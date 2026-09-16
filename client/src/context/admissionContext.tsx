@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useContext, useState } from "react";
 import { getAdmission } from "../services/admissionApi";
 
 type AdmissionContextType = {
@@ -6,14 +6,20 @@ type AdmissionContextType = {
     refreshPendingRequests: () => Promise<void>;
 };
 
-const AdmissionContext = createContext<AdmissionContextType | undefined>(undefined);
+const AdmissionContext = createContext<AdmissionContextType | undefined>(
+    undefined
+);
 
-export const AdmissionProvider = ({ children }: { children: React.ReactNode }) => {
+export const AdmissionProvider = ({
+    children
+}: {
+    children: React.ReactNode
+}) => {
     const [pendingRequests, setPendingRequests] = useState(0);
 
-    const user = JSON.parse(localStorage.getItem("user") || "{}");
-
     const refreshPendingRequests = async () => {
+        const user = JSON.parse(localStorage.getItem("user") || "{}");
+
         if (user.role !== "principal") {
             return;
         }
@@ -26,17 +32,10 @@ export const AdmissionProvider = ({ children }: { children: React.ReactNode }) =
             ).length;
 
             setPendingRequests(pending);
-        }
-        catch (error) {
+        } catch (error) {
             console.log(error);
         }
     };
-
-    useEffect(() => {
-        if (user.role === "principal") {
-            refreshPendingRequests();
-        }
-    }, []);
 
     return (
         <AdmissionContext.Provider
@@ -54,7 +53,9 @@ export const useAdmission = () => {
     const context = useContext(AdmissionContext);
 
     if (!context) {
-        throw new Error("useAdmission must be used inside AdmissionProvider");
+        throw new Error(
+            "useAdmission must be used inside AdmissionProvider"
+        );
     }
 
     return context;
