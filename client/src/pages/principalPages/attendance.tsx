@@ -60,6 +60,7 @@ function PrincipalAttendance() {
                             <input
                                 type="date"
                                 value={selectedDate}
+                                max={new Date().toISOString().split("T")[0]}
                                 onChange={(e) => setSelectedDate(e.target.value)}
                                 className="border-2 border-gray-500 rounded-sm p-2
                             focus:outline-none focus:border-gray-900"

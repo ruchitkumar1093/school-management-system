@@ -49,8 +49,8 @@ function PrincipalSubjectsTable({ subject, handleEditSubject, handleDeleteSubjec
                             <td className="border border-gray-400 p-3">{sub.teacherName}</td>
                             <td className="border border-gray-400 p-3">
                                 <div className="flex gap-2">
-                                    <button onClick={() => handleEditSubject(sub._id)} className="hover:text-purple-700 p-2 cursor-pointer"><FiEdit /></button>
-                                    <button onClick={() => handleDeleteSubject(sub._id)} className="hover:text-purple-700 p-2 cursor-pointer"><FiTrash /></button>
+                                    <button title="Edit" onClick={() => handleEditSubject(sub._id)} className="hover:text-purple-700 p-2 cursor-pointer"><FiEdit /></button>
+                                    <button title="Delete" onClick={() => handleDeleteSubject(sub._id)} className="hover:text-purple-700 p-2 cursor-pointer"><FiTrash /></button>
                                 </div>
                             </td>
                         </tr>

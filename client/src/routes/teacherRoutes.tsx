@@ -1,6 +1,7 @@
 import {Routes, Route} from "react-router-dom";
 import TeacherHome from "../pages/teacherPages/home";
 import TeacherProfile from "../pages/teacherPages/profile";
+import StudentProfile from "../pages/teacherPages/studentProfile";
 import TeacherViewStudents from "../pages/teacherPages/viewStudents";
 import TeacherViewSubjects from "../pages/teacherPages/viewSubjects";
 import TeacherViewMarks from "../pages/teacherPages/viewMarks";
@@ -25,6 +26,7 @@ function TeacherRoutes() {
 
             <Route path="/attendance/viewAttendance" element= {<TeacherViewAttendance />} />
             <Route path="viewStudents/studentForm" element={<StudentForm />} />
+            <Route path="viewStudents/studentProfile" element={<StudentProfile />} />
             <Route path="viewMarks/marksForm" element={<StudentMarks />} />
         </Routes>
     );

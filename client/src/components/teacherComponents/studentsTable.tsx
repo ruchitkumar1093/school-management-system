@@ -1,4 +1,4 @@
-import { FiEdit, FiTrash } from "react-icons/fi";
+import { FiEdit, FiTrash, FiEye } from "react-icons/fi";
 
 type Student = {
     _id: string;
@@ -14,10 +14,11 @@ type Props = {
     student: Student[];
     handleEditStudent: (id: string) => void;
     handleDeleteStudent: (id: string) => void;
+    handleStudentProfile: (id: string) => void;
     startIndex: number;
 };
 
-function TeacherStudentsTable({ student, handleEditStudent, handleDeleteStudent, startIndex }: Props) {
+function TeacherStudentsTable({ student, handleEditStudent, handleDeleteStudent, handleStudentProfile, startIndex }: Props) {
     return (
         <div >
             <table className="border-collapse border border-gray-400 bg-purple-200">
@@ -50,8 +51,9 @@ function TeacherStudentsTable({ student, handleEditStudent, handleDeleteStudent,
                             <td className="border border-gray-400 p-3">{std.rollNumber}</td>
                             <td className="border border-gray-400 p-3">
                                 <div className="flex gap-2">
-                                    <button onClick={() => handleEditStudent(std._id)} className="hover:text-purple-700 p-2 cursor-pointer"><FiEdit /></button>
-                                    <button onClick={() => handleDeleteStudent(std._id)} className="hover:text-purple-700 p-2 cursor-pointer"><FiTrash /></button>
+                                    <button title="Edit" onClick={() => handleEditStudent(std._id)} className="hover:text-purple-700 p-2 cursor-pointer"><FiEdit /></button>
+                                    <button title="Delete" onClick={() => handleDeleteStudent(std._id)} className="hover:text-purple-700 p-2 cursor-pointer"><FiTrash /></button>
+                                    <button title="View" onClick={() => handleStudentProfile(std._id)} className="hover:text-purple-700 p-2 cursor-pointer"><FiEye /></button>
                                 </div>
                             </td>
                         </tr>

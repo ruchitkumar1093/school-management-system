@@ -48,7 +48,7 @@ function TeacherProfile() {
                             </h2>
                             <h2 className="flex gap-3">
                                 <span>Role:</span>
-                                <span>{user.role}</span>
+                                <span className="capitalize">{user.role}</span>
                             </h2>
                             <h2 className="flex gap-3">
                                 <span>Employee ID:</span>

@@ -130,6 +130,7 @@ function AdmissionForm() {
                                 <label htmlFor="dateOfBirth">Date of Birth:</label>
 
                                 <input
+                                    max={new Date().toISOString().split("T")[0]}
                                     required
                                     value={formData.dateOfBirth}
                                     onChange={handleChange}

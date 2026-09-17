@@ -321,6 +321,7 @@ function TeacherViewAttendance() {
 
 
                                         <input
+                                            max={new Date().toISOString().split("T")[0]}
                                             type="date"
                                             id="date"
                                             value={date}

@@ -1,6 +1,8 @@
 import { Routes, Route } from "react-router-dom";
 import PrincipalHome from "../pages/principalPages/home";
 import PrincipalViewTeachers from "../pages/principalPages/viewTeachers";
+import TeacherProfile from "../pages/principalPages/teacherProfile";
+import StudentProfile from "../pages/principalPages/studentProfile";
 import PrincipalViewStudents from "../pages/principalPages/viewStudents";
 import PrincipalViewSubjects from "../pages/principalPages/viewSubjects";
 import PrincipalViewMarks from "../pages/principalPages/viewMarks";
@@ -33,7 +35,9 @@ function PrincipalRoutes() {
             <Route path="/attendance/viewAttendance" element={<PrincipalViewAttendance />} />
             <Route path="admissionRequests/viewRequest" element={<ViewAdmissionRequest />} />
             <Route path="viewTeachers/teacherForm" element={<TeacherForm />} />
+            <Route path="viewTeachers/teacherProfile" element={<TeacherProfile />} />
             <Route path="viewStudents/studentForm" element={<StudentForm />} />
+            <Route path="viewStudents/studentProfile" element={<StudentProfile />} />
             <Route path="viewSubjects/subjectForm" element={<SubjectForm />} />
             <Route path="viewMarks/marksForm" element={<MarksForm />} />
         </Routes>

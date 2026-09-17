@@ -114,6 +114,10 @@ function TeacherViewStudents() {
         setCurrentPage(1);
     }, [sortBy, orderBy, limit]);
 
+        function handleStudentProfile(id: string) {
+            navigate(`studentProfile?id=${id}`);
+    }
+
     const sortOptions = ["None", "Student Name", "Class", "Roll no"];
 
     return (
@@ -143,6 +147,7 @@ function TeacherViewStudents() {
                                 student={currentStudents}
                                 handleEditStudent={handleEditStudent}
                                 handleDeleteStudent={handleDeleteStudent}
+                                handleStudentProfile={handleStudentProfile}
                                 startIndex={startIndex} />
                         </div>
                         <div className="flex justify-between mt-5 items-center">

@@ -44,7 +44,7 @@ function AdmissionTable({ admission, startIndex, handleViewAdmission }: Props) {
                             <td className="border border-gray-400 p-3">{adm.status}</td>
                             <td className="border border-gray-400 p-3">
                                 <div className="flex gap-2 justify-center">
-                                    <button onClick={() => handleViewAdmission(adm._id)} className="hover:text-purple-700 p-2 cursor-pointer"><FiEye /></button>
+                                    <button title="View" onClick={() => handleViewAdmission(adm._id)} className="hover:text-purple-700 p-2 cursor-pointer"><FiEye /></button>
                                 </div>
                             </td>
                         </tr>

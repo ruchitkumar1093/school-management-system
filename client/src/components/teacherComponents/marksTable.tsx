@@ -71,8 +71,8 @@ function TeacherMarksTable({ marksData, handleEditMarks, handleDeleteMarks, star
                                     ? "Pass" : "Fail"}</td>
                             <td className="border border-gray-400 p-3">
                                 <div className="flex gap-2">
-                                    <button onClick={() => handleEditMarks(mark._id)} className="hover:text-purple-700 p-2 cursor-pointer"><FiEdit /></button>
-                                    <button onClick={() => handleDeleteMarks(mark._id)} className="hover:text-purple-700 p-2 cursor-pointer"><FiTrash /></button>
+                                    <button title="Edit" onClick={() => handleEditMarks(mark._id)} className="hover:text-purple-700 p-2 cursor-pointer"><FiEdit /></button>
+                                    <button title="Delete" onClick={() => handleDeleteMarks(mark._id)} className="hover:text-purple-700 p-2 cursor-pointer"><FiTrash /></button>
                                 </div>
                             </td>
                         </tr>

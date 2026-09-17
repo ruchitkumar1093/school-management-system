@@ -23,6 +23,8 @@ function Breadcrumb() {
         viewExams: "Exams",
         profile: "Profile",
         changePassword: "Change Password",
+        teacherProfile: "Profile",
+        studentProfile: "Profile",
 
         // Principal pages
         admissionRequests: "Admission Requests",

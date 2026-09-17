@@ -238,7 +238,7 @@ export const deleteStudent = async (req: Request, res: Response, next: NextFunct
 
 export const getStudentById = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const student = await Student.findById(req.params.id).populate("userId", "name uid");
+        const student = await Student.findById(req.params.id).populate("userId", "name uid role");
 
         if (!student) {
             return res.status(404).json({
@@ -259,12 +259,13 @@ export const updateMark = async (req: Request, res: Response, next: NextFunction
         const { id } = req.params;
 
         const {
-            uid,
+            studentId,
             subjectName,
             exam,
             marksObtained,
             totalMarks
         } = req.body;
+
 
         const teacher = await Teacher.findOne({
             userId: req.user?.userId
@@ -276,17 +277,8 @@ export const updateMark = async (req: Request, res: Response, next: NextFunction
             });
         }
 
-        const user = await User.findOne({ uid });
 
-        if (!user) {
-            return res.status(404).json({
-                message: "Student user not found"
-            });
-        }
-
-        const student = await Student.findOne({
-            userId: user._id
-        });
+        const student = await Student.findById(studentId);
 
         if (!student) {
             return res.status(404).json({
@@ -294,16 +286,39 @@ export const updateMark = async (req: Request, res: Response, next: NextFunction
             });
         }
 
+
+        if (student.class !== teacher.classAssigned) {
+            return res.status(400).json({
+                message: "Student does not belong to your assigned class"
+            });
+        }
+
+
         const subject = await Subject.findOne({
             name: subjectName,
-            class: student.class
+            class: teacher.classAssigned
         });
 
         if (!subject) {
             return res.status(404).json({
-                message: "Subject not found for this student's class"
+                message: "Subject not found for your assigned class"
             });
         }
+
+
+        const existingMark = await Mark.findOne({
+            studentId: student._id,
+            subjectId: subject._id,
+            exam,
+            _id: { $ne: id }
+        });
+
+        if (existingMark) {
+            return res.status(400).json({
+                message: "Marks for this student, subject and exam already exist"
+            });
+        }
+
 
         const mark = await Mark.findByIdAndUpdate(
             id,
@@ -321,18 +336,21 @@ export const updateMark = async (req: Request, res: Response, next: NextFunction
             }
         );
 
+
         if (!mark) {
             return res.status(404).json({
                 message: "Mark not found"
             });
         }
 
+
         res.status(200).json({
             message: "Mark updated successfully",
             mark
         });
 
-    } catch (error) {
+    }
+    catch (error) {
         console.log(error);
         next(error);
     }
@@ -341,12 +359,13 @@ export const updateMark = async (req: Request, res: Response, next: NextFunction
 export const createMark = async (req: Request, res: Response, next: NextFunction) => {
     try {
         const {
-            uid,
+            studentId,
             subjectName,
             exam,
             marksObtained,
             totalMarks
         } = req.body;
+
 
         const teacher = await Teacher.findOne({
             userId: req.user?.userId
@@ -358,17 +377,8 @@ export const createMark = async (req: Request, res: Response, next: NextFunction
             });
         }
 
-        const user = await User.findOne({ uid });
 
-        if (!user) {
-            return res.status(404).json({
-                message: "Student user not found"
-            });
-        }
-
-        const student = await Student.findOne({
-            userId: user._id
-        });
+        const student = await Student.findById(studentId);
 
         if (!student) {
             return res.status(404).json({
@@ -376,18 +386,40 @@ export const createMark = async (req: Request, res: Response, next: NextFunction
             });
         }
 
+
+        if (student.class !== teacher.classAssigned) {
+            return res.status(400).json({
+                message: "Student does not belong to your assigned class"
+            });
+        }
+
+
         const subject = await Subject.findOne({
             name: subjectName,
-            class: student.class
+            class: teacher.classAssigned
         });
 
         if (!subject) {
             return res.status(404).json({
-                message: "Subject not found for this student's class"
+                message: "Subject not found for your assigned class"
             });
         }
 
-        const mark = await Mark.create({
+
+        const existingMark = await Mark.findOne({
+            studentId: student._id,
+            subjectId: subject._id,
+            exam
+        });
+
+        if (existingMark) {
+            return res.status(400).json({
+                message: "Marks for this student, subject and exam already exist"
+            });
+        }
+
+
+        await Mark.create({
             studentId: student._id,
             teacherId: teacher._id,
             subjectId: subject._id,
@@ -395,6 +427,7 @@ export const createMark = async (req: Request, res: Response, next: NextFunction
             marksObtained,
             totalMarks
         });
+
 
         res.status(201).json({
             message: "mark created successfully"
@@ -404,7 +437,7 @@ export const createMark = async (req: Request, res: Response, next: NextFunction
         console.log(error);
         next(error);
     }
-}
+};
 
 export const deleteMark = async (req: Request, res: Response, next: NextFunction) => {
     try {

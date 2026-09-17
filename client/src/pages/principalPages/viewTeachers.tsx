@@ -67,6 +67,10 @@ function PrincipalViewTeachers() {
         }
     }
 
+    function handleTeacherProfile(id: string) {
+            navigate(`teacherProfile?id=${id}`);
+    }
+
     const [currentPage, setCurrentPage] = useState(1);
     const [limit, setLimit] = useState(5);
 
@@ -146,6 +150,7 @@ function PrincipalViewTeachers() {
                             teacher={currentTeachers}
                             handleEditTeacher={handleEditTeacher}
                             handleDeleteTeacher={handleDeleteTeacher}
+                            handleTeacherProfile={handleTeacherProfile}
                             startIndex={startIndex} />
                     </div>
                     <div className="flex justify-between mt-5 items-center">
