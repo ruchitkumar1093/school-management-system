@@ -38,7 +38,7 @@ function TeacherHome() {
                     <div className="flex flex-col pt-12 pl-20">
                         <h1 className="text-3xl mb-10">Welcome, {user.name}</h1>
                         <div className="mb-10 flex flex-col gap-3">
-                            <div className="bg-purple-200 rounded-lg p-5 flex flex-col gap-3">
+                            <div className="bg-purple-200 rounded-lg p-5 flex flex-col gap-3 shadow-md">
                                 <h2 className="flex gap-3 text-2xl">
                                     <span>UID:</span>
                                     <span>{user.uid.toUpperCase()}</span>
@@ -48,7 +48,7 @@ function TeacherHome() {
                                     <span>{homeInfo?.classAssigned}</span>
                                 </h2>
                             </div >
-                            <h2 className="flex gap-3 text-2xl bg-purple-200 rounded-lg p-5">
+                            <h2 className="flex gap-3 text-2xl bg-purple-200 rounded-lg p-5 shadow-md">
                                 <span>Role:</span>
                                 <span>{user.role}</span>
                             </h2>

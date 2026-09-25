@@ -10,6 +10,16 @@ The application follows a role-based architecture:
 
 The backend exposes REST APIs using Express and MongoDB, while the frontend provides a React-based user interface.
 
+## Demo Credentials
+
+The following credentials are available for testing the different user roles:
+
+| Role | UID | Password |
+|---|---|---|
+| Principal | `pri0001` | `12345` |
+| Teacher | `tch0001` | `12345` |
+| Student | `stu0001` | `12345` |
+
 ## Table of Contents
 
 - [Technology Stack](#technology-stack)
@@ -82,10 +92,11 @@ school-management-system/
 │   │
 │   ├── migrations/
 │   │   ├── migrate.ts
-│   │   └── seedDemoData.ts
+│   │   ├── 001_seedDemoData.ts
+│   │   └── 002_seedClasses.ts
 │   │
 │   ├── .env
-│
+│   └── ...
 │
 │
 │
@@ -167,6 +178,7 @@ The demo seed creates:
 - 60 Students
 - 60 Subjects
 - Marks for students
+- 12 Classes
 - Attendance records
 - 5 Admission Requests
 - Hashed passwords for all demo users
@@ -178,6 +190,7 @@ Principal: 1
 Teachers: 60
 Students: 60
 Subjects: 60
+Classes: 12
 Marks: 892
 Attendance: 600
 Admission Requests: 5
@@ -205,25 +218,11 @@ Run:
 npm run migrate
 ```
 
-Expected output is similar to:
+### Important:
 
-```text
-Connected to MongoDB
-Starting demo data migration...
-Demo data seeded successfully
-Principal: pri0001
-Teachers: 60
-Students: 60
-Subjects: 60
-Marks: 892
-Attendance: 600
-Admission Requests: 5
-Default password for all users: 12345
-Demo data migration completed successfully
-Disconnected from MongoDB
-```
+The project previously used a migration system that did not track executed migrations. The current migration system stores executed migrations in the MongoDB `migrations` collection.
 
-The migration runner records executed migrations so that an already executed migration is not unintentionally executed again.
+If you have an existing database created using an older version of this project then before running the new migration delete old database otherwise the new migration system can cause duplicate-key errors and the migration may fail.
 
 ## Feature Testing Guide
 
@@ -333,11 +332,22 @@ Verify:
 - Add, Edit, delete
 - Filter by class, filter by exam type, Sort, Order, Search, Pagination
 
-### 8. View Exams / Results
+### 8. Class Overview
+
+Open the Class Overview section.
+
+Use the class tabs to switch between classes from 1st to 12th.
+
+Verify:
+
+- Class Info
+- Class information updates when switching between classes
+
+### 9. View Exams / Results
 
 Verify that class wise examination information and result calculations are displayed correctly according to the application's implemented rules.
 
-### 9. Password Change
+### 10. Password Change
 
 Open the Change Password page.
 
@@ -552,6 +562,15 @@ Important fields include:
 - `userId`
 - `studentId`
 - timestamps
+
+### Class
+
+Stores class-level information and the teacher assigned as the class teacher.
+
+Important fields:
+
+- `class`
+- `teacherId`
 
 ## Quick Reference
 

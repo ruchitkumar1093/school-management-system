@@ -1,4 +1,4 @@
-import { createContext, useContext, useState } from "react";
+import { createContext, useContext, useEffect, useState } from "react";
 import { getAdmission } from "../services/admissionApi";
 
 type AdmissionContextType = {
@@ -18,9 +18,12 @@ export const AdmissionProvider = ({
     const [pendingRequests, setPendingRequests] = useState(0);
 
     const refreshPendingRequests = async () => {
-        const user = JSON.parse(localStorage.getItem("user") || "{}");
+        const user = JSON.parse(
+            localStorage.getItem("user") || "{}"
+        );
 
         if (user.role !== "principal") {
+            setPendingRequests(0);
             return;
         }
 
@@ -28,14 +31,30 @@ export const AdmissionProvider = ({
             const response = await getAdmission();
 
             const pending = response.data.filter(
-                (admission: any) => admission.status === "pending"
+                (admission: any) =>
+                    admission.status === "pending"
             ).length;
 
             setPendingRequests(pending);
-        } catch (error) {
+        }
+        catch (error) {
             console.log(error);
         }
     };
+
+    useEffect(() => {
+        refreshPendingRequests();
+
+        const handleLogin = () => {
+            refreshPendingRequests();
+        };
+
+        window.addEventListener("login", handleLogin);
+
+        return () => {
+            window.removeEventListener("login", handleLogin);
+        };
+    }, []);
 
     return (
         <AdmissionContext.Provider

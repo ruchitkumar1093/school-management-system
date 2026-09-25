@@ -3,7 +3,6 @@ import SideBar from "../../components/sideBar";
 import { useState, useEffect } from "react";
 import { viewTotal } from "../../services/principalApi";
 import Breadcrumb from "../../components/breadcrumb";
-import { useAdmission } from "../../context/admissionContext";
 
 function PrincipalHome() {
 
@@ -30,12 +29,6 @@ function PrincipalHome() {
         fetchHome();
     }, []);
 
-    const { refreshPendingRequests } = useAdmission();
-
-    useEffect(() => {
-        refreshPendingRequests();
-    }, []);
-
     const user = JSON.parse(localStorage.getItem("user") || "{}");
 
     return (
@@ -49,22 +42,22 @@ function PrincipalHome() {
                         <h1 className="text-3xl mb-10">Welcome, {user.name}</h1>
                         <div className="mb-10 flex gap-10">
                             <div className="flex flex-col gap-5">
-                                <h2 className="flex gap-3 text-2xl bg-purple-200 p-5 rounded-lg">
+                                <h2 className="flex gap-3 text-2xl bg-purple-200 p-5 rounded-lg shadow-md">
                                     <span>Total Students:</span>
                                     <span>{homeInfo?.totalStudents}</span>
                                 </h2>
-                                <h2 className="flex gap-3 text-2xl bg-purple-200 p-5 rounded-lg">
+                                <h2 className="flex gap-3 text-2xl bg-purple-200 p-5 rounded-lg shadow-md">
                                     <span>Total Teachers:</span>
                                     <span>{homeInfo?.totalTeachers}</span>
                                 </h2>
                             </div>
 
                             <div className="flex flex-col gap-5">
-                                <h2 className="flex gap-3 text-2xl bg-purple-200 p-5 rounded-lg">
+                                <h2 className="flex gap-3 text-2xl bg-purple-200 p-5 rounded-lg shadow-md">
                                     <span>Total Subjects:</span>
                                     <span>{homeInfo?.totalSubjects}</span>
                                 </h2>
-                                <h2 className="flex gap-3 text-2xl bg-purple-200 p-5 rounded-lg">
+                                <h2 className="flex gap-3 text-2xl bg-purple-200 p-5 rounded-lg shadow-md">
                                     <span>Enrolled Classes:</span>
                                     <span>{homeInfo?.totalClasses}</span>
                                 </h2>

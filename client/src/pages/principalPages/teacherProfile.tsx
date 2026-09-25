@@ -74,7 +74,7 @@ function TeacherProfile() {
                     <div className="flex flex-1 bg-purple-100">
                         <div className="flex flex-col pt-12 pl-20">
                             <h1 className="text-3xl mb-10">Teacher Profile:</h1>
-                            <div className="flex p-7 bg-purple-200 rounded-lg mb-7 gap-x-15">
+                            <div className="flex shadow-md p-7 bg-purple-200 rounded-lg mb-7 gap-x-15">
                                 <div className="flex flex-col justify-between items-center">
                                     <img
                                         src={teacherPhoto}

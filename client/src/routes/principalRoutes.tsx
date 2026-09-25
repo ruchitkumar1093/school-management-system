@@ -7,6 +7,7 @@ import PrincipalViewStudents from "../pages/principalPages/viewStudents";
 import PrincipalViewSubjects from "../pages/principalPages/viewSubjects";
 import PrincipalViewMarks from "../pages/principalPages/viewMarks";
 import PrincipalViewExams from "../pages/principalPages/viewExams";
+import PrincipalViewClass from "../pages/principalPages/viewClass";
 import PrincipalProfile from "../pages/principalPages/profile";
 import PrincipalChangePassword from "../pages/principalPages/changePassword";
 import TeacherForm from "../pages/principalPages/teacherForm";
@@ -29,6 +30,7 @@ function PrincipalRoutes() {
             <Route path="/viewSubjects" element={<PrincipalViewSubjects />} />
             <Route path="/viewMarks" element={<PrincipalViewMarks />} />
             <Route path="/viewExams" element={<PrincipalViewExams />} />
+            <Route path="/viewClass" element={<PrincipalViewClass />} />
             <Route path="/profile" element={<PrincipalProfile />} />
             <Route path="/changePassword" element={<PrincipalChangePassword />} />
 

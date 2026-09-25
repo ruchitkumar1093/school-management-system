@@ -85,7 +85,7 @@ function ViewAdmissionRequest() {
                     <div className="flex flex-1 bg-purple-100">
                         <div className="flex flex-col pt-12 pl-20">
                             <h1 className="text-3xl mb-10">View Request:</h1>
-                            <div className="p-7 bg-purple-200 rounded-lg mb-7 grid grid-cols-2 gap-x-15 gap-y-4">
+                            <div className="p-7 bg-purple-200 rounded-lg shadow-md mb-7 grid grid-cols-2 gap-x-15 gap-y-4">
                                 <h2 className="flex gap-3">
                                     <span>Name:</span>
                                     <span>{admissionInfo?.studentName}</span>

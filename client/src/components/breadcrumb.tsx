@@ -10,9 +10,9 @@ function Breadcrumb() {
         student: "Student",
 
         // Common pages
-        viewTeachers: "All Teachers",
+        viewTeachers: "Teachers",
         teacherForm: "Teacher Form",
-        viewStudents: "All Students",
+        viewStudents: "Students",
         studentForm: "Student Form",
         attendance: "Attendance",
         viewAttendance: "View Attendance",
@@ -28,7 +28,8 @@ function Breadcrumb() {
 
         // Principal pages
         admissionRequests: "Admission Requests",
-        viewRequest: "View Request"
+        viewRequest: "View Request",
+        viewClass: "Class Overview"
     };
 
     const paths = location.pathname

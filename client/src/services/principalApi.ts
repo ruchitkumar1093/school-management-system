@@ -113,3 +113,7 @@ export const getAttendance = (studentClass: string, date: string) => {
         }
     });
 };
+
+export const getClassOverview = (className: string) => {
+    return api.get(`/principal/class-overview/${className}`);
+};

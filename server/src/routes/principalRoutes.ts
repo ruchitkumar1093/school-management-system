@@ -5,7 +5,7 @@ import {
     updateTeacher, getTeacherById, deleteTeacher, updateStudent, deleteStudent, 
     getStudentById, getSubjectById, createSubject, updateSubject, deleteSubject, getMarkById,
     createMark, updateMark, deleteMark, getExamResults, getAttendanceSummary, getStudentsForAttendance,
-    getStudentAttendance, getAttendance
+    getStudentAttendance, getAttendance, getClassOverview
 } from "../controllers/principalController";
 
 //GET all:
@@ -46,5 +46,8 @@ router.get("/mark/:id", getMarkById);
 router.post("/marks/addMark", createMark);
 router.put("/updateMark/:id", updateMark);
 router.delete("/deleteMark/:id", deleteMark);
+
+//Class
+router.get("/class-overview/:class", getClassOverview);
 
 export default router;

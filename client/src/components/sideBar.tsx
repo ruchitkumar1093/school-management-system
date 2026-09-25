@@ -25,13 +25,14 @@ function SideBar() {
 
     const principalLinks: Link[] = [
         { label: "Home", path: "/principal" },
-        { label: "All Teachers", path: "/principal/viewTeachers" },
-        { label: "All Students", path: "/principal/viewStudents" },
+        { label: "Teachers", path: "/principal/viewTeachers" },
+        { label: "Students", path: "/principal/viewStudents" },
         { label: "Attendance", path: "/principal/attendance" },
         { label: "Admission Requests", path: "/principal/admissionRequests" },
         { label: "School Subjects", path: "/principal/viewSubjects" },
         { label: "Student Marks", path: "/principal/viewMarks" },
-        { label: "Exams", path: "/principal/viewExams" }
+        { label: "Exams", path: "/principal/viewExams" },
+        { label: "Class Overview", path: "/principal/viewClass" }
     ];
 
     const teacherLinks: Link[] = [

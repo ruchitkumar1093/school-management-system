@@ -254,7 +254,7 @@ function PrincipalAttendance() {
                     <div className="flex flex-col pt-12 pl-20 mb-10">
                         <div className="flex justify-between items-center mb-6">
                             <h1 className="text-3xl">
-                                View Attendance:
+                                Attendance:
                             </h1>
 
                             <button

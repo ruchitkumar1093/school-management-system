@@ -5,6 +5,7 @@ import Teacher from "../models/Teacher";
 import Subject from "../models/Subject";
 import Mark from "../models/Mark";
 import Attendance from "../models/Attendance";
+import Class from "../models/Class";
 import mongoose from "mongoose";
 import bcrypt from "bcrypt";
 
@@ -1246,5 +1247,113 @@ export const getAttendance = async (
     } catch (error) {
         console.log(error);
         next(error);
+    }
+};
+
+export const getClassOverview = async (req: Request, res: Response) => {
+    try {
+        const studentClass = req.params.class as
+            | "1st"
+            | "2nd"
+            | "3rd"
+            | "4th"
+            | "5th"
+            | "6th"
+            | "7th"
+            | "8th"
+            | "9th"
+            | "10th"
+            | "11th"
+            | "12th";
+
+        const classData = await Class.findOne({
+            class: studentClass
+        });
+
+        if (!classData) {
+            return res.status(404).json({
+                message: "Class not found"
+            });
+        }
+
+        const classTeacher = await Teacher.findById(
+            classData.teacherId
+        );
+
+        if (!classTeacher) {
+            return res.status(404).json({
+                message: "Class teacher not found"
+            });
+        }
+
+        const classTeacherUser = await User.findById(
+            classTeacher.userId
+        ).select("name uid");
+
+        const students = await Student.find({
+            class: studentClass
+        }).select("_id");
+
+        const studentIds = students.map(
+            (student) => student._id
+        );
+
+        const studentCount = students.length;
+
+        const teacherCount = await Teacher.countDocuments({
+            classAssigned: studentClass
+        });
+
+        const subjectCount = await Subject.countDocuments({
+            class: studentClass
+        });
+
+        const attendanceRecords = await Attendance.find({
+            studentId: {
+                $in: studentIds
+            }
+        }).select("status");
+
+        const totalAttendance = attendanceRecords.length;
+
+        const presentAttendance = attendanceRecords.filter(
+            (attendance) =>
+                attendance.status === "Present"
+        ).length;
+
+        const overallAttendance =
+            totalAttendance === 0
+                ? 0
+                : Math.round(
+                    (presentAttendance / totalAttendance) * 100
+                );
+
+        return res.status(200).json({
+            class: studentClass,
+
+            classTeacher: {
+                name: classTeacherUser?.name ?? "N/A",
+                employeeID: classTeacher.employeeID,
+                uid: classTeacherUser?.uid ?? "N/A"
+            },
+
+            students: studentCount,
+
+            teachers: teacherCount,
+
+            subjects: subjectCount,
+
+            overallAttendance
+        });
+    }
+    catch (error) {
+        console.error(
+            "Get class overview error:",
+            error
+        );
+
+        return res.status(500).json({
+            message: "Failed to get class overview"
+        });
     }
 };
