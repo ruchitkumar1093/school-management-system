@@ -32,7 +32,8 @@ function SideBar() {
         { label: "School Subjects", path: "/principal/viewSubjects" },
         { label: "Student Marks", path: "/principal/viewMarks" },
         { label: "Exams", path: "/principal/viewExams" },
-        { label: "Class Overview", path: "/principal/viewClass" }
+        { label: "Class Overview", path: "/principal/viewClass" },
+        { label: "Holidays", path: "/principal/viewHolidays" }
     ];
 
     const teacherLinks: Link[] = [
@@ -41,14 +42,16 @@ function SideBar() {
         { label: "Attendance", path: "/teacher/attendance" },
         { label: "Assigned Subjects", path: "/teacher/viewSubjects" },
         { label: "My Student Marks", path: "/teacher/viewMarks" },
-        { label: "Exams", path: "/teacher/viewExams" }
+        { label: "Exams", path: "/teacher/viewExams" },
+        { label: "Holidays", path: "/teacher/viewHolidays" }
     ];
 
     const studentLinks: Link[] = [
         { label: "Home", path: "/student" },
         { label: "Attendance", path: "/student/attendance" },
         { label: "My Subjects", path: "/student/viewSubjects" },
-        { label: "My Marks", path: "/student/viewMarks" }
+        { label: "My Marks", path: "/student/viewMarks" },
+        { label: "Holidays", path: "/student/viewHolidays" }
     ];
 
     const linksByRole: Record<Role, Link[]> = {
@@ -69,22 +72,31 @@ function SideBar() {
                             to={link.path}
                             end={index === 0}
                             className={({ isActive }) =>
-                                isActive
-                                    ? "text-[#8900BA] font-[480]"
-                                    : "hover:text-[#8900BA]"
+                                `relative ${
+                                    isActive
+                                        ? "text-[#8900BA] font-[480]"
+                                        : "hover:text-[#8900BA]"
+                                }`
                             }
                         >
-                            <div className="flex gap-2">
-                                <span>
-                                    {link.label}
-                                </span>
+                            {({ isActive }) => (
+                                <div className="flex gap-2">
+                                    {isActive && (
+                                        <span className="absolute -left-7 top-0 h-full w-1 rounded-r-full bg-[#8900BA]"></span>
+                                    )}
 
-                                {link.label === "Admission Requests" && pendingRequests > 0 && (
-                                    <span className="bg-purple-800 text-white rounded-full px-2 text-sm">
-                                        {pendingRequests}
+                                    <span>
+                                        {link.label}
                                     </span>
-                                )}
-                            </div>
+
+                                    {link.label === "Admission Requests" &&
+                                        pendingRequests > 0 && (
+                                            <span className="bg-purple-800 text-white rounded-full px-2 text-sm">
+                                                {pendingRequests}
+                                            </span>
+                                        )}
+                                </div>
+                            )}
                         </NavLink>
                     );
                 })}

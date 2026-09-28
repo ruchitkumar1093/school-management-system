@@ -78,15 +78,30 @@ function AdmissionForm() {
     return (
         <div className="flex flex-col min-h-screen font-fredoka bg-purple-100">
 
-            <nav className="z-10 flex justify-between p-4 font-fredoka bg-purple-300 shadow-sm">
-                <div className="flex items-center">
-                    <img src={logo} alt="school logo" className="h-10" />
-                    <h1 className="text-3xl">GPS</h1>
+            <nav className="z-10 flex items-center justify-between bg-purple-300 px-8 py-4 shadow-sm">
+                <div className="flex items-center gap-3">
+                    <img
+                        src={logo}
+                        alt="school logo"
+                        className="h-10 w-auto"
+                    />
+
+                    <h1 className="text-3xl font-medium text-gray-900">
+                        GPS
+                    </h1>
                 </div>
 
-                <button className="bg-purple-900 text-white rounded-md p-3 hover:bg-purple-950"
-                    type="button" onClick={() => navigate("/login")}>Login</button>
-
+                <button
+                    className="rounded-lg bg-purple-800 px-5 py-2.5 font-medium text-white
+            shadow-[0_2px_1px_rgba(0,0,0,0.15)]
+            transition-all duration-200
+            hover:bg-purple-900
+            cursor-pointer"
+                    type="button"
+                    onClick={() => navigate("/login")}
+                >
+                    Login
+                </button>
             </nav>
 
             <div className="flex justify-center py-12 px-5">

@@ -15,3 +15,12 @@ export const viewStudent = () => {
 export const getAttendance = () => {
     return api.get("student/attendance");
 };
+
+export const viewHome = () => {
+    return api.get("student/home");
+};
+
+//Holidays:
+export const getHolidays = () => {
+    return api.get("student/holidays");
+};

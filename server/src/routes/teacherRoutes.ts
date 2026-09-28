@@ -1,11 +1,18 @@
 import express from "express";
 const router = express.Router();
-import { getStudents, getSubjects, getMarks, createStudent, getTeacher, getStudentById,
+import { getStudents, getSubjects, getMarks, createStudent, getStudentById,
     updateStudent, deleteStudent, getMarkById, createMark, updateMark, deleteMark, getExamResults,
-    getStudentsForAttendance, createAttendance, getAttendance, getStudentAttendance
+    getStudentsForAttendance, createAttendance, getAttendance, getStudentAttendance, getTeacherHome,
+    getTeacher
  } 
 from "../controllers/teacherController";
 
+import { getHolidays } from "../controllers/holidayController";
+
+
+router.get("/home", getTeacherHome);
+
+router.get("/holidays", getHolidays);
 
 //GET all:
 router.get("/students", getStudents);

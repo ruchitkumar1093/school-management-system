@@ -131,8 +131,16 @@ function AdmissionRequest() {
                 <div>
                     <Breadcrumb />
                     <div className="flex flex-col pt-12 pl-20 mb-10">
-                        <div className="flex justify-between items-center mb-4">
-                            <h1 className="text-3xl">Admission Requests:</h1>
+                        <div className="mb-8">
+
+                            <h1 className="text-3xl font-medium text-gray-900">
+                                Admission Requests
+                            </h1>
+
+                            <p className="mt-1 text-sm text-gray-600">
+                                View and Manage Admission Requests
+                            </p>
+
                         </div>
                         <div className="flex justify-between items-center mb-3">
                             <div className="w-full">

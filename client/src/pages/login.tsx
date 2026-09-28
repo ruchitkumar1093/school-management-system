@@ -9,10 +9,12 @@ function Login() {
     const [uid, setUid] = useState("");
     const [password, setPassword] = useState("");
     const [error, setError] = useState("");
+    const [loading, setLoading] = useState(false);
 
     const handleLogin = async (e: React.FormEvent<HTMLFormElement>) => {
         try {
             e.preventDefault();
+            setLoading(true);
             const response = await login({
                 uid,
                 password
@@ -44,6 +46,9 @@ function Login() {
         catch(error){
             console.log(error);
             setError("Invalid Credentials");
+        }
+        finally{
+            setLoading(false);
         }
     }
 
@@ -77,8 +82,8 @@ function Login() {
                                 value={password}
                                 onChange={(e) => setPassword(e.target.value)} />
                         </div>
-                        <button type="submit" className="bg-gray-800 hover:bg-gray-700 transition-colors
-                    duration-300 ease-in-out text-white p-3 rounded-sm">Login</button>
+                        <button type="submit" disabled={loading} className="bg-gray-800 hover:bg-gray-700 transition-colors
+                    duration-300 ease-in-out text-white p-3 rounded-sm">{loading ? "Please wait..." : "Login"}</button>
                     {error? <p className="text-red-600 text-center">{error}</p> : null}
                     </form>
                 </div>

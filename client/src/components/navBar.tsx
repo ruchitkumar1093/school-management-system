@@ -85,7 +85,7 @@ function NavBar() {
             <nav className="z-10 flex justify-between p-3 font-fredoka bg-purple-300 shadow-sm">
                 <Link to={homePath} className="flex items-center cursor-pointer">
                     <img src={logo} alt="school logo" className="h-10" />
-                    <h1 className="text-3xl">SMS</h1>
+                    <h1 className="text-3xl font-medium text-gray-900">SMS</h1>
                 </Link>
 
                 <div className="relative" ref={dropdownRef}>

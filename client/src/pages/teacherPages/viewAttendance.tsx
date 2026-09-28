@@ -286,9 +286,17 @@ function TeacherViewAttendance() {
 
                         <div className="flex gap-3 justify-between items-center mb-6">
 
-                            <h1 className="text-3xl">
-                                View Attendance:
-                            </h1>
+                            <div>
+
+                                <h1 className="text-3xl font-medium text-gray-900">
+                                    View Attendance
+                                </h1>
+
+                                <p className="mt-1 text-sm text-gray-600">
+                                    View and Manage Attendance
+                                </p>
+
+                            </div>
 
 
                             <button

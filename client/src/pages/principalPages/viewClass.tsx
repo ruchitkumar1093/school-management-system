@@ -57,7 +57,7 @@ function PrincipalViewClass() {
     }, [selectedClass]);
 
     return (
-        <div className="flex flex-col min-h-screen font-fredoka">
+        <div className="flex min-h-screen flex-col font-fredoka">
 
             <NavBar />
 
@@ -65,112 +65,134 @@ function PrincipalViewClass() {
 
                 <SideBar />
 
-                <div>
+                <div className="flex min-w-0 flex-1 flex-col">
 
                     <Breadcrumb />
 
-                    <div className="flex flex-1 bg-purple-100 mr-15">
+                    <div className="flex flex-1 flex-col px-16 pt-10 pb-12">
 
-                        <div className="flex flex-col pt-12 pl-20">
-
-                            <h1 className="text-3xl mb-10">
-                                Class Overview:
+                        {/* Header */}
+                        <div className="mb-7">
+                            <h1 className="text-3xl font-medium text-gray-900">
+                                Class Overview
                             </h1>
 
-                            <div className="flex mb-8">
+                            <p className="mt-1 text-sm text-gray-600">
+                                View information and statistics for each class
+                            </p>
+                        </div>
 
-                                <ClassTabs
-                                    selectedClass={selectedClass}
-                                    onClassChange={setSelectedClass}
-                                />
+                        {/* Class Tabs */}
+                        <div className="mb-7">
+                            <ClassTabs
+                                selectedClass={selectedClass}
+                                onClassChange={setSelectedClass}
+                            />
+                        </div>
 
-                            </div>
+                        {loading ? (
 
-                            <div className="p-4">
+                            <p className="text-gray-600">
+                                Loading class information...
+                            </p>
 
-                                {loading ? (
+                        ) : classOverview ? (
 
-                                    <p className="text-gray-600">
-                                        Loading class information...
-                                    </p>
+                            <div className="max-w-4xl rounded-xl bg-purple-200 px-6 py-5">
 
-                                ) : classOverview ? (
+                                {/* Class Teacher */}
+                                <div className="border-b border-white pb-5">
 
-                                    <div className="flex flex-col gap-3">
+                                    <h2 className="mb-4 text-base font-medium text-purple-900">
+                                        Class Teacher
+                                    </h2>
 
-                                        <h2 className="flex gap-3">
-                                            <span>
-                                                Class Teacher:
-                                            </span>
+                                    <div className="grid grid-cols-4 gap-8">
 
-                                            <span>
+                                        {/* Column 1 */}
+                                        <div>
+                                            <p className="text-sm text-gray-600">
+                                                Name
+                                            </p>
+
+                                            <p className="mt-1 text-base font-medium text-gray-900">
                                                 {classOverview.classTeacher.name}
-                                            </span>
-                                        </h2>
+                                            </p>
+                                        </div>
 
-                                        <h2 className="flex gap-3">
-                                            <span>
-                                                EmployeeID:
-                                            </span>
+                                        {/* Column 2 */}
+                                        <div>
+                                            <p className="text-sm text-gray-600">
+                                                Employee ID
+                                            </p>
 
-                                            <span>
+                                            <p className="mt-1 text-base font-medium text-gray-900">
                                                 {classOverview.classTeacher.employeeID}
-                                            </span>
-                                        </h2>
-
-                                        <h2 className="flex gap-3">
-                                            <span>
-                                                Total Students:
-                                            </span>
-
-                                            <span>
-                                                {classOverview.students}
-                                            </span>
-                                        </h2>
-
-                                        <h2 className="flex gap-3">
-                                            <span>
-                                                Total Teachers:
-                                            </span>
-
-                                            <span>
-                                                {classOverview.teachers}
-                                            </span>
-                                        </h2>
-
-                                        <h2 className="flex gap-3">
-                                            <span>
-                                                Total Subjects:
-                                            </span>
-
-                                            <span>
-                                                {classOverview.subjects}
-                                            </span>
-                                        </h2>
-
-                                        <h2 className="flex gap-3">
-                                            <span>
-                                                Overall Attendance:
-                                            </span>
-
-                                            <span>
-                                                {classOverview.overallAttendance}%
-                                            </span>
-                                        </h2>
+                                            </p>
+                                        </div>
 
                                     </div>
 
-                                ) : (
+                                </div>
 
-                                    <p className="text-red-500">
-                                        Failed to load class information.
-                                    </p>
+                                {/* Class Information */}
+                                <div className="grid grid-cols-4 gap-8 pt-5">
 
-                                )}
+                                    {/* Column 1 */}
+                                    <div>
+                                        <p className="text-sm text-gray-600">
+                                            Total Students
+                                        </p>
+
+                                        <p className="mt-1 text-lg font-medium text-gray-900">
+                                            {classOverview.students}
+                                        </p>
+                                    </div>
+
+                                    {/* Column 2 */}
+                                    <div>
+                                        <p className="text-sm text-gray-600">
+                                            Total Teachers
+                                        </p>
+
+                                        <p className="mt-1 text-lg font-medium text-gray-900">
+                                            {classOverview.teachers}
+                                        </p>
+                                    </div>
+
+                                    {/* Column 3 */}
+                                    <div>
+                                        <p className="text-sm text-gray-600">
+                                            Total Subjects
+                                        </p>
+
+                                        <p className="mt-1 text-lg font-medium text-gray-900">
+                                            {classOverview.subjects}
+                                        </p>
+                                    </div>
+
+                                    {/* Column 4 */}
+                                    <div>
+                                        <p className="text-sm text-gray-600">
+                                            Overall Attendance
+                                        </p>
+
+                                        <p className="mt-1 text-lg font-medium text-gray-900">
+                                            {classOverview.overallAttendance}%
+                                        </p>
+                                    </div>
+
+                                </div>
 
                             </div>
 
-                        </div>
+                        ) : (
+
+                            <p className="text-red-600">
+                                Failed to load class information.
+                            </p>
+
+                        )}
 
                     </div>
 

@@ -50,9 +50,17 @@ function PrincipalAttendance() {
                     <Breadcrumb />
                     <div className="flex flex-col pt-12 pl-20 mb-10 max-w-6xl">
                         <div className="items-center mb-6">
-                            <h1 className="text-3xl">
-                                Attendance Summary:
-                            </h1>
+                            <div>
+
+                                <h1 className="text-3xl font-medium text-gray-900">
+                                    Attendance Summary
+                                </h1>
+
+                                <p className="mt-1 text-sm text-gray-600">
+                                    View and Manage Attendance
+                                </p>
+
+                            </div>
 
 
                         </div>

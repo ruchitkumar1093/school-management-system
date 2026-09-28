@@ -1,5 +1,9 @@
 import api from "./api";
 
+export const viewHome = () => {
+    return api.get("/principal/home");
+}
+
 
 //GET ALL:
 export const viewTeachers = () => {
@@ -13,9 +17,6 @@ export const viewSubjects = () => {
 }
 export const viewMarks = () => {
     return api.get("/principal/marks");
-}
-export const viewTotal = () => {
-    return api.get("/principal/total");
 }
 
 //TEACHER CRUD:
@@ -116,4 +117,24 @@ export const getAttendance = (studentClass: string, date: string) => {
 
 export const getClassOverview = (className: string) => {
     return api.get(`/principal/class-overview/${className}`);
+};
+
+//Holidays:
+export const getHolidays = () => {
+    return api.get("/principal/getHolidays");
+};
+
+export const addHoliday = (data: { date: string; name: string }) => {
+    return api.post("/principal/addHolidays", data);
+};
+
+export const updateHoliday = (
+    id: string,
+    data: { date: string; name: string }
+) => {
+    return api.patch(`/principal/updateHolidays/${id}`, data);
+};
+
+export const deleteHoliday = (id: string) => {
+    return api.delete(`/principal/deleteHolidays/${id}`);
 };

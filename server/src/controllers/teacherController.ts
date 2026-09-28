@@ -6,7 +6,42 @@ import Teacher from "../models/Teacher";
 import User from "../models/User";
 import Attendance from "../models/Attendance";
 import mongoose from "mongoose";
+import Holiday from "../models/Holiday";
 
+export const getTeacherHome = async (
+    req: Request,
+    res: Response
+) => {
+    try {
+        const userId = req.user?.userId;
+
+        const teacher = await Teacher.findOne({
+            userId: userId
+        });
+
+        if (!teacher) {
+            return res.status(404).json({
+                message: "Teacher profile not found"
+            });
+        }
+
+        return res.status(200).json({
+            employeeID: teacher.employeeID,
+            department: teacher.department,
+            classAssigned: teacher.classAssigned
+        });
+    }
+    catch (error) {
+        console.error(
+            "Get teacher home error:",
+            error
+        );
+
+        return res.status(500).json({
+            message: "Failed to get teacher home information"
+        });
+    }
+};
 
 // GET all:
 export const getSubjects = async (req: Request, res: Response, next: NextFunction) => {
@@ -857,14 +892,14 @@ export const getAttendance = async (
             },
             date: selectedDate
         })
-        .populate({
-            path: "studentId",
-            select: "class rollNumber userId",
-            populate: {
-                path: "userId",
-                select: "name uid"
-            }
-        });
+            .populate({
+                path: "studentId",
+                select: "class rollNumber userId",
+                populate: {
+                    path: "userId",
+                    select: "name uid"
+                }
+            });
 
         res.status(200).json(attendance);
 
@@ -917,17 +952,17 @@ export const getStudentAttendance = async (
         const attendance = await Attendance.find({
             studentId: student._id
         })
-        .populate({
-            path: "studentId",
-            select: "class rollNumber userId",
-            populate: {
-                path: "userId",
-                select: "name uid"
-            }
-        })
-        .sort({
-            date: 1
-        });
+            .populate({
+                path: "studentId",
+                select: "class rollNumber userId",
+                populate: {
+                    path: "userId",
+                    select: "name uid"
+                }
+            })
+            .sort({
+                date: 1
+            });
 
         res.status(200).json(attendance);
 

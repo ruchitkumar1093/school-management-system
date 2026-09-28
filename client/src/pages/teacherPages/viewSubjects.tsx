@@ -75,7 +75,17 @@ function TeacherViewSubjects() {
                 <div>
                     <Breadcrumb />
                     <div className="flex flex-col pt-12 pl-20 mb-10">
-                        <h1 className="text-3xl mb-4">Assigned Subjects:</h1>
+                        <div className="mb-5">
+
+                            <h1 className="text-3xl font-medium text-gray-900">
+                                View Subjects
+                            </h1>
+
+                            <p className="mt-1 text-sm text-gray-600">
+                                View Assigned Subjects
+                            </p>
+
+                        </div>
                         <div className="flex justify-between items-center mb-3">
                             <div className="flex gap-8 mb-3">
                                 <OrderBy orderBy={orderBy} setOrderBy={setOrderBy} />

@@ -5,6 +5,62 @@ import Mark from "../models/Mark";
 import Teacher from "../models/Teacher";
 import Attendance from "../models/Attendance";
 
+export const getStudentHome = async (
+    req: Request,
+    res: Response
+) => {
+    try {
+        const userId = req.user?.userId;
+
+        const student = await Student.findOne({
+            userId
+        });
+
+        if (!student) {
+            return res.status(404).json({
+                message: "Student not found"
+            });
+        }
+
+        const [totalSubjects, totalAttendance, presentAttendance] =
+            await Promise.all([
+                Subject.countDocuments({
+                    class: student.class
+                }),
+
+                Attendance.countDocuments({
+                    studentId: student._id
+                }),
+
+                Attendance.countDocuments({
+                    studentId: student._id,
+                    status: "Present"
+                })
+            ]);
+
+        const attendancePercentage =
+            totalAttendance === 0
+                ? 0
+                : Math.round(
+                    (presentAttendance / totalAttendance) * 100
+                );
+
+        return res.status(200).json({
+            class: student.class,
+            rollNumber: student.rollNumber,
+            attendancePercentage,
+            totalSubjects
+        });
+    }
+    catch (error) {
+        console.error("Get student home error:", error);
+
+        return res.status(500).json({
+            message: "Failed to get student home information"
+        });
+    }
+};
+
 export const getSubjects = async (
     req: Request,
     res: Response,

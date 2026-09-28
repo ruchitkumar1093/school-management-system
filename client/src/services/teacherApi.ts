@@ -1,5 +1,8 @@
 import api from "./api";
 
+export const viewHome = () => {
+    return api.get("teacher/home");
+}
 
 //GET ALL:
 export const viewStudents = () => {
@@ -74,4 +77,9 @@ export const getStudentAttendance = (studentId: string) => {
             studentId
         }
     });
+};
+
+//Holidays:
+export const getHolidays = () => {
+    return api.get("teacher/holidays");
 };

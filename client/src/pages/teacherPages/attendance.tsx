@@ -206,9 +206,17 @@ function TeacherAttendance() {
                     <Breadcrumb />
                     <div className="flex flex-col pt-12 pl-20 mb-10">
                         <div className="flex justify-between items-center mb-6">
-                            <h1 className="text-3xl">
-                                Attendance:
-                            </h1>
+                            <div>
+
+                                <h1 className="text-3xl font-medium text-gray-900">
+                                    Attendance
+                                </h1>
+
+                                <p className="mt-1 text-sm text-gray-600">
+                                    View and Manage Attendance
+                                </p>
+
+                            </div>
                             <button
                                 type="button" onClick={() => navigate("viewAttendance")}
                                 className="p-2 bg-purple-300 rounded-lg shadow-[0_2px_1px] hover:bg-violet-300 cursor-pointer"

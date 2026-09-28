@@ -9,25 +9,37 @@ import Class from "../models/Class";
 import mongoose from "mongoose";
 import bcrypt from "bcrypt";
 
-export const getTotal = async (req: Request, res: Response, next: NextFunction) => {
+export const getPrincipalHome = async (
+    req: Request,
+    res: Response
+) => {
     try {
         const totalStudents = await Student.countDocuments();
-        const totalTeachers = await Teacher.countDocuments();
-        const totalSubjects = await Subject.countDocuments();
-        const totalClasses = (await Student.distinct("class")).length;
 
-        res.status(200).json({
+        const totalTeachers = await Teacher.countDocuments();
+
+        const totalSubjects = await Subject.countDocuments();
+
+        const totalClasses = await Class.countDocuments();
+
+        return res.status(200).json({
             totalStudents,
             totalTeachers,
             totalSubjects,
             totalClasses
         });
     }
-
     catch (error) {
-        next(error);
+        console.error(
+            "Get principal home error:",
+            error
+        );
+
+        return res.status(500).json({
+            message: "Failed to get principal home information"
+        });
     }
-}
+};
 
 //GET all
 export const getStudents = async (req: Request, res: Response, next: NextFunction) => {

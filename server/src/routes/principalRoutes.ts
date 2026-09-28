@@ -1,22 +1,31 @@
 import express from "express";
 const router = express.Router();
 import {
-    getSubjects, getStudents, getTeachers, createTeacher, getTotal, getMarks, 
+    getSubjects, getStudents, getTeachers, createTeacher, getMarks, 
     updateTeacher, getTeacherById, deleteTeacher, updateStudent, deleteStudent, 
     getStudentById, getSubjectById, createSubject, updateSubject, deleteSubject, getMarkById,
     createMark, updateMark, deleteMark, getExamResults, getAttendanceSummary, getStudentsForAttendance,
-    getStudentAttendance, getAttendance, getClassOverview
+    getStudentAttendance, getAttendance, getClassOverview, getPrincipalHome
 } from "../controllers/principalController";
+
+import { getHolidays, addHoliday, updateHoliday, deleteHoliday} from "../controllers/holidayController";
+
+router.get("/home", getPrincipalHome);
 
 //GET all:
 router.get("/teachers", getTeachers);
 router.get("/students", getStudents);
 router.get("/subjects", getSubjects);
-router.get("/total", getTotal);
 router.get("/marks", getMarks);
 
 //Exam:
 router.get("/examResults", getExamResults);
+
+//Holidays:
+router.get("/getHolidays", getHolidays);
+router.post("/addHolidays", addHoliday);
+router.patch("/updateHolidays/:id", updateHoliday);
+router.delete("/deleteHolidays/:id", deleteHoliday);
 
 //Attendance:
 router.get("/attendance/summary", getAttendanceSummary);
