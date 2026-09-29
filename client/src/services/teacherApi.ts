@@ -55,9 +55,11 @@ export const getExamResults = (exam: string) =>
 });
 
 //Attendance:
-export const getStudentsForAttendance = () => {
-    return api.get("teacher/getStudentsForAttendance")
-}
+export const getStudentsForAttendance = (date: string) => {
+    return api.get("teacher/getStudentsForAttendance", {
+        params: { date }
+    });
+};
 
 export const createAttendance = (data: any) => {
     return api.post("teacher/createAttendance", data);
@@ -82,4 +84,23 @@ export const getStudentAttendance = (studentId: string) => {
 //Holidays:
 export const getHolidays = () => {
     return api.get("teacher/holidays");
+};
+
+//Leaves:
+export const getLeaveApplications = () => {
+    return api.get("/teacher/leaves");
+};
+
+
+export const approveLeave = (id: string) => {
+    return api.patch(
+        `/teacher/leaves/${id}/approve`
+    );
+};
+
+
+export const rejectLeave = (id: string) => {
+    return api.patch(
+        `/teacher/leaves/${id}/reject`
+    );
 };

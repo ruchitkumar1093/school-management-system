@@ -5,7 +5,8 @@ import {
     updateTeacher, getTeacherById, deleteTeacher, updateStudent, deleteStudent, 
     getStudentById, getSubjectById, createSubject, updateSubject, deleteSubject, getMarkById,
     createMark, updateMark, deleteMark, getExamResults, getAttendanceSummary, getStudentsForAttendance,
-    getStudentAttendance, getAttendance, getClassOverview, getPrincipalHome
+    getStudentAttendance, getAttendance, getClassOverview, getPrincipalHome, getLeaveApplications,
+    approveLeave, rejectLeave
 } from "../controllers/principalController";
 
 import { getHolidays, addHoliday, updateHoliday, deleteHoliday} from "../controllers/holidayController";
@@ -17,6 +18,11 @@ router.get("/teachers", getTeachers);
 router.get("/students", getStudents);
 router.get("/subjects", getSubjects);
 router.get("/marks", getMarks);
+
+//Leaves:
+router.get("/leaves", getLeaveApplications);
+router.patch("/leaves/:id/approve", approveLeave);
+router.patch("/leaves/:id/reject", rejectLeave);
 
 //Exam:
 router.get("/examResults", getExamResults);

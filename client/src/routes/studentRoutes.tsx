@@ -6,6 +6,7 @@ import StudentProfile from "../pages/studentPages/profile";
 import StudentChangePassword from "../pages/studentPages/changePassword";
 import StudentAttendance from "../pages/studentPages/attendance";
 import Holidays from "../pages/studentPages/holidays";
+import LeaveApplications from "../pages/studentPages/leaves";
 
 
 function StudentRoutes() {
@@ -17,6 +18,7 @@ function StudentRoutes() {
             <Route path="/profile" element= {<StudentProfile />} />
             <Route path="/attendance" element= {<StudentAttendance />} />
             <Route path="/viewHolidays" element={<Holidays />} />
+            <Route path="/viewLeaves" element={<LeaveApplications />} />
             <Route path="/changePassword" element= {<StudentChangePassword />} />
         </Routes>
     );

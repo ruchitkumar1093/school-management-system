@@ -8,7 +8,7 @@ type Attendance = {
         };
     };
     date: string;
-    status: "Present" | "Absent";
+    status: "Present" | "Absent" | "Leave";
 };
 
 type Props = {

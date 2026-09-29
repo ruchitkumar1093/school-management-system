@@ -6,7 +6,288 @@ import Teacher from "../models/Teacher";
 import User from "../models/User";
 import Attendance from "../models/Attendance";
 import mongoose from "mongoose";
-import Holiday from "../models/Holiday";
+import Leave from "../models/Leave";
+
+export const getLeaveApplications = async (
+    req: Request,
+    res: Response
+) => {
+    try {
+
+        const userId = req.user?.userId;
+
+
+        // Find logged-in teacher
+        const teacher = await Teacher.findOne({
+            userId
+        });
+
+        if (!teacher) {
+            return res.status(404).json({
+                message: "Teacher not found"
+            });
+        }
+
+
+        // Find students belonging to teacher's class
+        const students = await Student.find({
+            class: teacher.classAssigned
+        }).select("_id");
+
+
+        const studentIds = students.map(
+            (student) => student._id
+        );
+
+
+        // Get leaves of those students
+        const leaves = await Leave.find({
+            studentId: {
+                $in: studentIds
+            }
+        })
+            .sort({
+                createdAt: -1
+            })
+            .populate({
+                path: "studentId",
+                select: "userId",
+                populate: {
+                    path: "userId",
+                    select: "name uid"
+                }
+            });
+
+
+        // Format response for frontend
+        const formattedLeaves = leaves.map(
+            (leave) => {
+
+                const student = leave.studentId as any;
+
+                return {
+                    _id: leave._id,
+
+                    student: {
+                        _id: student._id,
+                        name: student.userId.name,
+                        uid: student.userId.uid
+                    },
+
+                    startDate: leave.startDate,
+                    endDate: leave.endDate,
+                    reason: leave.reason,
+                    status: leave.status
+                };
+            }
+        );
+
+
+        return res.status(200).json(
+            formattedLeaves
+        );
+
+    }
+    catch (error) {
+
+        console.error(
+            "Get teacher leave applications error:",
+            error
+        );
+
+        return res.status(500).json({
+            message:
+                "Failed to get leave applications"
+        });
+
+    }
+};
+
+export const approveLeave = async (
+    req: Request,
+    res: Response
+) => {
+    try {
+
+        const userId = req.user?.userId;
+
+        const { id } = req.params;
+
+
+        // Find logged-in teacher
+        const teacher = await Teacher.findOne({
+            userId
+        });
+
+        if (!teacher) {
+            return res.status(404).json({
+                message: "Teacher not found"
+            });
+        }
+
+
+        // Find leave
+        const leave = await Leave.findById(id);
+
+        if (!leave) {
+            return res.status(404).json({
+                message: "Leave application not found"
+            });
+        }
+
+
+        // Find student who applied
+        const student = await Student.findById(
+            leave.studentId
+        );
+
+        if (!student) {
+            return res.status(404).json({
+                message: "Student not found"
+            });
+        }
+
+
+        // Make sure student belongs to teacher's class
+        if (
+            student.class !==
+            teacher.classAssigned
+        ) {
+            return res.status(403).json({
+                message:
+                    "You are not authorized to manage this leave application"
+            });
+        }
+
+
+        // Only pending leaves can be approved
+        if (leave.status !== "Pending") {
+            return res.status(400).json({
+                message:
+                    "Only pending leave applications can be approved"
+            });
+        }
+
+
+        leave.status = "Approved";
+
+        await leave.save();
+
+
+        return res.status(200).json({
+            message:
+                "Leave application approved successfully",
+            leave
+        });
+
+    }
+    catch (error) {
+
+        console.error(
+            "Approve leave error:",
+            error
+        );
+
+        return res.status(500).json({
+            message:
+                "Failed to approve leave application"
+        });
+
+    }
+};
+
+export const rejectLeave = async (
+    req: Request,
+    res: Response
+) => {
+    try {
+
+        const userId = req.user?.userId;
+
+        const { id } = req.params;
+
+
+        // Find logged-in teacher
+        const teacher = await Teacher.findOne({
+            userId
+        });
+
+        if (!teacher) {
+            return res.status(404).json({
+                message: "Teacher not found"
+            });
+        }
+
+
+        // Find leave
+        const leave = await Leave.findById(id);
+
+        if (!leave) {
+            return res.status(404).json({
+                message: "Leave application not found"
+            });
+        }
+
+
+        // Find student who applied
+        const student = await Student.findById(
+            leave.studentId
+        );
+
+        if (!student) {
+            return res.status(404).json({
+                message: "Student not found"
+            });
+        }
+
+
+        // Make sure student belongs to teacher's class
+        if (
+            student.class !==
+            teacher.classAssigned
+        ) {
+            return res.status(403).json({
+                message:
+                    "You are not authorized to manage this leave application"
+            });
+        }
+
+
+        // Only pending leaves can be rejected
+        if (leave.status !== "Pending") {
+            return res.status(400).json({
+                message:
+                    "Only pending leave applications can be rejected"
+            });
+        }
+
+
+        leave.status = "Rejected";
+
+        await leave.save();
+
+
+        return res.status(200).json({
+            message:
+                "Leave application rejected successfully",
+            leave
+        });
+
+    }
+    catch (error) {
+
+        console.error(
+            "Reject leave error:",
+            error
+        );
+
+        return res.status(500).json({
+            message:
+                "Failed to reject leave application"
+        });
+
+    }
+};
 
 export const getTeacherHome = async (
     req: Request,
@@ -743,6 +1024,14 @@ export const getStudentsForAttendance = async (
     next: NextFunction
 ) => {
     try {
+        const { date } = req.query;
+
+        if (!date || typeof date !== "string") {
+            return res.status(400).json({
+                message: "Date is required"
+            });
+        }
+
         const teacher = await Teacher.findOne({
             userId: req.user?.userId
         });
@@ -760,8 +1049,25 @@ export const getStudentsForAttendance = async (
             select: "name uid"
         });
 
-        res.status(200).json(students);
+        const selectedDate = new Date(date);
 
+        const approvedLeaves = await Leave.find({
+            status: "Approved",
+            startDate: { $lte: selectedDate },
+            endDate: { $gte: selectedDate },
+            studentId: { $in: students.map(student => student._id) }
+        }).select("studentId");
+
+        const studentsOnLeave = new Set(
+            approvedLeaves.map(leave => leave.studentId.toString())
+        );
+
+        const studentsWithLeaveStatus = students.map(student => ({
+            ...student.toObject(),
+            onLeave: studentsOnLeave.has(student._id.toString())
+        }));
+
+        res.status(200).json(studentsWithLeaveStatus);
     } catch (error) {
         console.log(error);
         next(error);
@@ -880,10 +1186,15 @@ export const getAttendance = async (
 
         const students = await Student.find({
             class: teacher.classAssigned
-        }).select("_id");
+        })
+            .select("_id class rollNumber userId")
+            .populate({
+                path: "userId",
+                select: "name uid"
+            });
 
         const studentIds = students.map(
-            (student) => student._id
+            student => student._id
         );
 
         const attendance = await Attendance.find({
@@ -901,8 +1212,65 @@ export const getAttendance = async (
                 }
             });
 
-        res.status(200).json(attendance);
+        const approvedLeaves = await Leave.find({
+            studentId: {
+                $in: studentIds
+            },
+            status: "Approved",
+            startDate: {
+                $lte: selectedDate
+            },
+            endDate: {
+                $gte: selectedDate
+            }
+        });
 
+        const leaveStudentIds = new Set(
+            approvedLeaves.map(
+                leave => leave.studentId.toString()
+            )
+        );
+
+        const attendanceWithoutLeave = attendance.filter(
+            record =>
+                !leaveStudentIds.has(
+                    record.studentId._id.toString()
+                )
+        );
+
+        const leaveRecords = approvedLeaves.map(
+            leave => {
+                const student = students.find(
+                    student =>
+                        student._id.toString() ===
+                        leave.studentId.toString()
+                );
+
+                return {
+                    _id: `${leave._id}-${date}`,
+                    studentId: student,
+                    date: selectedDate,
+                    status: "Leave"
+                };
+            }
+        );
+
+        const result = [
+            ...attendanceWithoutLeave,
+            ...leaveRecords
+        ];
+
+        result.sort(
+            (a, b) =>
+                Number(
+                    (a.studentId as any).rollNumber
+                ) -
+                Number(
+                    (b.studentId as any).rollNumber
+                )
+        );
+
+        res.status(200).json(result);
     } catch (error) {
         console.log(error);
         next(error);
@@ -933,7 +1301,11 @@ export const getStudentAttendance = async (
             });
         }
 
-        const student = await Student.findById(studentId);
+        const student = await Student.findById(studentId)
+            .populate({
+                path: "userId",
+                select: "name uid"
+            });
 
         if (!student) {
             return res.status(404).json({
@@ -941,11 +1313,10 @@ export const getStudentAttendance = async (
             });
         }
 
-        // Make sure teacher can only view
-        // students from their assigned class
         if (student.class !== teacher.classAssigned) {
             return res.status(403).json({
-                message: "You can only view attendance for students in your assigned class"
+                message:
+                    "You can only view attendance for students in your assigned class"
             });
         }
 
@@ -964,8 +1335,78 @@ export const getStudentAttendance = async (
                 date: 1
             });
 
-        res.status(200).json(attendance);
+        const approvedLeaves = await Leave.find({
+            studentId: student._id,
+            status: "Approved"
+        }).sort({
+            startDate: 1
+        });
 
+        const leaveRecords: any[] = [];
+
+        for (const leave of approvedLeaves) {
+            const currentDate = new Date(
+                leave.startDate
+            );
+
+            const endDate = new Date(
+                leave.endDate
+            );
+
+            while (currentDate <= endDate) {
+                const dateString =
+                    currentDate
+                        .toISOString()
+                        .split("T")[0];
+
+                leaveRecords.push({
+                    _id: `${leave._id}-${dateString}`,
+                    studentId: student,
+                    date: new Date(currentDate),
+                    status: "Leave"
+                });
+
+                currentDate.setUTCDate(
+                    currentDate.getUTCDate() + 1
+                );
+            }
+        }
+
+        const attendanceDates = new Set(
+            attendance.map(
+                record =>
+                    new Date(record.date)
+                        .toISOString()
+                        .split("T")[0]
+            )
+        );
+
+        const filteredLeaveRecords =
+            leaveRecords.filter(
+                record => {
+                    const dateString =
+                        new Date(record.date)
+                            .toISOString()
+                            .split("T")[0];
+
+                    return !attendanceDates.has(
+                        dateString
+                    );
+                }
+            );
+
+        const result = [
+            ...attendance,
+            ...filteredLeaveRecords
+        ];
+
+        result.sort(
+            (a, b) =>
+                new Date(a.date).getTime() -
+                new Date(b.date).getTime()
+        );
+
+        res.status(200).json(result);
     } catch (error) {
         console.log(error);
         next(error);

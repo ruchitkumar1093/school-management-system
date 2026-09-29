@@ -8,6 +8,180 @@ import Attendance from "../models/Attendance";
 import Class from "../models/Class";
 import mongoose from "mongoose";
 import bcrypt from "bcrypt";
+import Leave from "../models/Leave";
+
+//Leaves
+export const getLeaveApplications = async (
+    req: Request,
+    res: Response
+) => {
+    try {
+
+        const leaves = await Leave.find()
+            .sort({
+                createdAt: -1
+            })
+            .populate({
+                path: "studentId",
+                populate: {
+                    path: "userId",
+                    select: "name uid"
+                }
+            });
+
+
+        const formattedLeaves = leaves.map(
+            (leave) => {
+
+                const student = leave.studentId as any;
+
+                return {
+                    _id: leave._id,
+
+                    student: {
+                        _id: student._id,
+                        name: student.userId.name,
+                        uid: student.userId.uid,
+                        class: student.class
+                    },
+
+                    startDate: leave.startDate,
+                    endDate: leave.endDate,
+                    reason: leave.reason,
+                    status: leave.status
+                };
+
+            }
+        );
+
+
+        return res.status(200).json(
+            formattedLeaves
+        );
+
+    }
+    catch (error) {
+
+        console.error(
+            "Get principal leave applications error:",
+            error
+        );
+
+        return res.status(500).json({
+            message:
+                "Failed to get leave applications"
+        });
+
+    }
+};
+
+export const approveLeave = async (
+    req: Request,
+    res: Response
+) => {
+    try {
+
+        const { id } = req.params;
+
+
+        const leave = await Leave.findById(id);
+
+        if (!leave) {
+            return res.status(404).json({
+                message:
+                    "Leave application not found"
+            });
+        }
+
+
+        if (leave.status !== "Pending") {
+            return res.status(400).json({
+                message:
+                    "Only pending leave applications can be approved"
+            });
+        }
+
+
+        leave.status = "Approved";
+
+        await leave.save();
+
+
+        return res.status(200).json({
+            message:
+                "Leave application approved successfully",
+            leave
+        });
+
+    }
+    catch (error) {
+
+        console.error(
+            "Approve leave error:",
+            error
+        );
+
+        return res.status(500).json({
+            message:
+                "Failed to approve leave application"
+        });
+
+    }
+};
+
+export const rejectLeave = async (
+    req: Request,
+    res: Response
+) => {
+    try {
+
+        const { id } = req.params;
+
+
+        const leave = await Leave.findById(id);
+
+        if (!leave) {
+            return res.status(404).json({
+                message:
+                    "Leave application not found"
+            });
+        }
+
+
+        if (leave.status !== "Pending") {
+            return res.status(400).json({
+                message:
+                    "Only pending leave applications can be rejected"
+            });
+        }
+
+
+        leave.status = "Rejected";
+
+        await leave.save();
+
+
+        return res.status(200).json({
+            message:
+                "Leave application rejected successfully",
+            leave
+        });
+
+    }
+    catch (error) {
+
+        console.error(
+            "Reject leave error:",
+            error
+        );
+
+        return res.status(500).json({
+            message:
+                "Failed to reject leave application"
+        });
+
+    }
+};
 
 export const getPrincipalHome = async (
     req: Request,
@@ -1031,11 +1205,28 @@ export const getAttendanceSummary = async (
             });
         }
 
-        const students = await Student.find().select("_id class");
+        const students = await Student.find()
+            .select("_id class");
 
         const attendance = await Attendance.find({
             date: selectedDate
         }).select("studentId status");
+
+        const approvedLeaves = await Leave.find({
+            status: "Approved",
+            startDate: {
+                $lte: selectedDate
+            },
+            endDate: {
+                $gte: selectedDate
+            }
+        }).select("studentId");
+
+        const leaveStudentIds = new Set(
+            approvedLeaves.map(
+                leave => leave.studentId.toString()
+            )
+        );
 
         const classes = [
             "1st",
@@ -1052,31 +1243,41 @@ export const getAttendanceSummary = async (
             "12th"
         ];
 
-        const summary = classes.map((studentClass) => {
+        const summary = classes.map(studentClass => {
             const classStudents = students.filter(
-                (student) => student.class === studentClass
+                student =>
+                    student.class === studentClass
             );
 
             const classStudentIds = new Set(
-                classStudents.map((student) =>
-                    student._id.toString()
+                classStudents.map(
+                    student =>
+                        student._id.toString()
                 )
             );
 
-            const classAttendance = attendance.filter(
-                (record) =>
-                    classStudentIds.has(
-                        record.studentId.toString()
-                    )
-            );
+            const classAttendance =
+                attendance.filter(record => {
+                    const studentId =
+                        record.studentId.toString();
 
-            const present = classAttendance.filter(
-                (record) => record.status === "Present"
-            ).length;
+                    return (
+                        classStudentIds.has(studentId) &&
+                        !leaveStudentIds.has(studentId)
+                    );
+                });
 
-            const absent = classAttendance.filter(
-                (record) => record.status === "Absent"
-            ).length;
+            const present =
+                classAttendance.filter(
+                    record =>
+                        record.status === "Present"
+                ).length;
+
+            const absent =
+                classAttendance.filter(
+                    record =>
+                        record.status === "Absent"
+                ).length;
 
             const total = present + absent;
 
@@ -1094,7 +1295,6 @@ export const getAttendanceSummary = async (
         });
 
         res.status(200).json(summary);
-
     } catch (error) {
         console.log(error);
         next(error);
@@ -1139,52 +1339,6 @@ export const getStudentsForAttendance = async (
             });
 
         res.status(200).json(students);
-
-    } catch (error) {
-        console.log(error);
-        next(error);
-    }
-};
-
-export const getStudentAttendance = async (
-    req: Request,
-    res: Response,
-    next: NextFunction
-) => {
-    try {
-        const { studentId } = req.query;
-
-        if (!studentId || typeof studentId !== "string") {
-            return res.status(400).json({
-                message: "Student ID is required"
-            });
-        }
-
-        const student = await Student.findById(studentId);
-
-        if (!student) {
-            return res.status(404).json({
-                message: "Student not found"
-            });
-        }
-
-        const attendance = await Attendance.find({
-            studentId: student._id
-        })
-            .populate({
-                path: "studentId",
-                select: "class rollNumber userId",
-                populate: {
-                    path: "userId",
-                    select: "name uid"
-                }
-            })
-            .sort({
-                date: 1
-            });
-
-        res.status(200).json(attendance);
-
     } catch (error) {
         console.log(error);
         next(error);
@@ -1210,6 +1364,7 @@ export const getAttendance = async (
             | "10th"
             | "11th"
             | "12th";
+
         const date = req.query.date;
 
         if (!studentClass || typeof studentClass !== "string") {
@@ -1234,10 +1389,18 @@ export const getAttendance = async (
 
         const students = await Student.find({
             class: studentClass
-        }).select("_id");
+        })
+            .select("_id class rollNumber userId")
+            .populate({
+                path: "userId",
+                select: "name uid"
+            })
+            .sort({
+                rollNumber: 1
+            });
 
         const studentIds = students.map(
-            (student) => student._id
+            student => student._id
         );
 
         const attendance = await Attendance.find({
@@ -1255,7 +1418,186 @@ export const getAttendance = async (
                 }
             });
 
-        res.status(200).json(attendance);
+        const approvedLeaves = await Leave.find({
+            studentId: {
+                $in: studentIds
+            },
+            status: "Approved",
+            startDate: {
+                $lte: selectedDate
+            },
+            endDate: {
+                $gte: selectedDate
+            }
+        });
+
+        const leaveStudentIds = new Set(
+            approvedLeaves.map(
+                leave =>
+                    leave.studentId.toString()
+            )
+        );
+
+        const attendanceRecords = attendance
+            .filter(record =>
+                !leaveStudentIds.has(
+                    record.studentId._id.toString()
+                )
+            )
+            .map(record => ({
+                _id: record._id,
+                studentId: record.studentId,
+                date: record.date,
+                status: record.status
+            }));
+
+        const leaveRecords = approvedLeaves.map(
+            leave => {
+                const student = students.find(
+                    student =>
+                        student._id.toString() ===
+                        leave.studentId.toString()
+                );
+
+                return {
+                    _id: `${leave._id}-${date}`,
+                    studentId: student,
+                    date: selectedDate,
+                    status: "Leave"
+                };
+            }
+        );
+
+        const result = [
+            ...attendanceRecords,
+            ...leaveRecords
+        ];
+
+        result.sort((a: any, b: any) => {
+            return (
+                Number(a.studentId.rollNumber) -
+                Number(b.studentId.rollNumber)
+            );
+        });
+
+        res.status(200).json(result);
+    } catch (error) {
+        console.log(error);
+        next(error);
+    }
+};
+
+export const getStudentAttendance = async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+) => {
+    try {
+        const { studentId } = req.query;
+
+        if (!studentId || typeof studentId !== "string") {
+            return res.status(400).json({
+                message: "Student ID is required"
+            });
+        }
+
+        const student = await Student.findById(studentId)
+            .populate({
+                path: "userId",
+                select: "name uid"
+            });
+
+        if (!student) {
+            return res.status(404).json({
+                message: "Student not found"
+            });
+        }
+
+        const attendance = await Attendance.find({
+            studentId: student._id
+        })
+            .populate({
+                path: "studentId",
+                select: "class rollNumber userId",
+                populate: {
+                    path: "userId",
+                    select: "name uid"
+                }
+            })
+            .sort({
+                date: 1
+            });
+
+        const approvedLeaves = await Leave.find({
+            studentId: student._id,
+            status: "Approved"
+        }).sort({
+            startDate: 1
+        });
+
+        const leaveRecords: any[] = [];
+
+        for (const leave of approvedLeaves) {
+            const currentDate = new Date(
+                leave.startDate
+            );
+
+            const endDate = new Date(
+                leave.endDate
+            );
+
+            while (currentDate <= endDate) {
+                const dateString =
+                    currentDate
+                        .toISOString()
+                        .split("T")[0];
+
+                leaveRecords.push({
+                    _id: `${leave._id}-${dateString}`,
+                    studentId: student,
+                    date: new Date(currentDate),
+                    status: "Leave"
+                });
+
+                currentDate.setUTCDate(
+                    currentDate.getUTCDate() + 1
+                );
+            }
+        }
+
+        const attendanceDates = new Set(
+            attendance.map(record =>
+                new Date(record.date)
+                    .toISOString()
+                    .split("T")[0]
+            )
+        );
+
+        const filteredLeaveRecords =
+            leaveRecords.filter(record => {
+                const dateString =
+                    new Date(record.date)
+                        .toISOString()
+                        .split("T")[0];
+
+                return !attendanceDates.has(
+                    dateString
+                );
+            });
+
+        const result = [
+            ...attendance,
+            ...filteredLeaveRecords
+        ];
+
+        result.sort((a: any, b: any) => {
+            return (
+                new Date(a.date).getTime() -
+                new Date(b.date).getTime()
+            );
+        });
+
+        res.status(200).json(result);
     } catch (error) {
         console.log(error);
         next(error);

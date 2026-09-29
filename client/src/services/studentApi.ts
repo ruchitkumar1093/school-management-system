@@ -24,3 +24,16 @@ export const viewHome = () => {
 export const getHolidays = () => {
     return api.get("student/holidays");
 };
+
+//Leaves:
+export const applyLeave = (data: {
+    startDate: string;
+    endDate: string;
+    reason: string;
+}) => {
+    return api.post("/student/applyLeave", data);
+};
+
+export const getMyLeaves = () => {
+    return api.get("/student/getMyLeaves");
+};

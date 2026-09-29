@@ -1,8 +1,13 @@
 import express from "express";
 const router = express.Router();
-import { getSubjects, getStudents, getMarks, getAttendance, getStudentHome } from "../controllers/studentController";
-
+import {
+    getSubjects, getStudents, getMarks, getAttendance, getStudentHome,
+    applyLeave, getMyLeaves
+} from "../controllers/studentController";
 import { getHolidays } from "../controllers/holidayController";
+
+router.post("/applyLeave", applyLeave);
+router.get("/getMyLeaves", getMyLeaves);
 
 router.get("/holidays", getHolidays);
 

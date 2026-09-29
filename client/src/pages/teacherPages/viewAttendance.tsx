@@ -19,6 +19,7 @@ import TeacherViewAttendanceTable from "../../components/viewAttendanceTable";
 
 import { useState, useEffect } from "react";
 
+
 type Attendance = {
     _id: string;
     studentId: {
@@ -31,8 +32,9 @@ type Attendance = {
         rollNumber: string;
     };
     date: string;
-    status: "Present" | "Absent";
+    status: "Present" | "Absent" | "Leave";
 };
+
 
 type Student = {
     _id: string;
@@ -44,45 +46,56 @@ type Student = {
     rollNumber: string;
 };
 
+
 function TeacherViewAttendance() {
 
     const navigate = useNavigate();
 
-    const [viewMode, setViewMode] = useState<"date" | "student">("date");
+    const [viewMode, setViewMode] =
+        useState<"date" | "student">("date");
 
     const [search, setSearch] = useState("");
 
-    const [attendanceData, setAttendanceData] = useState<Attendance[]>([]);
+    const [attendanceData, setAttendanceData] =
+        useState<Attendance[]>([]);
 
-    const [students, setStudents] = useState<Student[]>([]);
+    const [students, setStudents] =
+        useState<Student[]>([]);
 
-    const [selectedStudent, setSelectedStudent] = useState("");
+    const [selectedStudent, setSelectedStudent] =
+        useState("");
 
-    const [studentAttendance, setStudentAttendance] = useState<Attendance[]>([]);
+    const [studentAttendance, setStudentAttendance] =
+        useState<Attendance[]>([]);
 
     const [date, setDate] = useState(
         new Date().toISOString().split("T")[0]
     );
 
-    const [currentPage, setCurrentPage] = useState(1);
+    const [currentPage, setCurrentPage] =
+        useState(1);
 
-    const [limit, setLimit] = useState(10);
+    const [limit, setLimit] =
+        useState(10);
+
 
     const fetchAttendance = async () => {
 
         try {
 
-            const attendance = await getAttendance(date);
+            const attendance =
+                await getAttendance(date);
 
             console.log(
                 "Attendance response:",
                 attendance.data
             );
 
-            setAttendanceData(attendance.data);
+            setAttendanceData(
+                attendance.data
+            );
 
-        }
-        catch (error) {
+        } catch (error) {
 
             console.log(error);
 
@@ -92,22 +105,24 @@ function TeacherViewAttendance() {
 
     };
 
+
     const fetchStudents = async () => {
 
         try {
 
             const studentsResponse =
-                await getStudentsForAttendance();
+                await getStudentsForAttendance(date);
 
             console.log(
                 "Students response:",
                 studentsResponse.data
             );
 
-            setStudents(studentsResponse.data);
+            setStudents(
+                studentsResponse.data
+            );
 
-        }
-        catch (error) {
+        } catch (error) {
 
             console.log(error);
 
@@ -117,6 +132,7 @@ function TeacherViewAttendance() {
 
     };
 
+
     const fetchStudentAttendance = async (
         studentId: string
     ) => {
@@ -124,17 +140,20 @@ function TeacherViewAttendance() {
         try {
 
             const attendance =
-                await getStudentAttendance(studentId);
+                await getStudentAttendance(
+                    studentId
+                );
 
             console.log(
                 "Student attendance response:",
                 attendance.data
             );
 
-            setStudentAttendance(attendance.data);
+            setStudentAttendance(
+                attendance.data
+            );
 
-        }
-        catch (error) {
+        } catch (error) {
 
             console.log(error);
 
@@ -144,26 +163,30 @@ function TeacherViewAttendance() {
 
     };
 
+
     useEffect(() => {
 
         fetchAttendance();
 
     }, [date]);
 
+
     useEffect(() => {
 
         fetchStudents();
 
-    }, []);
+    }, [date]);
+
 
     useEffect(() => {
 
         if (selectedStudent) {
 
-            fetchStudentAttendance(selectedStudent);
+            fetchStudentAttendance(
+                selectedStudent
+            );
 
-        }
-        else {
+        } else {
 
             setStudentAttendance([]);
 
@@ -171,13 +194,17 @@ function TeacherViewAttendance() {
 
     }, [selectedStudent]);
 
+
     useEffect(() => {
 
         setCurrentPage(1);
 
     }, [search, limit]);
 
-    let processedAttendance = [...attendanceData];
+
+    let processedAttendance =
+        [...attendanceData];
+
 
     if (search.trim() !== "") {
 
@@ -186,24 +213,33 @@ function TeacherViewAttendance() {
                 (record) =>
                     record.studentId.userId.name
                         .toLowerCase()
-                        .includes(search.toLowerCase()) ||
-
+                        .includes(
+                            search.toLowerCase()
+                        ) ||
                     record.studentId.userId.uid
                         .toLowerCase()
-                        .includes(search.toLowerCase())
+                        .includes(
+                            search.toLowerCase()
+                        )
             );
 
     }
 
-    const dateWiseTotalPages = Math.ceil(
-        processedAttendance.length / limit
-    );
+
+    const dateWiseTotalPages =
+        Math.ceil(
+            processedAttendance.length /
+            limit
+        );
+
 
     const dateWiseStartIndex =
         (currentPage - 1) * limit;
 
+
     const dateWiseEndIndex =
         dateWiseStartIndex + limit;
+
 
     const currentAttendance =
         processedAttendance.slice(
@@ -211,53 +247,84 @@ function TeacherViewAttendance() {
             dateWiseEndIndex
         );
 
+
     const presentCount =
         attendanceData.filter(
-            (record) => record.status === "Present"
+            (record) =>
+                record.status === "Present"
         ).length;
 
 
     const absentCount =
         attendanceData.filter(
-            (record) => record.status === "Absent"
+            (record) =>
+                record.status === "Absent"
+        ).length;
+
+
+    const leaveCount =
+        attendanceData.filter(
+            (record) =>
+                record.status === "Leave"
         ).length;
 
 
     const className =
-        attendanceData[0]?.studentId.class || "-";
+        attendanceData[0]?.studentId.class ||
+        students[0]?.class ||
+        "-";
+
 
     const studentPresentCount =
         studentAttendance.filter(
-            (record) => record.status === "Present"
+            (record) =>
+                record.status === "Present"
         ).length;
 
 
     const studentAbsentCount =
         studentAttendance.filter(
-            (record) => record.status === "Absent"
+            (record) =>
+                record.status === "Absent"
+        ).length;
+
+
+    const studentLeaveCount =
+        studentAttendance.filter(
+            (record) =>
+                record.status === "Leave"
         ).length;
 
 
     const studentTotalDays =
-        studentAttendance.length;
+        studentPresentCount +
+        studentAbsentCount;
 
 
     const studentPercentage =
         studentTotalDays > 0
             ? (
-                (studentPresentCount / studentTotalDays) * 100
+                (studentPresentCount /
+                    studentTotalDays) *
+                100
             ).toFixed(2)
             : "0.00";
 
-    const studentWiseTotalPages = Math.ceil(
-        studentAttendance.length / limit
-    );
+
+    const studentWiseTotalPages =
+        Math.ceil(
+            studentAttendance.length /
+            limit
+        );
+
 
     const studentWiseStartIndex =
         (currentPage - 1) * limit;
 
+
     const studentWiseEndIndex =
         studentWiseStartIndex + limit;
+
 
     const currentStudentAttendance =
         studentAttendance.slice(
@@ -265,13 +332,17 @@ function TeacherViewAttendance() {
             studentWiseEndIndex
         );
 
+
     const selectedStudentData =
         students.find(
-            (student) => student._id === selectedStudent
+            (student) =>
+                student._id ===
+                selectedStudent
         );
 
 
     return (
+
         <div className="flex flex-col min-h-screen font-fredoka">
 
             <NavBar />
@@ -280,8 +351,11 @@ function TeacherViewAttendance() {
             <div className="flex flex-1 bg-purple-100">
 
                 <SideBar />
+
                 <div>
+
                     <Breadcrumb />
+
                     <div className="flex flex-col pt-12 pl-20 mb-10">
 
                         <div className="flex gap-3 justify-between items-center mb-6">
@@ -301,16 +375,19 @@ function TeacherViewAttendance() {
 
                             <button
                                 type="button"
-                                onClick={() => navigate(-1)}
+                                onClick={() =>
+                                    navigate(-1)
+                                }
                                 className="p-2 bg-purple-300 rounded-lg
-                            shadow-[0_2px_1px]
-                            hover:bg-violet-300
-                            cursor-pointer"
+                                shadow-[0_2px_1px]
+                                hover:bg-violet-300
+                                cursor-pointer"
                             >
                                 Mark Attendance
                             </button>
 
                         </div>
+
 
                         {viewMode === "date" && (
 
@@ -329,24 +406,32 @@ function TeacherViewAttendance() {
 
 
                                         <input
-                                            max={new Date().toISOString().split("T")[0]}
+                                            max={
+                                                new Date()
+                                                    .toISOString()
+                                                    .split("T")[0]
+                                            }
                                             type="date"
                                             id="date"
                                             value={date}
                                             onChange={(e) => {
 
-                                                setDate(e.target.value);
+                                                setDate(
+                                                    e.target.value
+                                                );
 
-                                                setCurrentPage(1);
+                                                setCurrentPage(
+                                                    1
+                                                );
 
                                             }}
                                             className="border-2 border-gray-500
-                                        rounded-sm p-2
-                                        focus:outline-none
-                                        focus:border-gray-900
-                                        transition-colors
-                                        duration-300
-                                        ease-in-out"
+                                            rounded-sm p-2
+                                            focus:outline-none
+                                            focus:border-gray-900
+                                            transition-colors
+                                            duration-300
+                                            ease-in-out"
                                         />
 
                                     </div>
@@ -354,10 +439,13 @@ function TeacherViewAttendance() {
 
                                     <SearchBar
                                         search={search}
-                                        setSearch={setSearch}
+                                        setSearch={
+                                            setSearch
+                                        }
                                     />
 
                                 </div>
+
 
                                 <div className="flex gap-5 items-center justify-between mb-5">
 
@@ -389,50 +477,84 @@ function TeacherViewAttendance() {
                                             </span>
                                         </div>
 
+
+                                        <div>
+                                            Leave:
+
+                                            <span className="font-medium ml-1">
+                                                {leaveCount}
+                                            </span>
+                                        </div>
+
                                     </div>
+
 
                                     <button
                                         type="button"
                                         onClick={() => {
-                                            setViewMode("student");
+
+                                            setViewMode(
+                                                "student"
+                                            );
+
                                             setSearch("");
-                                            setCurrentPage(1);
+
+                                            setCurrentPage(
+                                                1
+                                            );
+
                                         }}
                                         className="p-2 bg-purple-300 rounded-lg
-    shadow-[0_2px_1px]
-    hover:bg-violet-300
-    cursor-pointer"
+                                        shadow-[0_2px_1px]
+                                        hover:bg-violet-300
+                                        cursor-pointer"
                                     >
                                         View Student Wise
                                     </button>
 
                                 </div>
 
+
                                 <div className="flex flex-wrap gap-10">
 
                                     <TeacherViewAttendanceTable
-                                        attendance={currentAttendance}
-                                        startIndex={dateWiseStartIndex}
+                                        attendance={
+                                            currentAttendance
+                                        }
+                                        startIndex={
+                                            dateWiseStartIndex
+                                        }
                                     />
 
                                 </div>
+
 
                                 <div className="flex justify-between mt-5 mb-5 items-center">
 
                                     <div className="mt-1">
 
                                         <Pagination
-                                            currentPage={currentPage}
-                                            totalPages={dateWiseTotalPages}
-                                            setCurrentPage={setCurrentPage}
+                                            currentPage={
+                                                currentPage
+                                            }
+                                            totalPages={
+                                                dateWiseTotalPages
+                                            }
+                                            setCurrentPage={
+                                                setCurrentPage
+                                            }
                                         />
 
                                     </div>
 
 
                                     <Limit
-                                        setLimit={setLimit}
-                                        limit={limit}
+                                        setLimit={
+                                            setLimit
+                                        }
+                                        limit={
+                                            limit
+                                        }
                                     />
 
                                 </div>
@@ -441,13 +563,17 @@ function TeacherViewAttendance() {
 
                         )}
 
+
                         {viewMode === "student" && (
 
                             <>
 
                                 <div className="flex justify-between items-center gap-4 mb-6">
+
                                     <div>
+
                                         <div className="flex gap-2 items-center">
+
                                             <label
                                                 htmlFor="student"
                                                 className="text-lg"
@@ -458,20 +584,24 @@ function TeacherViewAttendance() {
 
                                             <select
                                                 id="student"
-                                                value={selectedStudent}
+                                                value={
+                                                    selectedStudent
+                                                }
                                                 onChange={(e) => {
 
                                                     setSelectedStudent(
                                                         e.target.value
                                                     );
 
-                                                    setCurrentPage(1);
+                                                    setCurrentPage(
+                                                        1
+                                                    );
 
                                                 }}
                                                 className="border-2 border-gray-500
-                                    rounded-sm p-2
-                                    focus:outline-none
-                                    focus:border-gray-900"
+                                                rounded-sm p-2
+                                                focus:outline-none
+                                                focus:border-gray-900"
                                             >
 
                                                 <option value="">
@@ -479,46 +609,68 @@ function TeacherViewAttendance() {
                                                 </option>
 
 
-                                                {students.map((student) => (
+                                                {students.map(
+                                                    (student) => (
 
-                                                    <option
-                                                        key={student._id}
-                                                        value={student._id}
-                                                    >
-                                                        {student.userId.name}
-                                                        {" - "}
-                                                        {student.userId.uid.toUpperCase()}
-                                                    </option>
+                                                        <option
+                                                            key={
+                                                                student._id
+                                                            }
+                                                            value={
+                                                                student._id
+                                                            }
+                                                        >
+                                                            {
+                                                                student
+                                                                    .userId
+                                                                    .name
+                                                            }
+                                                            {" - "}
+                                                            {
+                                                                student
+                                                                    .userId
+                                                                    .uid
+                                                            }
+                                                        </option>
 
-                                                ))}
+                                                    )
+                                                )}
 
                                             </select>
 
                                         </div>
 
-
                                     </div>
-
 
 
                                     <button
                                         type="button"
                                         onClick={() => {
-                                            setViewMode("date");
+
+                                            setViewMode(
+                                                "date"
+                                            );
+
                                             setSearch("");
-                                            setCurrentPage(1);
+
+                                            setCurrentPage(
+                                                1
+                                            );
+
                                         }}
                                         className="p-2 bg-purple-300 rounded-lg
-    shadow-[0_2px_1px]
-    hover:bg-violet-300
-    cursor-pointer"
+                                        shadow-[0_2px_1px]
+                                        hover:bg-violet-300
+                                        cursor-pointer"
                                     >
                                         View Date Wise
                                     </button>
 
                                 </div>
 
-                                {selectedStudent && selectedStudentData && (
+
+                                {selectedStudent &&
+                                    selectedStudentData && (
 
                                     <>
 
@@ -528,7 +680,11 @@ function TeacherViewAttendance() {
                                                 Student:
 
                                                 <span className="font-medium ml-1">
-                                                    {selectedStudentData.userId.name}
+                                                    {
+                                                        selectedStudentData
+                                                            .userId
+                                                            .name
+                                                    }
                                                 </span>
                                             </div>
 
@@ -537,7 +693,11 @@ function TeacherViewAttendance() {
                                                 UID:
 
                                                 <span className="font-medium ml-1">
-                                                    {selectedStudentData.userId.uid.toUpperCase()}
+                                                    {
+                                                        selectedStudentData
+                                                            .userId
+                                                            .uid
+                                                    }
                                                 </span>
                                             </div>
 
@@ -546,11 +706,15 @@ function TeacherViewAttendance() {
                                                 Class:
 
                                                 <span className="font-medium ml-1">
-                                                    {selectedStudentData.class}
+                                                    {
+                                                        selectedStudentData
+                                                            .class
+                                                    }
                                                 </span>
                                             </div>
 
                                         </div>
+
 
                                         <div className="flex gap-8 mb-5">
 
@@ -558,7 +722,9 @@ function TeacherViewAttendance() {
                                                 Total Days:
 
                                                 <span className="font-medium ml-1">
-                                                    {studentTotalDays}
+                                                    {
+                                                        studentTotalDays
+                                                    }
                                                 </span>
                                             </div>
 
@@ -567,7 +733,9 @@ function TeacherViewAttendance() {
                                                 Present:
 
                                                 <span className="font-medium ml-1">
-                                                    {studentPresentCount}
+                                                    {
+                                                        studentPresentCount
+                                                    }
                                                 </span>
                                             </div>
 
@@ -576,7 +744,20 @@ function TeacherViewAttendance() {
                                                 Absent:
 
                                                 <span className="font-medium ml-1">
-                                                    {studentAbsentCount}
+                                                    {
+                                                        studentAbsentCount
+                                                    }
+                                                </span>
+                                            </div>
+
+
+                                            <div>
+                                                Leave:
+
+                                                <span className="font-medium ml-1">
+                                                    {
+                                                        studentLeaveCount
+                                                    }
                                                 </span>
                                             </div>
 
@@ -585,11 +766,14 @@ function TeacherViewAttendance() {
                                                 Attendance:
 
                                                 <span className="font-medium ml-1">
-                                                    {studentPercentage}%
+                                                    {
+                                                        studentPercentage
+                                                    }%
                                                 </span>
                                             </div>
 
                                         </div>
+
 
                                         <div className="flex flex-wrap gap-10">
 
@@ -634,31 +818,51 @@ function TeacherViewAttendance() {
                                                     ) : (
 
                                                         currentStudentAttendance.map(
-                                                            (record, index) => (
+                                                            (
+                                                                record,
+                                                                index
+                                                            ) => (
 
-                                                                <tr key={record._id}>
+                                                                <tr
+                                                                    key={
+                                                                        record._id
+                                                                    }
+                                                                >
 
                                                                     <td className="border border-gray-400 p-3">
-                                                                        {studentWiseStartIndex + index + 1}
+                                                                        {
+                                                                            studentWiseStartIndex +
+                                                                            index +
+                                                                            1
+                                                                        }
                                                                     </td>
 
 
                                                                     <td className="border border-gray-400 p-3">
-                                                                        {new Date(
-                                                                            record.date
-                                                                        ).toLocaleDateString(
-                                                                            "en-GB"
-                                                                        )}
+                                                                        {
+                                                                            new Date(
+                                                                                record.date
+                                                                            ).toLocaleDateString(
+                                                                                "en-GB"
+                                                                            )
+                                                                        }
                                                                     </td>
 
 
                                                                     <td
-                                                                        className={`border border-gray-400 p-3 ${record.status === "Present"
-                                                                            ? "text-emerald-600"
-                                                                            : "text-rose-600"
-                                                                            }`}
+                                                                        className={`border border-gray-400 p-3 ${
+                                                                            record.status ===
+                                                                            "Present"
+                                                                                ? "text-emerald-600"
+                                                                                : record.status ===
+                                                                                  "Absent"
+                                                                                ? "text-rose-600"
+                                                                                : "text-yellow-600"
+                                                                        }`}
                                                                     >
-                                                                        {record.status}
+                                                                        {
+                                                                            record.status
+                                                                        }
                                                                     </td>
 
                                                                 </tr>
@@ -674,22 +878,33 @@ function TeacherViewAttendance() {
 
                                         </div>
 
+
                                         <div className="flex justify-between mt-5 mb-5 items-center">
 
                                             <div className="mt-1">
 
                                                 <Pagination
-                                                    currentPage={currentPage}
-                                                    totalPages={studentWiseTotalPages}
-                                                    setCurrentPage={setCurrentPage}
+                                                    currentPage={
+                                                        currentPage
+                                                    }
+                                                    totalPages={
+                                                        studentWiseTotalPages
+                                                    }
+                                                    setCurrentPage={
+                                                        setCurrentPage
+                                                    }
                                                 />
 
                                             </div>
 
 
                                             <Limit
-                                                setLimit={setLimit}
-                                                limit={limit}
+                                                setLimit={
+                                                    setLimit
+                                                }
+                                                limit={
+                                                    limit
+                                                }
                                             />
 
                                         </div>
@@ -712,10 +927,8 @@ function TeacherViewAttendance() {
                         )}
 
                     </div>
+
                 </div>
-
-
-
 
             </div>
 

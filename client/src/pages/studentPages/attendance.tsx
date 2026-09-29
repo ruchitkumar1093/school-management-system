@@ -11,7 +11,7 @@ import { useState, useEffect } from "react";
 type Attendance = {
     _id: string;
     date: string;
-    status: "Present" | "Absent";
+    status: "Present" | "Absent" | "Leave";
 };
 
 type StudentInfo = {
@@ -23,11 +23,8 @@ type StudentInfo = {
 
 function StudentAttendance() {
     const [attendance, setAttendance] = useState<Attendance[]>([]);
-
     const [student, setStudent] = useState<StudentInfo | null>(null);
-
     const [currentPage, setCurrentPage] = useState(1);
-
     const [limit, setLimit] = useState(10);
 
     const fetchAttendance = async () => {
@@ -59,7 +56,11 @@ function StudentAttendance() {
         (record) => record.status === "Absent"
     ).length;
 
-    const totalDays = attendance.length;
+    const leaveCount = attendance.filter(
+        (record) => record.status === "Leave"
+    ).length;
+
+    const totalDays = presentCount + absentCount;
 
     const percentage =
         totalDays > 0
@@ -85,12 +86,14 @@ function StudentAttendance() {
 
             <div className="flex flex-1 bg-purple-100">
                 <SideBar />
+
                 <div>
                     <Breadcrumb />
+
                     <div className="flex flex-col pt-12 pl-20 mb-10">
+
                         <div className="flex justify-between items-center mb-6">
                             <div>
-
                                 <h1 className="text-3xl font-medium text-gray-900">
                                     Attendance
                                 </h1>
@@ -98,7 +101,6 @@ function StudentAttendance() {
                                 <p className="mt-1 text-sm text-gray-600">
                                     View your Attendance
                                 </p>
-
                             </div>
                         </div>
 
@@ -157,6 +159,13 @@ function StudentAttendance() {
                                     </div>
 
                                     <div>
+                                        Leave:
+                                        <span className="font-medium ml-1">
+                                            {leaveCount}
+                                        </span>
+                                    </div>
+
+                                    <div>
                                         Attendance:
                                         <span className="font-medium ml-1">
                                             {percentage}%
@@ -210,10 +219,13 @@ function StudentAttendance() {
                                                 </td>
 
                                                 <td
-                                                    className={`border border-gray-400 p-3 text-center ${record.status === "Present"
+                                                    className={`border border-gray-400 p-3 text-center ${
+                                                        record.status === "Present"
                                                             ? "text-emerald-600"
-                                                            : "text-rose-600"
-                                                        }`}
+                                                            : record.status === "Absent"
+                                                            ? "text-rose-600"
+                                                            : "text-yellow-600"
+                                                    }`}
                                                 >
                                                     {record.status}
                                                 </td>
@@ -236,6 +248,7 @@ function StudentAttendance() {
                                 limit={limit}
                             />
                         </div>
+
                     </div>
                 </div>
             </div>

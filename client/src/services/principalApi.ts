@@ -138,3 +138,16 @@ export const updateHoliday = (
 export const deleteHoliday = (id: string) => {
     return api.delete(`/principal/deleteHolidays/${id}`);
 };
+
+//Leaves:
+export const getLeaveApplications = () => {
+    return api.get("/principal/leaves");
+};
+
+export const approveLeave = (id: string) => {
+    return api.patch(`/principal/leaves/${id}/approve`);
+};
+
+export const rejectLeave = (id: string) => {
+    return api.patch(`/principal/leaves/${id}/reject`);
+};

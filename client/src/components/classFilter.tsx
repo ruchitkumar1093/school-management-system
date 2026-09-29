@@ -1,3 +1,5 @@
+import React from "react";
+
 type Props = {
     classFilter: string;
     setClassFilter: React.Dispatch<React.SetStateAction<string>>;
@@ -7,12 +9,16 @@ type Props = {
 function classFilter({ classFilter, setClassFilter, showAll = true }: Props) {
     return (
         <div className="flex flex-col gap-1">
-            <label htmlFor="order">Class:</label>
-            <select onChange={(e) => setClassFilter(e.target.value)} value={classFilter} id="order" className="border-2 border-gray-400 bg-purple-200 
-                rounded-md focus:outline-none focus:border-gray-900">
-                {showAll && (
-                    <option value="All">All</option>
-                )}
+            <label htmlFor="order" className="text-sm font-medium text-purple-950">
+                Class:
+            </label>
+            <select
+                onChange={(e) => setClassFilter(e.target.value)}
+                value={classFilter}
+                id="order"
+                className="rounded-md border border-purple-400 bg-purple-200 px-2 py-1 text-sm font-medium text-purple-950 shadow-sm cursor-pointer transition-all duration-150 hover:bg-purple-300/80 focus:border-purple-600 focus:outline-none focus:ring-2 focus:ring-purple-400/40"
+            >
+                {showAll && <option value="All">All</option>}
                 <option value="1st">1st</option>
                 <option value="2nd">2nd</option>
                 <option value="3rd">3rd</option>
