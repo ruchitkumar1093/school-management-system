@@ -1,19 +1,55 @@
 import api from "./api";
 
-export const viewSubjects = () => {
-    return api.get("student/subjects");
-}
+export const viewSubjects = (
+    search: string,
+    orderBy: string,
+    currentPage: number,
+    limit: number
+) => {
+    return api.get("student/subjects", {
+        params: {
+            search,
+            order: orderBy,
+            page: currentPage,
+            limit
+        }
+    });
+};
 
-export const viewMarks = () => {
-    return api.get("student/marks");
-}
+export const viewMarks = (
+    exam: string,
+    search: string,
+    sortBy: string,
+    orderBy: string,
+    currentPage: number,
+    limit: number
+) => {
+    return api.get("student/marks", {
+        params: {
+            exam,
+            search,
+            sortBy,
+            order: orderBy,
+            page: currentPage,
+            limit
+        }
+    });
+};
 
 export const viewStudent = () => {
     return api.get("student/student")
 }
 
-export const getAttendance = () => {
-    return api.get("student/attendance");
+export const getAttendance = (
+    currentPage: number,
+    limit: number
+) => {
+    return api.get("student/attendance", {
+        params: {
+            page: currentPage,
+            limit
+        }
+    });
 };
 
 export const viewHome = () => {
@@ -34,6 +70,14 @@ export const applyLeave = (data: {
     return api.post("/student/applyLeave", data);
 };
 
-export const getMyLeaves = () => {
-    return api.get("/student/getMyLeaves");
+export const getMyLeaves = (
+    currentPage: number,
+    limit: number
+) => {
+    return api.get("/student/getMyLeaves", {
+        params: {
+            page: currentPage,
+            limit
+        }
+    });
 };

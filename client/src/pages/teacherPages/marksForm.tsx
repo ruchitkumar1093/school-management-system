@@ -59,27 +59,22 @@ function MarksForm() {
 
 
     useEffect(() => {
-
         const fetchData = async () => {
-
             try {
-
                 const teacherResponse = await viewTeacher();
 
                 const classAssigned = teacherResponse.data.classAssigned;
 
                 setTeacherClass(classAssigned);
 
+                const studentsResponse = await viewStudents("", "", "asc", 1, 1000);
 
-                const studentsResponse = await viewStudents();
-
-                const classStudents = studentsResponse.data.filter(
+                const classStudents = studentsResponse.data.students.filter(
                     (student: Student) =>
                         student.class === classAssigned
                 );
 
                 setStudents(classStudents);
-
             }
             catch (error) {
                 console.log(error);
@@ -87,7 +82,6 @@ function MarksForm() {
         };
 
         fetchData();
-
     }, []);
 
 
@@ -392,9 +386,7 @@ function MarksForm() {
 
                                 <button
                                     type="submit"
-                                    className="p-2 bg-purple-300 rounded-lg
-                                    shadow-[0_2px_3px]
-                                    hover:bg-violet-300 cursor-pointer"
+                                    className="rounded-lg bg-purple-300 px-6 py-3 font-medium text-purple-950 shadow-[0_2px_3px] transition-colors hover:bg-violet-300 cursor-pointer"
                                 >
                                     {isAdding ? "Add" : "Update"}
                                 </button>
@@ -402,9 +394,7 @@ function MarksForm() {
                                 <button
                                     onClick={() => navigate(-1)}
                                     type="button"
-                                    className="p-2 bg-purple-300 rounded-lg
-                                    shadow-[0_2px_3px]
-                                    hover:bg-violet-300 cursor-pointer"
+                                    className="rounded-lg bg-purple-300 px-6 py-3 font-medium text-purple-950 shadow-[0_2px_3px] transition-colors hover:bg-violet-300 cursor-pointer"
                                 >
                                     Cancel
                                 </button>

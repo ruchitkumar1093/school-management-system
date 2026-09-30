@@ -13,6 +13,7 @@ import TeacherAttendance from "../pages/teacherPages/attendance";
 import TeacherViewAttendance from "../pages/teacherPages/viewAttendance";
 import Holidays from "../pages/teacherPages/holidays";
 import LeaveApplications from "../pages/teacherPages/leaves";
+import NotFound from "../pages/notFound";
 
 
 function TeacherRoutes() {
@@ -33,6 +34,7 @@ function TeacherRoutes() {
             <Route path="viewStudents/studentForm" element={<StudentForm />} />
             <Route path="viewStudents/studentProfile" element={<StudentProfile />} />
             <Route path="viewMarks/marksForm" element={<StudentMarks />} />
+            <Route path="*" element={<NotFound />} />
         </Routes>
     );
 }

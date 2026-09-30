@@ -13,11 +13,8 @@ export const getLeaveApplications = async (
     res: Response
 ) => {
     try {
-
         const userId = req.user?.userId;
 
-
-        // Find logged-in teacher
         const teacher = await Teacher.findOne({
             userId
         });
@@ -28,27 +25,60 @@ export const getLeaveApplications = async (
             });
         }
 
+        const status =
+            req.query.status?.toString() || "All";
 
-        // Find students belonging to teacher's class
+        const currentPage = Math.max(
+            Number(req.query.page) || 1,
+            1
+        );
+
+        const pageLimit = Math.max(
+            Number(req.query.limit) || 5,
+            1
+        );
+
+        if (
+            status !== "All" &&
+            status !== "Pending" &&
+            status !== "Approved" &&
+            status !== "Rejected"
+        ) {
+            return res.status(400).json({
+                message: "Invalid leave status"
+            });
+        }
+
         const students = await Student.find({
             class: teacher.classAssigned
         }).select("_id");
 
-
         const studentIds = students.map(
-            (student) => student._id
+            student => student._id
         );
 
-
-        // Get leaves of those students
-        const leaves = await Leave.find({
+        const filter: any = {
             studentId: {
                 $in: studentIds
             }
-        })
+        };
+
+        if (status !== "All") {
+            filter.status = status;
+        }
+
+        const totalLeaves =
+            await Leave.countDocuments(filter);
+
+        const skip =
+            (currentPage - 1) * pageLimit;
+
+        const leaves = await Leave.find(filter)
             .sort({
                 createdAt: -1
             })
+            .skip(skip)
+            .limit(pageLimit)
             .populate({
                 path: "studentId",
                 select: "userId",
@@ -58,22 +88,18 @@ export const getLeaveApplications = async (
                 }
             });
 
-
-        // Format response for frontend
         const formattedLeaves = leaves.map(
-            (leave) => {
-
-                const student = leave.studentId as any;
+            leave => {
+                const student =
+                    leave.studentId as any;
 
                 return {
                     _id: leave._id,
-
                     student: {
                         _id: student._id,
                         name: student.userId.name,
                         uid: student.userId.uid
                     },
-
                     startDate: leave.startDate,
                     endDate: leave.endDate,
                     reason: leave.reason,
@@ -82,14 +108,20 @@ export const getLeaveApplications = async (
             }
         );
 
+        const totalPages =
+            Math.ceil(
+                totalLeaves / pageLimit
+            );
 
-        return res.status(200).json(
-            formattedLeaves
-        );
-
+        return res.status(200).json({
+            leaves: formattedLeaves,
+            totalLeaves,
+            totalPages,
+            currentPage,
+            limit: pageLimit
+        });
     }
     catch (error) {
-
         console.error(
             "Get teacher leave applications error:",
             error
@@ -99,7 +131,6 @@ export const getLeaveApplications = async (
             message:
                 "Failed to get leave applications"
         });
-
     }
 };
 
@@ -325,8 +356,27 @@ export const getTeacherHome = async (
 };
 
 // GET all:
-export const getSubjects = async (req: Request, res: Response, next: NextFunction) => {
+export const getSubjects = async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+) => {
     try {
+        const search =
+            req.query.search?.toString().trim() || "";
+
+        const order =
+            req.query.order?.toString() || "asc";
+
+        const currentPage = Math.max(
+            Number(req.query.page) || 1,
+            1
+        );
+
+        const pageLimit = Math.max(
+            Number(req.query.limit) || 5,
+            1
+        );
 
         const teacher = await Teacher.findOne({
             userId: req.user?.userId
@@ -338,16 +388,51 @@ export const getSubjects = async (req: Request, res: Response, next: NextFunctio
             });
         }
 
-        const subjects = await Subject.find({
+        const match: any = {
             class: teacher.classAssigned
-        });
-        res.status(200).json(subjects);
-    }
+        };
 
+        if (search !== "") {
+            match.name = {
+                $regex: search,
+                $options: "i"
+            };
+        }
+
+        const sortOrder =
+            order === "desc" ? -1 : 1;
+
+        const skip =
+            (currentPage - 1) * pageLimit;
+
+        const totalSubjects =
+            await Subject.countDocuments(match);
+
+        const subjects =
+            await Subject.find(match)
+                .sort({
+                    name: sortOrder
+                })
+                .skip(skip)
+                .limit(pageLimit);
+
+        const totalPages =
+            Math.ceil(
+                totalSubjects / pageLimit
+            );
+
+        return res.status(200).json({
+            subjects,
+            totalSubjects,
+            totalPages,
+            currentPage,
+            limit: pageLimit
+        });
+    }
     catch (error) {
         next(error);
     }
-}
+};
 
 export const getTeacher = async (req: Request, res: Response, next: NextFunction) => {
     try {
@@ -368,9 +453,12 @@ export const getTeacher = async (req: Request, res: Response, next: NextFunction
     }
 }
 
-export const getMarks = async (req: Request, res: Response, next: NextFunction) => {
+export const getMarks = async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+) => {
     try {
-
         const teacher = await Teacher.findOne({
             userId: req.user?.userId
         });
@@ -381,40 +469,213 @@ export const getMarks = async (req: Request, res: Response, next: NextFunction) 
             });
         }
 
+        const exam =
+            req.query.exam?.toString() || "All";
+
+        const search =
+            req.query.search?.toString().trim() || "";
+
+        const sortBy =
+            req.query.sortBy?.toString() || "None";
+
+        const order =
+            req.query.order?.toString() || "asc";
+
+        const currentPage = Math.max(
+            Number(req.query.page) || 1,
+            1
+        );
+
+        const pageLimit = Math.max(
+            Number(req.query.limit) || 5,
+            1
+        );
+
         const students = await Student.find({
             class: teacher.classAssigned
-        });
+        }).select("_id");
 
-        if (students.length === 0) {
-            return res.status(404).json({
-                message: "student not found"
+        const studentIds = students.map(
+            student => student._id
+        );
+
+        if (studentIds.length === 0) {
+            return res.status(200).json({
+                marks: [],
+                totalMarks: 0,
+                totalPages: 0,
+                currentPage,
+                limit: pageLimit
             });
         }
 
-        const studentIds = students.map(student => student._id);
-
-        const marks = await Mark.find({
-            studentId: { $in: studentIds }
-        }).populate({
-            path: "studentId",
-            select: "class userId",
-            populate: {
-                path: "userId",
-                select: "name uid"
+        const pipeline: any[] = [
+            {
+                $match: {
+                    studentId: {
+                        $in: studentIds
+                    }
+                }
+            },
+            {
+                $lookup: {
+                    from: "students",
+                    localField: "studentId",
+                    foreignField: "_id",
+                    as: "studentId"
+                }
+            },
+            {
+                $unwind: "$studentId"
+            },
+            {
+                $lookup: {
+                    from: "users",
+                    localField: "studentId.userId",
+                    foreignField: "_id",
+                    as: "studentUser"
+                }
+            },
+            {
+                $unwind: "$studentUser"
+            },
+            {
+                $lookup: {
+                    from: "subjects",
+                    localField: "subjectId",
+                    foreignField: "_id",
+                    as: "subjectId"
+                }
+            },
+            {
+                $unwind: "$subjectId"
             }
-        })
-            .populate("subjectId");
-        res.status(200).json(marks);
-    }
+        ];
 
+        if (exam !== "All") {
+            pipeline.push({
+                $match: {
+                    exam
+                }
+            });
+        }
+
+        if (search !== "") {
+            pipeline.push({
+                $match: {
+                    "studentUser.name": {
+                        $regex: search,
+                        $options: "i"
+                    }
+                }
+            });
+        }
+
+        if (sortBy === "Student Name") {
+            pipeline.push({
+                $sort: {
+                    "studentUser.name":
+                        order === "desc" ? -1 : 1
+                }
+            });
+        }
+        else if (sortBy === "Subject Name") {
+            pipeline.push({
+                $sort: {
+                    "subjectId.name":
+                        order === "desc" ? -1 : 1
+                }
+            });
+        }
+        else if (sortBy === "Marks Obtained") {
+            pipeline.push({
+                $sort: {
+                    marksObtained:
+                        order === "desc" ? -1 : 1
+                }
+            });
+        }
+        else {
+            pipeline.push({
+                $sort: {
+                    _id: 1
+                }
+            });
+        }
+
+        const skip =
+            (currentPage - 1) * pageLimit;
+
+        pipeline.push({
+            $facet: {
+                marks: [
+                    {
+                        $skip: skip
+                    },
+                    {
+                        $limit: pageLimit
+                    }
+                ],
+                total: [
+                    {
+                        $count: "count"
+                    }
+                ]
+            }
+        });
+
+        const result =
+            await Mark.aggregate(pipeline);
+
+        const marks =
+            result[0]?.marks || [];
+
+        const totalMarks =
+            result[0]?.total[0]?.count || 0;
+
+        const totalPages =
+            Math.ceil(
+                totalMarks / pageLimit
+            );
+
+        const formattedMarks = marks.map(
+            (mark: any) => ({
+                _id: mark._id,
+                studentId: {
+                    class: mark.studentId.class,
+                    userId: {
+                        name: mark.studentUser.name,
+                        uid: mark.studentUser.uid
+                    }
+                },
+                subjectId: {
+                    name: mark.subjectId.name
+                },
+                exam: mark.exam,
+                marksObtained: mark.marksObtained,
+                totalMarks: mark.totalMarks
+            })
+        );
+
+        return res.status(200).json({
+            marks: formattedMarks,
+            totalMarks,
+            totalPages,
+            currentPage,
+            limit: pageLimit
+        });
+    }
     catch (error) {
         next(error);
     }
-}
+};
 
-export const getStudents = async (req: Request, res: Response, next: NextFunction) => {
+export const getStudents = async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+) => {
     try {
-
         const teacher = await Teacher.findOne({
             userId: req.user?.userId
         });
@@ -425,12 +686,146 @@ export const getStudents = async (req: Request, res: Response, next: NextFunctio
             });
         }
 
-        const students = await Student.find({
-            class: teacher.classAssigned
-        }).populate("userId", "name uid");
-        res.status(200).json(students);
-    }
+        const search =
+            req.query.search?.toString().trim() || "";
 
+        const sortBy =
+            req.query.sortBy?.toString() || "None";
+
+        const order =
+            req.query.order?.toString() || "asc";
+
+        const currentPage = Math.max(
+            Number(req.query.page) || 1,
+            1
+        );
+
+        const pageLimit = Math.max(
+            Number(req.query.limit) || 5,
+            1
+        );
+
+        const skip =
+            (currentPage - 1) * pageLimit;
+
+        const match: any = {
+            class: teacher.classAssigned
+        };
+
+        const pipeline: any[] = [
+            {
+                $match: match
+            },
+            {
+                $lookup: {
+                    from: "users",
+                    localField: "userId",
+                    foreignField: "_id",
+                    as: "userId"
+                }
+            },
+            {
+                $unwind: "$userId"
+            }
+        ];
+
+        if (search !== "") {
+            pipeline.push({
+                $match: {
+                    "userId.name": {
+                        $regex: search,
+                        $options: "i"
+                    }
+                }
+            });
+        }
+
+        if (sortBy === "Student Name") {
+            pipeline.push({
+                $sort: {
+                    "userId.name": order === "desc" ? -1 : 1
+                }
+            });
+        }
+        else if (sortBy === "Class") {
+            pipeline.push({
+                $addFields: {
+                    classNumber: {
+                        $toInt: {
+                            $getField: {
+                                field: "match",
+                                input: {
+                                    $regexFind: {
+                                        input: "$class",
+                                        regex: "\\d+"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+
+            pipeline.push({
+                $sort: {
+                    classNumber: order === "desc" ? -1 : 1,
+                    "userId.name": 1
+                }
+            });
+        }
+        else if (sortBy === "Roll no") {
+            pipeline.push({
+                $sort: {
+                    rollNumber: order === "desc" ? -1 : 1
+                }
+            });
+        }
+        else {
+            pipeline.push({
+                $sort: {
+                    rollNumber: 1
+                }
+            });
+        }
+
+        pipeline.push({
+            $facet: {
+                students: [
+                    {
+                        $skip: skip
+                    },
+                    {
+                        $limit: pageLimit
+                    }
+                ],
+                total: [
+                    {
+                        $count: "count"
+                    }
+                ]
+            }
+        });
+
+        const result =
+            await Student.aggregate(pipeline);
+
+        const students =
+            result[0]?.students || [];
+
+        const totalStudents =
+            result[0]?.total[0]?.count || 0;
+
+        const totalPages =
+            Math.ceil(totalStudents / pageLimit);
+
+        res.status(200).json({
+            students,
+            totalStudents,
+            totalPages,
+            currentPage,
+            limit: pageLimit
+        });
+    }
     catch (error) {
         next(error);
     }
@@ -816,6 +1211,7 @@ type ExamType =
     | "mid term"
     | "final";
 
+
 export const getExamResults = async (
     req: Request,
     res: Response,
@@ -833,7 +1229,40 @@ export const getExamResults = async (
         }
 
         const studentClass = teacher.classAssigned;
-        const exam = req.query.exam as ExamType;
+
+        const examValue =
+            req.query.exam?.toString() || "";
+
+        if (
+            examValue !== "class test" &&
+            examValue !== "mid term" &&
+            examValue !== "final"
+        ) {
+            return res.status(400).json({
+                message: "Invalid exam type"
+            });
+        }
+
+        const exam = examValue as ExamType;
+
+        const search =
+            req.query.search?.toString().trim() || "";
+
+        const sortBy =
+            req.query.sortBy?.toString() || "None";
+
+        const order =
+            req.query.order?.toString() || "asc";
+
+        const currentPage = Math.max(
+            Number(req.query.page) || 1,
+            1
+        );
+
+        const pageLimit = Math.max(
+            Number(req.query.limit) || 5,
+            1
+        );
 
         if (!studentClass || !exam) {
             return res.status(400).json({
@@ -841,7 +1270,6 @@ export const getExamResults = async (
             });
         }
 
-        // Get all students of the selected class
         const students = await Student.find({
             class: studentClass
         }).populate({
@@ -849,15 +1277,15 @@ export const getExamResults = async (
             select: "name uid"
         });
 
-        // Get all subjects available for the selected class
         const subjects = await Subject.find({
             class: studentClass
         }).select("name subjectCode");
 
-        // Get marks for the selected class and exam
         const marks = await Mark.find({
             studentId: {
-                $in: students.map(student => student._id)
+                $in: students.map(
+                    student => student._id
+                )
             },
             exam
         }).populate({
@@ -873,7 +1301,6 @@ export const getExamResults = async (
                     student._id.toString()
             );
 
-            // Store marks by subject name
             const subjectMarks: Record<
                 string,
                 {
@@ -887,7 +1314,8 @@ export const getExamResults = async (
                     return;
                 }
 
-                const subject = mark.subjectId as any;
+                const subject =
+                    mark.subjectId as any;
 
                 subjectMarks[subject.name] = {
                     obtained: mark.marksObtained,
@@ -895,8 +1323,8 @@ export const getExamResults = async (
                 };
             });
 
-            // Subject values for the table
-            const science = subjectMarks["Science"] ?? null;
+            const science =
+                subjectMarks["Science"] ?? null;
 
             const mathematics =
                 subjectMarks["Mathematics"] ?? null;
@@ -910,14 +1338,10 @@ export const getExamResults = async (
             const hindi =
                 subjectMarks["Hindi"] ?? null;
 
-
-            /*
-             * Only subjects that actually exist
-             * for this class are considered required.
-             */
-            const requiredSubjects = subjects.map(
-                subject => subject.name
-            );
+            const requiredSubjects =
+                subjects.map(
+                    subject => subject.name
+                );
 
             let obtainedMarks = 0;
             let totalMarks = 0;
@@ -926,47 +1350,52 @@ export const getExamResults = async (
             let hasFailedSubject = false;
             let hasAnyMarks = false;
 
-            requiredSubjects.forEach(subjectName => {
+            requiredSubjects.forEach(
+                subjectName => {
 
-                const mark = subjectMarks[subjectName];
+                    const mark =
+                        subjectMarks[subjectName];
 
-                if (!mark) {
-                    hasMissingMarks = true;
-                    return;
+                    if (!mark) {
+                        hasMissingMarks = true;
+                        return;
+                    }
+
+                    hasAnyMarks = true;
+
+                    obtainedMarks +=
+                        mark.obtained;
+
+                    totalMarks +=
+                        mark.total;
+
+                    const percentage =
+                        mark.total > 0
+                            ? (mark.obtained / mark.total) * 100
+                            : 0;
+
+                    if (percentage < 33) {
+                        hasFailedSubject = true;
+                    }
                 }
-
-                hasAnyMarks = true;
-
-                obtainedMarks += mark.obtained;
-                totalMarks += mark.total;
-
-                const percentage =
-                    (mark.obtained / mark.total) * 100;
-
-                if (percentage < 33) {
-                    hasFailedSubject = true;
-                }
-            });
-
+            );
 
             let percentage: number | null = null;
             let result: string;
 
             if (!hasAnyMarks) {
-
                 result = "Not Assessed";
-
-            } else if (hasMissingMarks) {
-
+            }
+            else if (hasMissingMarks) {
                 result = "Incomplete";
-
-            } else {
-
+            }
+            else {
                 percentage =
                     totalMarks > 0
                         ? Number(
                             (
-                                (obtainedMarks / totalMarks) *
+                                (obtainedMarks /
+                                    totalMarks) *
                                 100
                             ).toFixed(2)
                         )
@@ -976,7 +1405,6 @@ export const getExamResults = async (
                     ? "Fail"
                     : "Pass";
             }
-
 
             return {
                 studentName:
@@ -1004,14 +1432,90 @@ export const getExamResults = async (
                         : null,
 
                 percentage,
-
                 result
             };
         });
 
-        res.status(200).json(results);
+        let filteredResults = results;
 
-    } catch (error) {
+        if (search !== "") {
+            const searchValue =
+                search.toLowerCase();
+
+            filteredResults =
+                filteredResults.filter(
+                    student =>
+                        student.studentName
+                            .toLowerCase()
+                            .includes(searchValue) ||
+                        student.uid
+                            .toLowerCase()
+                            .includes(searchValue)
+                );
+        }
+
+        if (sortBy === "Student Name") {
+            filteredResults.sort(
+                (a, b) =>
+                    a.studentName.localeCompare(
+                        b.studentName
+                    )
+            );
+        }
+        else if (sortBy === "UID") {
+            filteredResults.sort(
+                (a, b) =>
+                    a.uid.localeCompare(b.uid)
+            );
+        }
+        else if (sortBy === "Total Marks") {
+            filteredResults.sort(
+                (a, b) =>
+                    (a.total?.obtained ?? 0) -
+                    (b.total?.obtained ?? 0)
+            );
+        }
+        else if (sortBy === "Percentage") {
+            filteredResults.sort(
+                (a, b) =>
+                    (a.percentage ?? -1) -
+                    (b.percentage ?? -1)
+            );
+        }
+
+        if (
+            sortBy !== "None" &&
+            order === "desc"
+        ) {
+            filteredResults.reverse();
+        }
+
+        const totalResults =
+            filteredResults.length;
+
+        const totalPages =
+            Math.ceil(
+                totalResults / pageLimit
+            );
+
+        const skip =
+            (currentPage - 1) * pageLimit;
+
+        const paginatedResults =
+            filteredResults.slice(
+                skip,
+                skip + pageLimit
+            );
+
+        return res.status(200).json({
+            results: paginatedResults,
+            totalResults,
+            totalPages,
+            currentPage,
+            limit: pageLimit
+        });
+    }
+    catch (error) {
         console.log(error);
         next(error);
     }
@@ -1024,11 +1528,30 @@ export const getStudentsForAttendance = async (
     next: NextFunction
 ) => {
     try {
-        const { date } = req.query;
+        const date = req.query.date?.toString() || "";
+        const search = req.query.search?.toString().trim() || "";
 
-        if (!date || typeof date !== "string") {
+        const currentPage = Math.max(
+            Number(req.query.page) || 1,
+            1
+        );
+
+        const pageLimit = Math.max(
+            Number(req.query.limit) || 10,
+            1
+        );
+
+        if (!date) {
             return res.status(400).json({
                 message: "Date is required"
+            });
+        }
+
+        const selectedDate = new Date(date);
+
+        if (isNaN(selectedDate.getTime())) {
+            return res.status(400).json({
+                message: "Invalid date"
             });
         }
 
@@ -1044,31 +1567,94 @@ export const getStudentsForAttendance = async (
 
         const students = await Student.find({
             class: teacher.classAssigned
-        }).populate({
-            path: "userId",
-            select: "name uid"
-        });
+        })
+            .populate({
+                path: "userId",
+                select: "name uid"
+            })
+            .sort({
+                rollNumber: 1
+            });
 
-        const selectedDate = new Date(date);
+        const filteredStudents = search
+            ? students.filter((student: any) => {
+                const name =
+                    student.userId.name.toLowerCase();
+
+                const uid =
+                    student.userId.uid.toLowerCase();
+
+                const searchValue =
+                    search.toLowerCase();
+
+                return (
+                    name.includes(searchValue) ||
+                    uid.includes(searchValue)
+                );
+            })
+            : students;
 
         const approvedLeaves = await Leave.find({
             status: "Approved",
             startDate: { $lte: selectedDate },
             endDate: { $gte: selectedDate },
-            studentId: { $in: students.map(student => student._id) }
+            studentId: {
+                $in: students.map(
+                    student => student._id
+                )
+            }
         }).select("studentId");
 
         const studentsOnLeave = new Set(
-            approvedLeaves.map(leave => leave.studentId.toString())
+            approvedLeaves.map(
+                leave => leave.studentId.toString()
+            )
         );
 
-        const studentsWithLeaveStatus = students.map(student => ({
-            ...student.toObject(),
-            onLeave: studentsOnLeave.has(student._id.toString())
-        }));
+        const studentsWithLeaveStatus =
+            filteredStudents.map(student => ({
+                ...student.toObject(),
+                onLeave: studentsOnLeave.has(
+                    student._id.toString()
+                )
+            }));
 
-        res.status(200).json(studentsWithLeaveStatus);
-    } catch (error) {
+        const allStudentIds = students.map(
+            student => student._id.toString()
+        );
+
+        const leaveStudentIds = approvedLeaves.map(
+            leave => leave.studentId.toString()
+        );
+
+        const totalStudents =
+            studentsWithLeaveStatus.length;
+
+        const totalPages =
+            Math.ceil(
+                totalStudents / pageLimit
+            );
+
+        const skip =
+            (currentPage - 1) * pageLimit;
+
+        const paginatedStudents =
+            studentsWithLeaveStatus.slice(
+                skip,
+                skip + pageLimit
+            );
+
+        return res.status(200).json({
+            students: paginatedStudents,
+            allStudentIds,
+            leaveStudentIds,
+            totalStudents,
+            totalPages,
+            currentPage,
+            limit: pageLimit
+        });
+    }
+    catch (error) {
         console.log(error);
         next(error);
     }
@@ -1158,9 +1744,23 @@ export const getAttendance = async (
     next: NextFunction
 ) => {
     try {
-        const { date } = req.query;
+        const date =
+            req.query.date?.toString() || "";
 
-        if (!date || typeof date !== "string") {
+        const search =
+            req.query.search?.toString().trim() || "";
+
+        const currentPage = Math.max(
+            Number(req.query.page) || 1,
+            1
+        );
+
+        const pageLimit = Math.max(
+            Number(req.query.limit) || 10,
+            1
+        );
+
+        if (!date) {
             return res.status(400).json({
                 message: "Date is required"
             });
@@ -1191,19 +1791,41 @@ export const getAttendance = async (
             .populate({
                 path: "userId",
                 select: "name uid"
+            })
+            .sort({
+                rollNumber: 1
             });
 
-        const studentIds = students.map(
-            student => student._id
-        );
+        const filteredStudents = search
+            ? students.filter((student: any) => {
+                const name =
+                    student.userId.name.toLowerCase();
 
-        const attendance = await Attendance.find({
-            studentId: {
-                $in: studentIds
-            },
-            date: selectedDate
-        })
-            .populate({
+                const uid =
+                    student.userId.uid.toLowerCase();
+
+                const searchValue =
+                    search.toLowerCase();
+
+                return (
+                    name.includes(searchValue) ||
+                    uid.includes(searchValue)
+                );
+            })
+            : students;
+
+        const studentIds =
+            filteredStudents.map(
+                student => student._id
+            );
+
+        const attendance =
+            await Attendance.find({
+                studentId: {
+                    $in: studentIds
+                },
+                date: selectedDate
+            }).populate({
                 path: "studentId",
                 select: "class rollNumber userId",
                 populate: {
@@ -1212,39 +1834,51 @@ export const getAttendance = async (
                 }
             });
 
-        const approvedLeaves = await Leave.find({
-            studentId: {
-                $in: studentIds
-            },
-            status: "Approved",
-            startDate: {
-                $lte: selectedDate
-            },
-            endDate: {
-                $gte: selectedDate
-            }
-        });
+        const approvedLeaves =
+            await Leave.find({
+                studentId: {
+                    $in: studentIds
+                },
+                status: "Approved",
+                startDate: {
+                    $lte: selectedDate
+                },
+                endDate: {
+                    $gte: selectedDate
+                }
+            });
 
         const leaveStudentIds = new Set(
             approvedLeaves.map(
-                leave => leave.studentId.toString()
+                leave =>
+                    leave.studentId.toString()
             )
         );
 
-        const attendanceWithoutLeave = attendance.filter(
-            record =>
-                !leaveStudentIds.has(
-                    record.studentId._id.toString()
+        const attendanceWithoutLeave =
+            attendance
+                .filter(
+                    record =>
+                        !leaveStudentIds.has(
+                            record.studentId._id.toString()
+                        )
                 )
-        );
+                .map(record => ({
+                    _id: record._id,
+                    studentId: record.studentId,
+                    date: record.date,
+                    status: record.status
+                }));
 
-        const leaveRecords = approvedLeaves.map(
-            leave => {
-                const student = students.find(
-                    student =>
-                        student._id.toString() ===
-                        leave.studentId.toString()
-                );
+        const leaveRecords =
+            approvedLeaves.map(leave => {
+
+                const student =
+                    filteredStudents.find(
+                        student =>
+                            student._id.toString() ===
+                            leave.studentId.toString()
+                    );
 
                 return {
                     _id: `${leave._id}-${date}`,
@@ -1252,8 +1886,7 @@ export const getAttendance = async (
                     date: selectedDate,
                     status: "Leave"
                 };
-            }
-        );
+            });
 
         const result = [
             ...attendanceWithoutLeave,
@@ -1261,17 +1894,63 @@ export const getAttendance = async (
         ];
 
         result.sort(
-            (a, b) =>
+            (a: any, b: any) =>
                 Number(
-                    (a.studentId as any).rollNumber
+                    a.studentId.rollNumber
                 ) -
                 Number(
-                    (b.studentId as any).rollNumber
+                    b.studentId.rollNumber
                 )
         );
 
-        res.status(200).json(result);
-    } catch (error) {
+        const totalRecords =
+            result.length;
+
+        const totalPages =
+            Math.ceil(
+                totalRecords / pageLimit
+            );
+
+        const skip =
+            (currentPage - 1) *
+            pageLimit;
+
+        const paginatedResult =
+            result.slice(
+                skip,
+                skip + pageLimit
+            );
+
+        const presentCount =
+            result.filter(
+                (record: any) =>
+                    record.status === "Present"
+            ).length;
+
+        const absentCount =
+            result.filter(
+                (record: any) =>
+                    record.status === "Absent"
+            ).length;
+
+        const leaveCount =
+            result.filter(
+                (record: any) =>
+                    record.status === "Leave"
+            ).length;
+
+        return res.status(200).json({
+            attendance: paginatedResult,
+            totalRecords,
+            totalPages,
+            currentPage,
+            limit: pageLimit,
+            presentCount,
+            absentCount,
+            leaveCount
+        });
+    }
+    catch (error) {
         console.log(error);
         next(error);
     }
@@ -1283,9 +1962,20 @@ export const getStudentAttendance = async (
     next: NextFunction
 ) => {
     try {
-        const { studentId } = req.query;
+        const studentId =
+            req.query.studentId?.toString() || "";
 
-        if (!studentId || typeof studentId !== "string") {
+        const currentPage = Math.max(
+            Number(req.query.page) || 1,
+            1
+        );
+
+        const pageLimit = Math.max(
+            Number(req.query.limit) || 10,
+            1
+        );
+
+        if (!studentId) {
             return res.status(400).json({
                 message: "Student ID is required"
             });
@@ -1301,11 +1991,12 @@ export const getStudentAttendance = async (
             });
         }
 
-        const student = await Student.findById(studentId)
-            .populate({
-                path: "userId",
-                select: "name uid"
-            });
+        const student = await Student.findById(
+            studentId
+        ).populate({
+            path: "userId",
+            select: "name uid"
+        });
 
         if (!student) {
             return res.status(404).json({
@@ -1313,47 +2004,54 @@ export const getStudentAttendance = async (
             });
         }
 
-        if (student.class !== teacher.classAssigned) {
+        if (
+            student.class !==
+            teacher.classAssigned
+        ) {
             return res.status(403).json({
                 message:
                     "You can only view attendance for students in your assigned class"
             });
         }
 
-        const attendance = await Attendance.find({
-            studentId: student._id
-        })
-            .populate({
-                path: "studentId",
-                select: "class rollNumber userId",
-                populate: {
-                    path: "userId",
-                    select: "name uid"
-                }
+        const attendance =
+            await Attendance.find({
+                studentId: student._id
             })
-            .sort({
-                date: 1
-            });
+                .populate({
+                    path: "studentId",
+                    select: "class rollNumber userId",
+                    populate: {
+                        path: "userId",
+                        select: "name uid"
+                    }
+                })
+                .sort({
+                    date: 1
+                });
 
-        const approvedLeaves = await Leave.find({
-            studentId: student._id,
-            status: "Approved"
-        }).sort({
-            startDate: 1
-        });
+        const approvedLeaves =
+            await Leave.find({
+                studentId: student._id,
+                status: "Approved"
+            }).sort({
+                startDate: 1
+            });
 
         const leaveRecords: any[] = [];
 
         for (const leave of approvedLeaves) {
-            const currentDate = new Date(
-                leave.startDate
-            );
 
-            const endDate = new Date(
-                leave.endDate
-            );
+            const currentDate =
+                new Date(leave.startDate);
 
-            while (currentDate <= endDate) {
+            const endDate =
+                new Date(leave.endDate);
+
+            while (
+                currentDate <= endDate
+            ) {
+
                 const dateString =
                     currentDate
                         .toISOString()
@@ -1372,18 +2070,20 @@ export const getStudentAttendance = async (
             }
         }
 
-        const attendanceDates = new Set(
-            attendance.map(
-                record =>
-                    new Date(record.date)
-                        .toISOString()
-                        .split("T")[0]
-            )
-        );
+        const attendanceDates =
+            new Set(
+                attendance.map(
+                    record =>
+                        new Date(record.date)
+                            .toISOString()
+                            .split("T")[0]
+                )
+            );
 
         const filteredLeaveRecords =
             leaveRecords.filter(
                 record => {
+
                     const dateString =
                         new Date(record.date)
                             .toISOString()
@@ -1401,13 +2101,110 @@ export const getStudentAttendance = async (
         ];
 
         result.sort(
-            (a, b) =>
+            (a: any, b: any) =>
                 new Date(a.date).getTime() -
                 new Date(b.date).getTime()
         );
 
-        res.status(200).json(result);
-    } catch (error) {
+        const totalRecords =
+            result.length;
+
+        const totalPages =
+            Math.ceil(
+                totalRecords / pageLimit
+            );
+
+        const skip =
+            (currentPage - 1) *
+            pageLimit;
+
+        const paginatedResult =
+            result.slice(
+                skip,
+                skip + pageLimit
+            );
+
+        const presentCount =
+            result.filter(
+                (record: any) =>
+                    record.status === "Present"
+            ).length;
+
+        const absentCount =
+            result.filter(
+                (record: any) =>
+                    record.status === "Absent"
+            ).length;
+
+        const leaveCount =
+            result.filter(
+                (record: any) =>
+                    record.status === "Leave"
+            ).length;
+
+        const totalDays =
+            presentCount +
+            absentCount;
+
+        const percentage =
+            totalDays > 0
+                ? (
+                    presentCount /
+                    totalDays *
+                    100
+                ).toFixed(2)
+                : "0.00";
+
+        return res.status(200).json({
+            attendance: paginatedResult,
+            totalRecords,
+            totalPages,
+            currentPage,
+            limit: pageLimit,
+            presentCount,
+            absentCount,
+            leaveCount,
+            totalDays,
+            percentage
+        });
+    }
+    catch (error) {
+        console.log(error);
+        next(error);
+    }
+};
+
+export const getAttendanceStudents = async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+) => {
+    try {
+        const teacher = await Teacher.findOne({
+            userId: req.user?.userId
+        });
+
+        if (!teacher) {
+            return res.status(404).json({
+                message: "Teacher not found"
+            });
+        }
+
+        const students = await Student.find({
+            class: teacher.classAssigned
+        })
+            .select("_id class rollNumber userId")
+            .populate({
+                path: "userId",
+                select: "name uid"
+            })
+            .sort({
+                rollNumber: 1
+            });
+
+        return res.status(200).json(students);
+    }
+    catch (error) {
         console.log(error);
         next(error);
     }

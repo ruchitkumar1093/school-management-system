@@ -3,7 +3,7 @@ const router = express.Router();
 import { getStudents, getSubjects, getMarks, createStudent, getStudentById,
     updateStudent, deleteStudent, getMarkById, createMark, updateMark, deleteMark, getExamResults,
     getStudentsForAttendance, createAttendance, getAttendance, getStudentAttendance, getTeacherHome,
-    getTeacher, getLeaveApplications, approveLeave, rejectLeave
+    getTeacher, getLeaveApplications, approveLeave, rejectLeave, getAttendanceStudents
  } 
 from "../controllers/teacherController";
 
@@ -17,6 +17,8 @@ router.patch("/leaves/:id/reject", rejectLeave);
 router.get("/home", getTeacherHome);
 
 router.get("/holidays", getHolidays);
+
+router.get("/attendance/students", getAttendanceStudents);
 
 //GET all:
 router.get("/students", getStudents);

@@ -3,12 +3,13 @@ import { useEffect, useState } from "react";
 import NavBar from "../../components/navBar";
 import SideBar from "../../components/sideBar";
 import Breadcrumb from "../../components/breadcrumb";
+import Pagination from "../../components/pagination";
+import Limit from "../../components/limit";
 
 import {
     applyLeave,
     getMyLeaves
 } from "../../services/studentApi";
-
 
 type LeaveStatus = "Pending" | "Approved" | "Rejected";
 
@@ -20,9 +21,7 @@ type LeaveApplication = {
     status: LeaveStatus;
 };
 
-
 function LeaveApplications() {
-
     const today = new Date();
 
     const todayString =
@@ -44,29 +43,29 @@ function LeaveApplications() {
         LeaveApplication[]
     >([]);
 
+    const [currentPage, setCurrentPage] = useState(1);
+    const [limit, setLimit] = useState(5);
+    const [totalPages, setTotalPages] = useState(1);
+
     const [error, setError] = useState("");
-
     const [loading, setLoading] = useState(false);
-
     const [fetchingApplications, setFetchingApplications] =
         useState(false);
 
-
-    // Get student's leave applications
     async function fetchApplications() {
-
         try {
-
             setFetchingApplications(true);
             setError("");
 
-            const response = await getMyLeaves();
+            const response = await getMyLeaves(
+                currentPage,
+                limit
+            );
 
-            setApplications(response.data);
-
+            setApplications(response.data.leaves);
+            setTotalPages(response.data.totalPages);
         }
         catch (error) {
-
             console.error(
                 "Failed to fetch leave applications:",
                 error
@@ -75,54 +74,37 @@ function LeaveApplications() {
             setError(
                 "Failed to load leave applications."
             );
-
         }
         finally {
-
             setFetchingApplications(false);
-
         }
     }
 
-
-    // Fetch applications when page loads
     useEffect(() => {
-
         fetchApplications();
+    }, [currentPage, limit]);
 
-    }, []);
-
-
-    // Submit leave application
     async function handleSubmit(
         event: React.FormEvent<HTMLFormElement>
     ) {
-
         event.preventDefault();
 
         setError("");
 
         if (!startDate || !endDate || !reason.trim()) {
-
             setError("Please fill in all fields.");
-
             return;
         }
 
         if (endDate < startDate) {
-
             setError(
                 "End date cannot be before the start date."
             );
-
             return;
         }
 
-
         try {
-
             setLoading(true);
-
 
             await applyLeave({
                 startDate,
@@ -130,23 +112,16 @@ function LeaveApplications() {
                 reason: reason.trim()
             });
 
-
-            // Clear form
             setStartDate("");
             setEndDate("");
             setReason("");
 
-
-            // Get updated applications
+            setCurrentPage(1);
             await fetchApplications();
 
-
-            // Show applications after successful submission
             setActiveView("applications");
-
         }
         catch (error) {
-
             console.error(
                 "Failed to apply for leave:",
                 error
@@ -155,18 +130,13 @@ function LeaveApplications() {
             setError(
                 "Failed to submit leave application."
             );
-
         }
         finally {
-
             setLoading(false);
-
         }
     }
 
-
     function formatDate(date: string) {
-
         return new Date(date).toLocaleDateString(
             "en-IN",
             {
@@ -177,25 +147,21 @@ function LeaveApplications() {
         );
     }
 
+    const startIndex =
+        (currentPage - 1) * limit;
 
     return (
         <div className="flex min-h-screen flex-col font-fredoka">
-
             <NavBar />
 
             <div className="flex flex-1 bg-purple-100">
-
                 <SideBar />
 
                 <div className="flex min-w-0 flex-1 flex-col">
-
                     <Breadcrumb />
 
                     <div className="flex flex-1 flex-col px-16 pt-10 pb-12">
-
-                        {/* Header */}
                         <div className="mb-7">
-
                             <h1 className="text-3xl font-medium text-gray-900">
                                 Leave Applications
                             </h1>
@@ -203,21 +169,16 @@ function LeaveApplications() {
                             <p className="mt-1 text-sm text-gray-600">
                                 Apply for leave and track your leave applications
                             </p>
-
                         </div>
 
-
-                        {/* View Buttons */}
                         <div className="mb-7 flex gap-2">
-
                             <button
                                 type="button"
                                 onClick={() => {
                                     setActiveView("apply");
                                     setError("");
                                 }}
-                                className={`cursor-pointer rounded-lg px-5 py-2.5 text-sm font-medium
-                                transition-colors
+                                className={`cursor-pointer rounded-lg px-5 py-2.5 text-sm font-medium transition-colors
                                 ${activeView === "apply"
                                         ? "bg-purple-800 text-white"
                                         : "bg-purple-200 text-gray-700 hover:bg-purple-300"
@@ -226,15 +187,13 @@ function LeaveApplications() {
                                 Apply for Leave
                             </button>
 
-
                             <button
                                 type="button"
                                 onClick={() => {
                                     setActiveView("applications");
                                     setError("");
                                 }}
-                                className={`cursor-pointer rounded-lg px-5 py-2.5 text-sm font-medium
-                                transition-colors
+                                className={`cursor-pointer rounded-lg px-5 py-2.5 text-sm font-medium transition-colors
                                 ${activeView === "applications"
                                         ? "bg-purple-800 text-white"
                                         : "bg-purple-200 text-gray-700 hover:bg-purple-300"
@@ -242,40 +201,26 @@ function LeaveApplications() {
                             >
                                 My Applications
                             </button>
-
                         </div>
 
-
-                        {/* Error */}
                         {error && (
-
                             <p className="mb-5 text-sm text-red-600">
                                 {error}
                             </p>
-
                         )}
 
-
-                        {/* Apply for Leave */}
                         {activeView === "apply" && (
-
                             <div className="w-full max-w-4xl rounded-2xl bg-purple-200 p-6 shadow-sm">
-
                                 <h2 className="mb-5 text-xl font-medium text-gray-900">
                                     Apply for Leave
                                 </h2>
-
 
                                 <form
                                     onSubmit={handleSubmit}
                                     className="flex flex-col gap-5"
                                 >
-
-                                    {/* Dates */}
                                     <div className="grid grid-cols-2 gap-5">
-
                                         <div className="flex flex-col gap-2">
-
                                             <label
                                                 htmlFor="startDate"
                                                 className="text-sm font-medium text-gray-800"
@@ -293,16 +238,11 @@ function LeaveApplications() {
                                                         event.target.value
                                                     )
                                                 }
-                                                className="w-full rounded-lg border-2 border-purple-400
-                                                bg-purple-100 px-4 py-3 text-gray-900 outline-none
-                                                transition-colors focus:border-purple-800 focus:bg-white"
+                                                className="w-full rounded-lg border-2 border-purple-400 bg-purple-100 px-4 py-3 text-gray-900 outline-none transition-colors focus:border-purple-800 focus:bg-white"
                                             />
-
                                         </div>
 
-
                                         <div className="flex flex-col gap-2">
-
                                             <label
                                                 htmlFor="endDate"
                                                 className="text-sm font-medium text-gray-800"
@@ -320,19 +260,12 @@ function LeaveApplications() {
                                                         event.target.value
                                                     )
                                                 }
-                                                className="w-full rounded-lg border-2 border-purple-400
-                                                bg-purple-100 px-4 py-3 text-gray-900 outline-none
-                                                transition-colors focus:border-purple-800 focus:bg-white"
+                                                className="w-full rounded-lg border-2 border-purple-400 bg-purple-100 px-4 py-3 text-gray-900 outline-none transition-colors focus:border-purple-800 focus:bg-white"
                                             />
-
                                         </div>
-
                                     </div>
 
-
-                                    {/* Reason */}
                                     <div className="flex flex-col gap-2">
-
                                         <label
                                             htmlFor="reason"
                                             className="text-sm font-medium text-gray-800"
@@ -350,58 +283,35 @@ function LeaveApplications() {
                                             }
                                             placeholder="Enter the reason for your leave"
                                             rows={4}
-                                            className="w-full resize-none rounded-lg border-2 border-purple-400
-                                            bg-purple-100 px-4 py-3 text-gray-900 outline-none
-                                            transition-colors focus:border-purple-800 focus:bg-white"
+                                            className="w-full resize-none rounded-lg border-2 border-purple-400 bg-purple-100 px-4 py-3 text-gray-900 outline-none transition-colors focus:border-purple-800 focus:bg-white"
                                         />
-
                                     </div>
 
-
-                                    {/* Submit */}
                                     <div className="flex justify-end">
-
                                         <button
                                             type="submit"
                                             disabled={loading}
-                                            className="cursor-pointer rounded-lg bg-purple-800
-                                            px-6 py-3 text-sm font-medium text-white
-                                            shadow-[0_2px_1px_rgba(0,0,0,0.2)]
-                                            transition-colors hover:bg-purple-900
-                                            disabled:cursor-not-allowed disabled:opacity-60"
+                                            className="cursor-pointer rounded-lg bg-purple-800 px-6 py-3 text-sm font-medium text-white shadow-[0_2px_1px_rgba(0,0,0,0.2)] transition-colors hover:bg-purple-900 disabled:cursor-not-allowed disabled:opacity-60"
                                         >
                                             {loading
                                                 ? "Submitting..."
                                                 : "Apply for Leave"}
                                         </button>
-
                                     </div>
-
                                 </form>
-
                             </div>
-
                         )}
 
-
-                        {/* My Applications */}
                         {activeView === "applications" && (
-
                             <div className="w-full max-w-5xl">
-
                                 <h2 className="mb-4 text-xl font-medium text-gray-900">
                                     My Leave Applications
                                 </h2>
 
-
                                 <div className="overflow-hidden rounded-2xl bg-purple-200 shadow-sm">
-
                                     <table className="w-full border-collapse">
-
                                         <thead>
-
                                             <tr className="border-b border-white bg-purple-300">
-
                                                 <th className="px-5 py-4 text-left text-base font-medium text-gray-700">
                                                     S.No.
                                                 </th>
@@ -421,55 +331,40 @@ function LeaveApplications() {
                                                 <th className="px-5 py-4 text-left text-base font-medium text-gray-700">
                                                     Status
                                                 </th>
-
                                             </tr>
-
                                         </thead>
 
-
                                         <tbody>
-
                                             {fetchingApplications ? (
-
                                                 <tr>
-
                                                     <td
                                                         colSpan={5}
                                                         className="px-5 py-10 text-center text-base text-gray-500"
                                                     >
                                                         Loading leave applications...
                                                     </td>
-
                                                 </tr>
-
                                             ) : applications.length === 0 ? (
-
                                                 <tr>
-
                                                     <td
                                                         colSpan={5}
                                                         className="px-5 py-10 text-center text-base text-gray-500"
                                                     >
                                                         No leave applications found
                                                     </td>
-
                                                 </tr>
-
                                             ) : (
-
                                                 applications.map(
                                                     (
                                                         application,
                                                         index
                                                     ) => (
-
                                                         <tr
                                                             key={application._id}
                                                             className="border-b border-white"
                                                         >
-
                                                             <td className="px-5 py-4 text-base text-gray-600">
-                                                                {index + 1}
+                                                                {startIndex + index + 1}
                                                             </td>
 
                                                             <td className="px-5 py-4 text-base text-gray-600">
@@ -489,7 +384,6 @@ function LeaveApplications() {
                                                             </td>
 
                                                             <td className="px-5 py-4">
-
                                                                 <span
                                                                     className={`rounded-full px-3 py-1 text-sm font-medium
                                                                     ${application.status ===
@@ -503,32 +397,32 @@ function LeaveApplications() {
                                                                 >
                                                                     {application.status}
                                                                 </span>
-
                                                             </td>
-
                                                         </tr>
-
                                                     )
                                                 )
-
                                             )}
-
                                         </tbody>
-
                                     </table>
-
                                 </div>
 
+                                <div className="mt-5 flex items-center justify-between">
+                                    <Pagination
+                                        currentPage={currentPage}
+                                        totalPages={totalPages}
+                                        setCurrentPage={setCurrentPage}
+                                    />
+
+                                    <Limit
+                                        setLimit={setLimit}
+                                        limit={limit}
+                                    />
+                                </div>
                             </div>
-
                         )}
-
                     </div>
-
                 </div>
-
             </div>
-
         </div>
     );
 }

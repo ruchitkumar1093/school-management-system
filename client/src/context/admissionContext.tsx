@@ -28,14 +28,17 @@ export const AdmissionProvider = ({
         }
 
         try {
-            const response = await getAdmission();
+            const response = await getAdmission(
+                "pending",
+                "All",
+                "",
+                "None",
+                "asc",
+                1,
+                1
+            );
 
-            const pending = response.data.filter(
-                (admission: any) =>
-                    admission.status === "pending"
-            ).length;
-
-            setPendingRequests(pending);
+            setPendingRequests(response.data.totalAdmissions);
         }
         catch (error) {
             console.log(error);

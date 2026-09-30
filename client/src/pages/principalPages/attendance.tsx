@@ -75,7 +75,7 @@ function PrincipalAttendance() {
                             />
                             <button
                                 type="button" onClick={() => navigate("viewAttendance")}
-                                className="p-2 bg-purple-300 rounded-lg shadow-[0_2px_1px] hover:bg-violet-300 cursor-pointer"
+                                className="rounded-lg bg-purple-300 px-3 py-3 font-medium text-purple-950 shadow-[0_2px_3px] transition-colors hover:bg-violet-300 cursor-pointer"
                             >
                                 View Attendance
                             </button>

@@ -5,18 +5,63 @@ export const viewHome = () => {
 }
 
 //GET ALL:
-export const viewStudents = () => {
-    return api.get("teacher/students");
+export const viewStudents = (
+    search: string,
+    sortBy: string,
+    orderBy: string,
+    currentPage: number,
+    limit: number
+) => {
+    return api.get("teacher/students", {
+        params: {
+            search,
+            sortBy,
+            order: orderBy,
+            page: currentPage,
+            limit
+        }
+    });
 }
+
 export const viewTeacher = () => {
     return api.get("teacher/teacher");
 }
-export const viewSubjects = () => {
-    return api.get("teacher/subjects");
-}
-export const viewMarks = () => {
-    return api.get("teacher/marks")
-}
+
+export const viewSubjects = (
+    search: string,
+    orderBy: string,
+    currentPage: number,
+    limit: number
+) => {
+    return api.get("teacher/subjects", {
+        params: {
+            search,
+            order: orderBy,
+            page: currentPage,
+            limit
+        }
+    });
+};
+
+export const viewMarks = (
+    exam: string,
+    search: string,
+    sortBy: string,
+    orderBy: string,
+    currentPage: number,
+    limit: number
+) => {
+    return api.get("teacher/marks", {
+        params: {
+            exam,
+            search,
+            sortBy,
+            order: orderBy,
+            page: currentPage,
+            limit
+        }
+    });
+};
 
 //STUDENT CRUD:
 export const deleteStudent = (id: string) => {
@@ -47,17 +92,40 @@ export const getMarkById = (id: string) => {
 };
 
 //Exams:
-export const getExamResults = (exam: string) => 
-    api.get("/teacher/examResults", {
-    params: {
-        exam
-    }
-});
+export const getExamResults = (
+    exam: string,
+    search: string,
+    sortBy: string,
+    orderBy: string,
+    currentPage: number,
+    limit: number
+) => {
+    return api.get("/teacher/examResults", {
+        params: {
+            exam,
+            search,
+            sortBy,
+            order: orderBy,
+            page: currentPage,
+            limit
+        }
+    });
+};
 
 //Attendance:
-export const getStudentsForAttendance = (date: string) => {
+export const getStudentsForAttendance = (
+    date: string,
+    search: string,
+    currentPage: number,
+    limit: number
+) => {
     return api.get("teacher/getStudentsForAttendance", {
-        params: { date }
+        params: {
+            date,
+            search,
+            page: currentPage,
+            limit
+        }
     });
 };
 
@@ -65,20 +133,38 @@ export const createAttendance = (data: any) => {
     return api.post("teacher/createAttendance", data);
 };
 
-export const getAttendance = (date: string) => {
+export const getAttendance = (
+    date: string,
+    search: string,
+    currentPage: number,
+    limit: number
+) => {
     return api.get("teacher/attendance", {
         params: {
-            date: date
+            date,
+            search,
+            page: currentPage,
+            limit
         }
     });
 };
 
-export const getStudentAttendance = (studentId: string) => {
+export const getStudentAttendance = (
+    studentId: string,
+    currentPage: number,
+    limit: number
+) => {
     return api.get("teacher/attendance/student", {
         params: {
-            studentId
+            studentId,
+            page: currentPage,
+            limit
         }
     });
+};
+
+export const getAttendanceStudents = () => {
+    return api.get("teacher/attendance/students");
 };
 
 //Holidays:
@@ -87,8 +173,18 @@ export const getHolidays = () => {
 };
 
 //Leaves:
-export const getLeaveApplications = () => {
-    return api.get("/teacher/leaves");
+export const getLeaveApplications = (
+    status: string,
+    currentPage: number,
+    limit: number
+) => {
+    return api.get("/teacher/leaves", {
+        params: {
+            status,
+            page: currentPage,
+            limit
+        }
+    });
 };
 
 

@@ -3,6 +3,8 @@ import { useEffect, useState } from "react";
 import NavBar from "../../components/navBar";
 import SideBar from "../../components/sideBar";
 import Breadcrumb from "../../components/breadcrumb";
+import Pagination from "../../components/pagination";
+import Limit from "../../components/limit";
 
 import {
     getLeaveApplications,
@@ -10,24 +12,20 @@ import {
     rejectLeave
 } from "../../services/teacherApi";
 
-
 type LeaveStatus = "Pending" | "Approved" | "Rejected";
 
 type LeaveApplication = {
     _id: string;
-
     student: {
         _id: string;
         name: string;
         uid: string;
     };
-
     startDate: string;
     endDate: string;
     reason: string;
     status: LeaveStatus;
 };
-
 
 function LeaveApplications() {
 
@@ -35,11 +33,20 @@ function LeaveApplications() {
         "pending" | "applications"
     >("pending");
 
-    const [applications, setApplications] = useState<
-        LeaveApplication[]
-    >([]);
+    const [applications, setApplications] =
+        useState<LeaveApplication[]>([]);
 
-    const [error, setError] = useState("");
+    const [currentPage, setCurrentPage] =
+        useState(1);
+
+    const [limit, setLimit] =
+        useState(5);
+
+    const [totalPages, setTotalPages] =
+        useState(1);
+
+    const [error, setError] =
+        useState("");
 
     const [fetchingApplications, setFetchingApplications] =
         useState(false);
@@ -47,65 +54,76 @@ function LeaveApplications() {
     const [actionLoading, setActionLoading] =
         useState<string | null>(null);
 
-
-    // Get leave applications
     async function fetchApplications() {
-
         try {
-
             setFetchingApplications(true);
             setError("");
 
-            const response = await getLeaveApplications();
+            const status =
+                activeView === "pending"
+                    ? "Pending"
+                    : "All";
 
-            setApplications(response.data);
+            const response =
+                await getLeaveApplications(
+                    status,
+                    currentPage,
+                    limit
+                );
 
+            setApplications(
+                response.data.leaves
+            );
+
+            setTotalPages(
+                response.data.totalPages
+            );
         }
         catch (error) {
-
             console.error(
                 "Failed to fetch leave applications:",
                 error
             );
 
+            setApplications([]);
+            setTotalPages(1);
+
             setError(
                 "Failed to load leave applications."
             );
-
         }
         finally {
-
             setFetchingApplications(false);
-
         }
     }
 
-
-    // Fetch applications when page loads
     useEffect(() => {
-
         fetchApplications();
+    }, [
+        activeView,
+        currentPage,
+        limit
+    ]);
 
-    }, []);
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [
+        activeView,
+        limit
+    ]);
 
-
-    // Approve leave
     async function handleApprove(
         id: string
     ) {
-
         try {
-
             setActionLoading(id);
             setError("");
 
             await approveLeave(id);
 
             await fetchApplications();
-
         }
         catch (error) {
-
             console.error(
                 "Failed to approve leave:",
                 error
@@ -114,33 +132,24 @@ function LeaveApplications() {
             setError(
                 "Failed to approve leave application."
             );
-
         }
         finally {
-
             setActionLoading(null);
-
         }
     }
 
-
-    // Reject leave
     async function handleReject(
         id: string
     ) {
-
         try {
-
             setActionLoading(id);
             setError("");
 
             await rejectLeave(id);
 
             await fetchApplications();
-
         }
         catch (error) {
-
             console.error(
                 "Failed to reject leave:",
                 error
@@ -149,18 +158,13 @@ function LeaveApplications() {
             setError(
                 "Failed to reject leave application."
             );
-
         }
         finally {
-
             setActionLoading(null);
-
         }
     }
 
-
     function formatDate(date: string) {
-
         return new Date(date).toLocaleDateString(
             "en-IN",
             {
@@ -171,19 +175,8 @@ function LeaveApplications() {
         );
     }
 
-
-    const pendingApplications =
-        applications.filter(
-            (application) =>
-                application.status === "Pending"
-        );
-
-
-    const displayedApplications =
-        activeView === "pending"
-            ? pendingApplications
-            : applications;
-
+    const startIndex =
+        (currentPage - 1) * limit;
 
     return (
         <div className="flex min-h-screen flex-col font-fredoka">
@@ -200,7 +193,6 @@ function LeaveApplications() {
 
                     <div className="flex flex-1 flex-col px-16 pt-10 pb-12">
 
-                        {/* Header */}
                         <div className="mb-7">
 
                             <h1 className="text-3xl font-medium text-gray-900">
@@ -213,8 +205,6 @@ function LeaveApplications() {
 
                         </div>
 
-
-                        {/* View Buttons */}
                         <div className="mb-7 flex gap-2">
 
                             <button
@@ -233,7 +223,6 @@ function LeaveApplications() {
                             >
                                 Pending Applications
                             </button>
-
 
                             <button
                                 type="button"
@@ -254,28 +243,19 @@ function LeaveApplications() {
 
                         </div>
 
-
-                        {/* Error */}
                         {error && (
-
                             <p className="mb-5 text-sm text-red-600">
                                 {error}
                             </p>
-
                         )}
 
-
-                        {/* Applications */}
                         <div className="w-full">
 
                             <h2 className="mb-4 text-xl font-medium text-gray-900">
-
                                 {activeView === "pending"
                                     ? "Pending Leave Applications"
                                     : "All Leave Applications"}
-
                             </h2>
-
 
                             <div className="overflow-hidden rounded-2xl bg-purple-200 shadow-sm">
 
@@ -323,7 +303,6 @@ function LeaveApplications() {
 
                                         </thead>
 
-
                                         <tbody>
 
                                             {fetchingApplications ? (
@@ -339,7 +318,7 @@ function LeaveApplications() {
 
                                                 </tr>
 
-                                            ) : displayedApplications.length === 0 ? (
+                                            ) : applications.length === 0 ? (
 
                                                 <tr>
 
@@ -356,7 +335,7 @@ function LeaveApplications() {
 
                                             ) : (
 
-                                                displayedApplications.map(
+                                                applications.map(
                                                     (
                                                         application,
                                                         index
@@ -369,36 +348,21 @@ function LeaveApplications() {
                                                             className="border-b border-white"
                                                         >
 
-                                                            {/* S.No. */}
-
                                                             <td className="px-5 py-4 text-base text-gray-600">
-                                                                {index + 1}
+                                                                {startIndex + index + 1}
                                                             </td>
-
-
-                                                            {/* Student */}
 
                                                             <td className="px-5 py-4 text-base text-gray-600">
                                                                 {
-                                                                    application
-                                                                        .student
-                                                                        .name
+                                                                    application.student.name
                                                                 }
                                                             </td>
 
-
-                                                            {/* UID */}
-
-                                                            <td className="px-5 py-4 text-base text-gray-600">
+                                                            <td className="px-5 py-4 text-base text-gray-600 uppercase">
                                                                 {
-                                                                    application
-                                                                        .student
-                                                                        .uid
+                                                                    application.student.uid
                                                                 }
                                                             </td>
-
-
-                                                            {/* Start Date */}
 
                                                             <td className="px-5 py-4 text-base text-gray-600">
                                                                 {formatDate(
@@ -406,26 +370,17 @@ function LeaveApplications() {
                                                                 )}
                                                             </td>
 
-
-                                                            {/* End Date */}
-
                                                             <td className="px-5 py-4 text-base text-gray-600">
                                                                 {formatDate(
                                                                     application.endDate
                                                                 )}
                                                             </td>
 
-
-                                                            {/* Reason */}
-
                                                             <td className="max-w-xs px-5 py-4 text-base text-gray-600">
                                                                 {
                                                                     application.reason
                                                                 }
                                                             </td>
-
-
-                                                            {/* Status */}
 
                                                             <td className="px-5 py-4">
 
@@ -447,9 +402,6 @@ function LeaveApplications() {
                                                                 </span>
 
                                                             </td>
-
-
-                                                            {/* Action */}
 
                                                             <td className="px-5 py-4">
 
@@ -479,7 +431,6 @@ function LeaveApplications() {
                                                                                 ? "..."
                                                                                 : "Approve"}
                                                                         </button>
-
 
                                                                         <button
                                                                             type="button"
@@ -527,6 +478,23 @@ function LeaveApplications() {
                                     </table>
 
                                 </div>
+
+                            </div>
+
+                            <div className="flex justify-between mt-5 items-center">
+
+                                <div className="mt-1">
+                                    <Pagination
+                                        currentPage={currentPage}
+                                        totalPages={totalPages}
+                                        setCurrentPage={setCurrentPage}
+                                    />
+                                </div>
+
+                                <Limit
+                                    setLimit={setLimit}
+                                    limit={limit}
+                                />
 
                             </div>
 

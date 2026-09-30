@@ -98,7 +98,7 @@ function PrincipalViewClass() {
 
                         ) : classOverview ? (
 
-                            <div className="max-w-4xl rounded-xl bg-purple-200 px-6 py-5">
+                            <div className="w-full rounded-xl bg-purple-200 px-6 py-5">
 
                                 {/* Class Teacher */}
                                 <div className="border-b border-white pb-5">

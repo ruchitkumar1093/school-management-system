@@ -25,30 +25,59 @@ function PrincipalViewStudents() {
         };
         class: string;
         rollNumber: number;
-    }
+    };
 
     const navigate = useNavigate();
 
     const [studentsData, setStudentsData] = useState<Student[]>([]);
+    const [currentPage, setCurrentPage] = useState(1);
+    const [limit, setLimit] = useState(5);
+    const [totalPages, setTotalPages] = useState(1);
+
+    const [search, setSearch] = useState("");
+    const [debouncedSearch, setDebouncedSearch] = useState("");
+    const [sortBy, setSortBy] = useState("None");
+    const [orderBy, setOrderBy] = useState("asc");
+    const [classFilter, setClassFilter] = useState("All");
 
     const fetchStudents = async () => {
         try {
-            const students = await viewStudents();
+            const students = await viewStudents(
+                classFilter,
+                debouncedSearch,
+                sortBy,
+                orderBy,
+                currentPage,
+                limit
+            );
+
             console.log("Students response:", students.data);
-            setStudentsData(students.data);
+
+            setStudentsData(students.data.students);
+            setTotalPages(students.data.totalPages);
         }
         catch (error) {
             console.log(error);
         }
-    }
+    };
+
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            setDebouncedSearch(search);
+        }, 500);
+
+        return () => {
+            clearTimeout(timer);
+        };
+    }, [search]);
+
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [debouncedSearch, sortBy, orderBy, classFilter, limit]);
 
     useEffect(() => {
         fetchStudents();
-    }, []);
-
-    // function handleAddStudent() {
-    //     navigate("studentForm?mode=add");
-    // }
+    }, [debouncedSearch, sortBy, orderBy, classFilter, currentPage, limit]);
 
     function handleEditStudent(id: string) {
         navigate(`studentForm?mode=edit&id=${id}`);
@@ -72,71 +101,22 @@ function PrincipalViewStudents() {
 
     const sortOptions = ["None", "Student Name", "Class", "Roll no"];
 
-    const [currentPage, setCurrentPage] = useState(1);
-    const [limit, setLimit] = useState(5);
-
-    const [search, setSearch] = useState("");
-    const [sortBy, setSortBy] = useState("None");
-    const [orderBy, setOrderBy] = useState("asc");
-    const [classFilter, setClassFilter] = useState("All");
-
-    let processedStudents = [...studentsData];
-    if (classFilter !== "All") {
-        processedStudents = processedStudents.filter((student) => student.class === classFilter)
-    };
-
-    if (search.trim() !== "") {
-        processedStudents = processedStudents.filter(
-            (student) =>
-                student.userId.name
-                    .toLowerCase()
-                    .includes(search.toLowerCase())
-        );
-    }
-
-    if (sortBy === "Student Name") {
-        processedStudents.sort((a, b) =>
-            a.userId.name.localeCompare(b.userId.name));
-    }
-
-    if (sortBy === "Class") {
-        processedStudents.sort((a, b) => {
-            const numA = parseInt(a.class, 10);
-            const numB = parseInt(b.class, 10);
-            return numA - numB;
-        });
-    }
-
-    if (sortBy === "Roll no") {
-        processedStudents.sort((a, b) =>
-            a.rollNumber - b.rollNumber);
-    }
-
-    if (sortBy !== "None" && orderBy === "desc") {
-        processedStudents.reverse();
-    }
-
-    const totalPages = Math.ceil(processedStudents.length / limit);
-
     const startIndex = (currentPage - 1) * limit;
-    const endIndex = startIndex + limit;
-    const currentStudents = processedStudents.slice(startIndex, endIndex);
-
-    useEffect(() => {
-        setCurrentPage(1);
-    }, [sortBy, orderBy, classFilter, limit]);
 
     return (
         <div className="flex flex-col min-h-screen font-fredoka">
             <NavBar />
+
             <div className="flex flex-1 bg-purple-100">
                 <SideBar />
+
                 <div>
                     <Breadcrumb />
+
                     <div className="flex flex-col pt-12 pl-20 mb-10">
+
                         <div className="flex justify-between items-center mb-4">
                             <div>
-
                                 <h1 className="text-3xl font-medium text-gray-900">
                                     Students
                                 </h1>
@@ -144,41 +124,64 @@ function PrincipalViewStudents() {
                                 <p className="mt-1 text-sm text-gray-600">
                                     View and Manage Students
                                 </p>
-
                             </div>
-                            {/* <button onClick={handleAddStudent} type="button" className="p-2 bg-purple-300 rounded-md
-                shadow-[0_2px_1px] hover:bg-violet-300 cursor-pointer">Add Student</button> */}
                         </div>
+
                         <div className="flex justify-between items-center mb-3">
                             <div className="flex gap-8 mb-3">
-                                <SortBy sortOptions={sortOptions} sortBy={sortBy} setSortBy={setSortBy} />
-                                <OrderBy orderBy={orderBy} setOrderBy={setOrderBy} disabled={sortBy === "None"} />
-                                <ClassFilter classFilter={classFilter} setClassFilter={setClassFilter} />
+                                <SortBy
+                                    sortOptions={sortOptions}
+                                    sortBy={sortBy}
+                                    setSortBy={setSortBy}
+                                />
+
+                                <OrderBy
+                                    orderBy={orderBy}
+                                    setOrderBy={setOrderBy}
+                                    disabled={sortBy === "None"}
+                                />
+
+                                <ClassFilter
+                                    classFilter={classFilter}
+                                    setClassFilter={setClassFilter}
+                                />
                             </div>
+
                             <div>
-                                <SearchBar search={search} setSearch={setSearch} />
+                                <SearchBar
+                                    search={search}
+                                    setSearch={setSearch}
+                                />
                             </div>
                         </div>
+
                         <div className="flex flex-wrap gap-10">
                             <PrincipalStudentsTable
-                                student={currentStudents}
+                                student={studentsData}
                                 handleEditStudent={handleEditStudent}
                                 handleDeleteStudent={handleDeleteStudent}
                                 handleStudentProfile={handleStudentProfile}
-                                startIndex={startIndex} />
+                                startIndex={startIndex}
+                            />
                         </div>
+
                         <div className="flex justify-between mt-5 items-center">
                             <div className="mt-1">
-                                <Pagination currentPage={currentPage}
+                                <Pagination
+                                    currentPage={currentPage}
                                     totalPages={totalPages}
                                     setCurrentPage={setCurrentPage}
                                 />
                             </div>
-                            <Limit setLimit={setLimit} limit={limit} />
+
+                            <Limit
+                                setLimit={setLimit}
+                                limit={limit}
+                            />
                         </div>
+
                     </div>
                 </div>
-
             </div>
         </div>
     );

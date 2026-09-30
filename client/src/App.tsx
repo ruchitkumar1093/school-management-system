@@ -6,6 +6,7 @@ import LoginRoutes from "./routes/loginRoutes";
 import ProtectedRoutes from "./components/protectedRoutes";
 import Hero from "./pages/hero";
 import AdmissionForm from "./pages/admissionForm";
+import NotFound from "./pages/notFound";
 
 function App() {
   return (
@@ -13,7 +14,8 @@ function App() {
       <Routes>
         <Route path="/" element={<Hero />} />
         <Route path="/admission" element={<AdmissionForm />} />
-        <Route path="/*" element={<LoginRoutes />} />
+        {/* <Route path="/*" element={<LoginRoutes />} /> */}
+        <Route path="/login/*" element={<LoginRoutes />} />
         <Route path="/principal/*" element={
           <ProtectedRoutes allowedRole={"principal"}>
             <PrincipalRoutes />
@@ -26,6 +28,7 @@ function App() {
           <ProtectedRoutes allowedRole={"teacher"}>
             <TeacherRoutes />
           </ProtectedRoutes>} />
+        <Route path="*" element={<NotFound />} />
       </Routes>
     </div>
   );

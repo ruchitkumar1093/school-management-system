@@ -5,6 +5,7 @@ import Mark from "../models/Mark";
 import Teacher from "../models/Teacher";
 import Attendance from "../models/Attendance";
 import Leave from "../models/Leave";
+import AdmissionRequest from "../models/AdmissionRequest";
 
 //Leaves
 export const applyLeave = async (
@@ -78,7 +79,6 @@ export const getMyLeaves = async (
     res: Response
 ) => {
     try {
-
         const userId = req.user?.userId;
 
         const student = await Student.findOne({
@@ -91,17 +91,45 @@ export const getMyLeaves = async (
             });
         }
 
-        const leaves = await Leave.find({
+        const currentPage = Math.max(
+            Number(req.query.page) || 1,
+            1
+        );
+
+        const pageLimit = Math.max(
+            Number(req.query.limit) || 5,
+            1
+        );
+
+        const totalLeaves = await Leave.countDocuments({
             studentId: student._id
-        }).sort({
-            createdAt: -1
         });
 
-        return res.status(200).json(leaves);
+        const skip =
+            (currentPage - 1) * pageLimit;
 
+        const leaves = await Leave.find({
+            studentId: student._id
+        })
+            .sort({
+                createdAt: -1
+            })
+            .skip(skip)
+            .limit(pageLimit);
+
+        const totalPages = Math.ceil(
+            totalLeaves / pageLimit
+        );
+
+        return res.status(200).json({
+            leaves,
+            totalLeaves,
+            totalPages,
+            currentPage,
+            limit: pageLimit
+        });
     }
     catch (error) {
-
         console.error(
             "Get student leaves error:",
             error
@@ -186,20 +214,59 @@ export const getSubjects = async (
             });
         }
 
-        const subjects = await Subject.find({
+        const search =
+            req.query.search?.toString().trim() || "";
+
+        const order =
+            req.query.order?.toString() || "asc";
+
+        const currentPage = Math.max(
+            Number(req.query.page) || 1,
+            1
+        );
+
+        const pageLimit = Math.max(
+            Number(req.query.limit) || 5,
+            1
+        );
+
+        const match: any = {
             class: student.class
-        });
+        };
+
+        if (search !== "") {
+            match.name = {
+                $regex: search,
+                $options: "i"
+            };
+        }
+
+        const sortOrder =
+            order === "desc" ? -1 : 1;
+
+        const totalSubjects =
+            await Subject.countDocuments(match);
+
+        const subjects = await Subject.find(match)
+            .sort({
+                name: sortOrder
+            })
+            .skip(
+                (currentPage - 1) * pageLimit
+            )
+            .limit(pageLimit);
 
         const data = await Promise.all(
-            subjects.map(async (subject) => {
+            subjects.map(async subject => {
 
-                const teacher = await Teacher.findOne({
-                    department: subject.name,
-                    classAssigned: subject.class
-                }).populate({
-                    path: "userId",
-                    select: "name"
-                });
+                const teacher =
+                    await Teacher.findOne({
+                        department: subject.name,
+                        classAssigned: subject.class
+                    }).populate({
+                        path: "userId",
+                        select: "name"
+                    });
 
                 return {
                     ...subject.toObject(),
@@ -210,14 +277,29 @@ export const getSubjects = async (
             })
         );
 
-        res.status(200).json(data);
+        const totalPages =
+            Math.ceil(
+                totalSubjects / pageLimit
+            );
+
+        return res.status(200).json({
+            subjects: data,
+            totalSubjects,
+            totalPages,
+            currentPage,
+            limit: pageLimit
+        });
     }
     catch (error) {
         next(error);
     }
 };
 
-export const getMarks = async (req: Request, res: Response, next: NextFunction) => {
+export const getMarks = async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+) => {
     try {
         const student = await Student.findOne({
             userId: req.user?.userId
@@ -229,9 +311,38 @@ export const getMarks = async (req: Request, res: Response, next: NextFunction) 
             });
         }
 
-        const marks = await Mark.find({
+        const exam =
+            req.query.exam?.toString() || "All";
+
+        const search =
+            req.query.search?.toString().trim() || "";
+
+        const sortBy =
+            req.query.sortBy?.toString() || "None";
+
+        const order =
+            req.query.order?.toString() || "asc";
+
+        const currentPage = Math.max(
+            Number(req.query.page) || 1,
+            1
+        );
+
+        const pageLimit = Math.max(
+            Number(req.query.limit) || 5,
+            1
+        );
+
+        const filter: any = {
             studentId: student._id
-        }).populate("subjectId", "name")
+        };
+
+        if (exam !== "All") {
+            filter.exam = exam;
+        }
+
+        const marks = await Mark.find(filter)
+            .populate("subjectId", "name")
             .populate({
                 path: "teacherId",
                 populate: {
@@ -239,12 +350,69 @@ export const getMarks = async (req: Request, res: Response, next: NextFunction) 
                     select: "name"
                 }
             });
-        res.status(200).json(marks);
+
+        let filteredMarks = marks;
+
+        if (search !== "") {
+            const searchValue = search.toLowerCase();
+
+            filteredMarks = filteredMarks.filter(
+                (mark: any) =>
+                    mark.subjectId?.name
+                        ?.toLowerCase()
+                        .includes(searchValue)
+            );
+        }
+
+        if (sortBy === "Subject Name") {
+            filteredMarks.sort((a: any, b: any) => {
+                const subjectA = a.subjectId?.name || "";
+                const subjectB = b.subjectId?.name || "";
+
+                return subjectA.localeCompare(subjectB);
+            });
+        }
+        else if (sortBy === "Marks Obtained") {
+            filteredMarks.sort(
+                (a: any, b: any) =>
+                    a.marksObtained - b.marksObtained
+            );
+        }
+
+        if (
+            sortBy !== "None" &&
+            order === "desc"
+        ) {
+            filteredMarks.reverse();
+        }
+
+        const totalMarks =
+            filteredMarks.length;
+
+        const totalPages =
+            Math.ceil(totalMarks / pageLimit);
+
+        const skip =
+            (currentPage - 1) * pageLimit;
+
+        const paginatedMarks =
+            filteredMarks.slice(
+                skip,
+                skip + pageLimit
+            );
+
+        return res.status(200).json({
+            marks: paginatedMarks,
+            totalMarks,
+            totalPages,
+            currentPage,
+            limit: pageLimit
+        });
     }
     catch (error) {
         next(error);
     }
-}
+};
 
 export const getStudents = async (req: Request, res: Response, next: NextFunction) => {
     try {
@@ -258,13 +426,24 @@ export const getStudents = async (req: Request, res: Response, next: NextFunctio
             });
         }
 
-        res.status(200).json(student);
-    }
+        const admissionRequest = await AdmissionRequest.findOne({
+            studentId: student._id,
+            status: "approved"
+        }).select(
+            "studentName dateOfBirth gender classApplyingFor previousClass fatherName motherName phone email address city state pinCode bloodGroup aadhaarNumber academicYear"
+        );
 
+        res.status(200).json({
+            class: student.class,
+            section: student.section,
+            rollNumber: student.rollNumber,
+            admissionRequest
+        });
+    }
     catch (error) {
         next(error);
     }
-}
+};
 
 export const getAttendance = async (
     req: Request,
@@ -272,6 +451,16 @@ export const getAttendance = async (
     next: NextFunction
 ) => {
     try {
+        const currentPage = Math.max(
+            Number(req.query.page) || 1,
+            1
+        );
+
+        const pageLimit = Math.max(
+            Number(req.query.limit) || 10,
+            1
+        );
+
         const student = await Student.findOne({
             userId: req.user?.userId
         }).populate({
@@ -358,16 +547,75 @@ export const getAttendance = async (
                 new Date(b.date).getTime()
         );
 
-        res.status(200).json({
+        const presentCount =
+            result.filter(
+                record =>
+                    record.status === "Present"
+            ).length;
+
+        const absentCount =
+            result.filter(
+                record =>
+                    record.status === "Absent"
+            ).length;
+
+        const leaveCount =
+            result.filter(
+                record =>
+                    record.status === "Leave"
+            ).length;
+
+        const totalDays =
+            presentCount + absentCount;
+
+        const percentage =
+            totalDays > 0
+                ? Number(
+                    (
+                        (presentCount /
+                            totalDays) *
+                        100
+                    ).toFixed(2)
+                )
+                : 0;
+
+        const totalRecords =
+            result.length;
+
+        const totalPages =
+            Math.ceil(
+                totalRecords / pageLimit
+            );
+
+        const skip =
+            (currentPage - 1) * pageLimit;
+
+        const paginatedAttendance =
+            result.slice(
+                skip,
+                skip + pageLimit
+            );
+
+        return res.status(200).json({
             student: {
                 name: (student.userId as any).name,
                 uid: (student.userId as any).uid,
                 class: student.class,
                 rollNumber: student.rollNumber
             },
-            attendance: result
+            attendance: paginatedAttendance,
+            totalRecords,
+            totalPages,
+            currentPage,
+            limit: pageLimit,
+            presentCount,
+            absentCount,
+            leaveCount,
+            totalDays,
+            percentage
         });
-    } catch (error) {
+    }
+    catch (error) {
         console.log(error);
         next(error);
     }

@@ -63,10 +63,112 @@ export const getAdmissions = async (
     next: NextFunction
 ) => {
     try {
-        const admissions = await AdmissionRequest.find()
-            .sort({ createdAt: -1 });
+        const {
+            status = "pending",
+            class: classFilter = "All",
+            search = "",
+            sortBy = "None",
+            order = "asc",
+            page = "1",
+            limit = "5"
+        } = req.query;
 
-        res.status(200).json(admissions);
+        const currentPage = Math.max(Number(page), 1);
+        const pageLimit = Math.max(Number(limit), 1);
+        const skip = (currentPage - 1) * pageLimit;
+
+        const match: any = {
+            status
+        };
+
+        if (classFilter !== "All") {
+            match.classApplyingFor = classFilter;
+        }
+
+        const searchValue = search.toString().trim();
+
+        if (searchValue !== "") {
+            match.studentName = {
+                $regex: searchValue,
+                $options: "i"
+            };
+        }
+
+        const pipeline: any[] = [
+            {
+                $match: match
+            }
+        ];
+
+        if (sortBy === "Student Name") {
+            pipeline.push({
+                $sort: {
+                    studentName: order === "desc" ? -1 : 1,
+                    createdAt: -1
+                }
+            });
+        }
+        else if (sortBy === "Class") {
+            pipeline.push({
+                $addFields: {
+                    classNumber: {
+                        $toInt: {
+                            $getField: {
+                                field: "match",
+                                input: {
+                                    $regexFind: {
+                                        input: "$classApplyingFor",
+                                        regex: "\\d+"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+
+            pipeline.push({
+                $sort: {
+                    classNumber: order === "desc" ? -1 : 1,
+                    createdAt: -1
+                }
+            });
+        }
+        else {
+            pipeline.push({
+                $sort: {
+                    createdAt: -1
+                }
+            });
+        }
+
+        pipeline.push({
+            $facet: {
+                admissions: [
+                    { $skip: skip },
+                    { $limit: pageLimit }
+                ],
+                total: [
+                    { $count: "count" }
+                ]
+            }
+        });
+
+        const result = await AdmissionRequest.aggregate(pipeline);
+
+        const admissions = result[0]?.admissions || [];
+        const totalAdmissions = result[0]?.total[0]?.count || 0;
+        const totalPages = Math.ceil(
+            totalAdmissions / pageLimit
+        );
+
+        res.status(200).json({
+            admissions,
+            totalAdmissions,
+            totalPages,
+            currentPage,
+            limit: pageLimit
+        });
     }
     catch (error) {
         console.log(error);

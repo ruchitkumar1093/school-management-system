@@ -2,8 +2,7 @@ import NavBar from "../../components/navBar";
 import SideBar from "../../components/sideBar";
 import { useState, useEffect } from "react";
 import { getAdmissionById, rejectAdmissionById, approveAdmission } from "../../services/admissionApi";
-import { useNavigate } from "react-router-dom";
-import { useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import Breadcrumb from "../../components/breadcrumb";
 import { useAdmission } from "../../context/admissionContext";
 
@@ -28,29 +27,31 @@ type AdmissionInfo = {
 };
 
 function ViewAdmissionRequest() {
-
     const [admissionInfo, setAdmissionInfo] = useState<AdmissionInfo | null>(null);
     const [searchParams] = useSearchParams();
     const id = searchParams.get("id");
-    if (!id) return null;
     const navigate = useNavigate();
     const { refreshPendingRequests } = useAdmission();
 
     useEffect(() => {
         const fetchAdmission = async () => {
             try {
-                const response = await getAdmissionById(id);
-                setAdmissionInfo(response.data);
+                if (id) {
+                    const response = await getAdmissionById(id);
+                    setAdmissionInfo(response.data);
+                }
             }
             catch (error) {
                 console.log(error);
             }
         };
+
         fetchAdmission();
     }, [id]);
 
     const rejectAdmission = async () => {
         try {
+            if (!id) return;
             await rejectAdmissionById(id);
             await refreshPendingRequests();
             alert("Admission Rejected");
@@ -64,6 +65,7 @@ function ViewAdmissionRequest() {
 
     const approve = async () => {
         try {
+            if (!id) return;
             await approveAdmission(id);
             await refreshPendingRequests();
             alert("Admission Approved");
@@ -76,108 +78,268 @@ function ViewAdmissionRequest() {
     };
 
     return (
-        <div className="flex flex-col min-h-screen font-fredoka">
+        <div className="flex min-h-screen flex-col font-fredoka">
             <NavBar />
+
             <div className="flex flex-1 bg-purple-100">
                 <SideBar />
-                <div>
+
+                <div className="flex-1">
                     <Breadcrumb />
-                    <div className="flex flex-1 bg-purple-100">
-                        <div className="flex flex-col pt-12 pl-20">
-                            <div className="mb-8">
 
-                                <h1 className="text-3xl font-medium text-gray-900">
-                                    View Requests
-                                </h1>
-
-                            </div>
-                            <div className="p-7 bg-purple-200 rounded-lg shadow-md mb-7 grid grid-cols-2 gap-x-15 gap-y-4">
-                                <h2 className="flex gap-3">
-                                    <span>Name:</span>
-                                    <span>{admissionInfo?.studentName}</span>
-                                </h2>
-                                <h2 className="flex gap-3">
-                                    <span>DOB:</span>
-                                    <span>{admissionInfo?.dateOfBirth
-                                        ? new Date(admissionInfo.dateOfBirth).toLocaleDateString("en-IN")
-                                        : ""}</span>
-                                </h2>
-                                <h2 className="flex gap-3">
-                                    <span>Gender:</span>
-                                    <span>{admissionInfo?.gender}</span>
-                                </h2>
-                                <h2 className="flex gap-3">
-                                    <span>Class Applying For:</span>
-                                    <span>{admissionInfo?.classApplyingFor}</span>
-                                </h2>
-                                <h2 className="flex gap-3">
-                                    <span>Previous Class:</span>
-                                    <span>{admissionInfo?.previousClass}</span>
-                                </h2>
-                                <h2 className="flex gap-3">
-                                    <span>Father Name:</span>
-                                    <span>{admissionInfo?.fatherName}</span>
-                                </h2>
-                                <h2 className="flex gap-3">
-                                    <span>Mother Name:</span>
-                                    <span>{admissionInfo?.motherName}</span>
-                                </h2>
-                                <h2 className="flex gap-3">
-                                    <span>Phone:</span>
-                                    <span>{admissionInfo?.phone}</span>
-                                </h2>
-                                <h2 className="flex gap-3">
-                                    <span>Email:</span>
-                                    <span>{admissionInfo?.email}</span>
-                                </h2>
-                                <h2 className="flex gap-3">
-                                    <span>Address:</span>
-                                    <span>{admissionInfo?.address}</span>
-                                </h2>
-                                <h2 className="flex gap-3">
-                                    <span>City:</span>
-                                    <span>{admissionInfo?.city}</span>
-                                </h2>
-                                <h2 className="flex gap-3">
-                                    <span>State:</span>
-                                    <span>{admissionInfo?.state}</span>
-                                </h2>
-                                <h2 className="flex gap-3">
-                                    <span>Pin Code:</span>
-                                    <span>{admissionInfo?.pinCode}</span>
-                                </h2>
-                                <h2 className="flex gap-3">
-                                    <span>Blood Group:</span>
-                                    <span>{admissionInfo?.bloodGroup}</span>
-                                </h2>
-                                <h2 className="flex gap-3">
-                                    <span>Aadhar Number:</span>
-                                    <span>{admissionInfo?.aadhaarNumber}</span>
-                                </h2>
-                                <h2 className="flex gap-3">
-                                    <span>Academic Year:</span>
-                                    <span>{admissionInfo?.academicYear}</span>
-                                </h2>
-                            </div>
-                            <div className="flex gap-5 pb-15">
-                                <button
-                                    type="submit" onClick={approve}
-                                    className="p-3 px-6 bg-purple-300 rounded-lg
-                            shadow-[0_2px_3px] hover:bg-violet-300
-                            cursor-pointer"
-                                >Approve</button>
-
-                                <button
-                                    type="button" onClick={rejectAdmission}
-                                    className="p-3 px-6 bg-gray-200 rounded-lg
-                            shadow-[0_2px_3px] hover:bg-red-300
-                            cursor-pointer"
-                                >Reject</button>
-                            </div>
+                    <main className="px-8 py-8 lg:px-12 xl:px-16">
+                        <div className="mb-8">
+                            <h1 className="text-3xl font-semibold text-purple-950">
+                                Admission Request
+                            </h1>
+                            <p className="mt-1 text-gray-600">
+                                Review the student's admission information before making a decision.
+                            </p>
                         </div>
-                    </div>
-                </div>
 
+                        {admissionInfo && (
+                            <>
+                                <div className="mb-7 rounded-lg bg-purple-200 p-6 shadow-md">
+                                    <div className="flex flex-col gap-8 md:flex-row md:items-center">
+                                        <div className="flex flex-col md:min-w-40">
+                                            <h2 className="text-2xl font-semibold text-purple-950">
+                                                {admissionInfo.studentName}
+                                            </h2>
+
+                                            <span className="mt-1 text-sm text-gray-600">
+                                                Admission Applicant
+                                            </span>
+                                        </div>
+
+                                        <div className="hidden h-20 w-px bg-purple-300 md:block" />
+
+                                        <div className="grid flex-1 grid-cols-1 gap-x-12 gap-y-5 sm:grid-cols-2 lg:grid-cols-3">
+                                            <div>
+                                                <p className="text-sm font-medium text-gray-500">
+                                                    Class Applying For
+                                                </p>
+                                                <p className="mt-1 font-medium text-gray-900">
+                                                    {admissionInfo.classApplyingFor}
+                                                </p>
+                                            </div>
+
+                                            <div>
+                                                <p className="text-sm font-medium text-gray-500">
+                                                    Previous Class
+                                                </p>
+                                                <p className="mt-1 font-medium text-gray-900">
+                                                    {admissionInfo.previousClass}
+                                                </p>
+                                            </div>
+
+                                            <div>
+                                                <p className="text-sm font-medium text-gray-500">
+                                                    Academic Year
+                                                </p>
+                                                <p className="mt-1 font-medium text-gray-900">
+                                                    {admissionInfo.academicYear}
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-1 gap-7 xl:grid-cols-2">
+                                    <section className="rounded-lg bg-purple-200 p-6 shadow-md">
+                                        <div className="mb-6 border-b border-purple-300 pb-4">
+                                            <h2 className="text-xl font-semibold text-purple-950">
+                                                Personal Information
+                                            </h2>
+                                        </div>
+
+                                        <div className="grid grid-cols-1 gap-x-8 gap-y-5 sm:grid-cols-2">
+                                            <div>
+                                                <p className="text-sm font-medium text-gray-500">
+                                                    Date of Birth
+                                                </p>
+                                                <p className="mt-1 font-medium text-gray-900">
+                                                    {new Date(admissionInfo.dateOfBirth).toLocaleDateString("en-IN")}
+                                                </p>
+                                            </div>
+
+                                            <div>
+                                                <p className="text-sm font-medium text-gray-500">
+                                                    Gender
+                                                </p>
+                                                <p className="mt-1 font-medium text-gray-900">
+                                                    {admissionInfo.gender}
+                                                </p>
+                                            </div>
+
+                                            <div>
+                                                <p className="text-sm font-medium text-gray-500">
+                                                    Blood Group
+                                                </p>
+                                                <p className="mt-1 font-medium text-gray-900">
+                                                    {admissionInfo.bloodGroup || "Not provided"}
+                                                </p>
+                                            </div>
+
+                                            <div>
+                                                <p className="text-sm font-medium text-gray-500">
+                                                    Academic Year
+                                                </p>
+                                                <p className="mt-1 font-medium text-gray-900">
+                                                    {admissionInfo.academicYear}
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </section>
+
+                                    <section className="rounded-lg bg-purple-200 p-6 shadow-md">
+                                        <div className="mb-6 border-b border-purple-300 pb-4">
+                                            <h2 className="text-xl font-semibold text-purple-950">
+                                                Parent Information
+                                            </h2>
+                                        </div>
+
+                                        <div className="grid grid-cols-1 gap-x-8 gap-y-5 sm:grid-cols-2">
+                                            <div>
+                                                <p className="text-sm font-medium text-gray-500">
+                                                    Father's Name
+                                                </p>
+                                                <p className="mt-1 font-medium text-gray-900">
+                                                    {admissionInfo.fatherName}
+                                                </p>
+                                            </div>
+
+                                            <div>
+                                                <p className="text-sm font-medium text-gray-500">
+                                                    Mother's Name
+                                                </p>
+                                                <p className="mt-1 font-medium text-gray-900">
+                                                    {admissionInfo.motherName}
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </section>
+
+                                    <section className="rounded-lg bg-purple-200 p-6 shadow-md">
+                                        <div className="mb-6 border-b border-purple-300 pb-4">
+                                            <h2 className="text-xl font-semibold text-purple-950">
+                                                Contact Information
+                                            </h2>
+                                        </div>
+
+                                        <div className="grid grid-cols-1 gap-x-8 gap-y-5 sm:grid-cols-2">
+                                            <div>
+                                                <p className="text-sm font-medium text-gray-500">
+                                                    Phone
+                                                </p>
+                                                <p className="mt-1 font-medium text-gray-900">
+                                                    {admissionInfo.phone}
+                                                </p>
+                                            </div>
+
+                                            <div>
+                                                <p className="text-sm font-medium text-gray-500">
+                                                    Email
+                                                </p>
+                                                <p className="mt-1 break-words font-medium text-gray-900">
+                                                    {admissionInfo.email}
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </section>
+
+                                    <section className="rounded-lg bg-purple-200 p-6 shadow-md">
+                                        <div className="mb-6 border-b border-purple-300 pb-4">
+                                            <h2 className="text-xl font-semibold text-purple-950">
+                                                Address
+                                            </h2>
+                                        </div>
+
+                                        <div className="grid grid-cols-1 gap-x-8 gap-y-5 sm:grid-cols-3">
+                                            <div>
+                                                <p className="text-sm font-medium text-gray-500">
+                                                    City
+                                                </p>
+                                                <p className="mt-1 font-medium text-gray-900">
+                                                    {admissionInfo.city}
+                                                </p>
+                                            </div>
+
+                                            <div>
+                                                <p className="text-sm font-medium text-gray-500">
+                                                    State
+                                                </p>
+                                                <p className="mt-1 font-medium text-gray-900">
+                                                    {admissionInfo.state}
+                                                </p>
+                                            </div>
+
+                                            <div>
+                                                <p className="text-sm font-medium text-gray-500">
+                                                    PIN Code
+                                                </p>
+                                                <p className="mt-1 font-medium text-gray-900">
+                                                    {admissionInfo.pinCode}
+                                                </p>
+                                            </div>
+
+                                            <div className="sm:col-span-3">
+                                                <p className="text-sm font-medium text-gray-500">
+                                                    Address
+                                                </p>
+                                                <p className="mt-1 font-medium text-gray-900">
+                                                    {admissionInfo.address}
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </section>
+
+                                    <section className="rounded-lg bg-purple-200 p-6 shadow-md xl:col-span-2">
+                                        <div className="mb-6 border-b border-purple-300 pb-4">
+                                            <h2 className="text-xl font-semibold text-purple-950">
+                                                Identification
+                                            </h2>
+                                        </div>
+
+                                        <div>
+                                            <p className="text-sm font-medium text-gray-500">
+                                                Aadhaar Number
+                                            </p>
+                                            <p className="mt-1 font-medium text-gray-900">
+                                                {admissionInfo.aadhaarNumber}
+                                            </p>
+                                        </div>
+                                    </section>
+                                </div>
+
+                                <div className="mt-8 flex gap-4 pb-10">
+                                    <button
+                                        type="button"
+                                        onClick={approve}
+                                        className="rounded-lg bg-purple-300 px-6 py-3 font-medium text-purple-950 shadow-[0_2px_3px] transition-colors hover:bg-violet-300 cursor-pointer"
+                                    >
+                                        Approve
+                                    </button>
+
+                                    <button
+                                        type="button"
+                                        onClick={rejectAdmission}
+                                        className="rounded-lg bg-gray-200 px-6 py-3 font-medium text-gray-800 shadow-[0_2px_3px] transition-colors hover:bg-red-300 cursor-pointer"
+                                    >
+                                        Reject
+                                    </button>
+                                </div>
+                            </>
+                        )}
+
+                        {!admissionInfo && (
+                            <div className="rounded-lg bg-purple-200 p-6 text-center shadow-md">
+                                <p className="text-gray-600">
+                                    Admission information is not available.
+                                </p>
+                            </div>
+                        )}
+                    </main>
+                </div>
             </div>
         </div>
     );

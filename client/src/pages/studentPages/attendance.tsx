@@ -3,9 +3,7 @@ import SideBar from "../../components/sideBar";
 import Pagination from "../../components/pagination";
 import Limit from "../../components/limit";
 import Breadcrumb from "../../components/breadcrumb";
-
 import { getAttendance } from "../../services/studentApi";
-
 import { useState, useEffect } from "react";
 
 type Attendance = {
@@ -22,63 +20,103 @@ type StudentInfo = {
 };
 
 function StudentAttendance() {
-    const [attendance, setAttendance] = useState<Attendance[]>([]);
-    const [student, setStudent] = useState<StudentInfo | null>(null);
-    const [currentPage, setCurrentPage] = useState(1);
-    const [limit, setLimit] = useState(10);
+    const [attendance, setAttendance] =
+        useState<Attendance[]>([]);
+
+    const [student, setStudent] =
+        useState<StudentInfo | null>(null);
+
+    const [currentPage, setCurrentPage] =
+        useState(1);
+
+    const [limit, setLimit] =
+        useState(10);
+
+    const [totalPages, setTotalPages] =
+        useState(1);
+
+    const [presentCount, setPresentCount] =
+        useState(0);
+
+    const [absentCount, setAbsentCount] =
+        useState(0);
+
+    const [leaveCount, setLeaveCount] =
+        useState(0);
+
+    const [totalDays, setTotalDays] =
+        useState(0);
+
+    const [percentage, setPercentage] =
+        useState(0);
 
     const fetchAttendance = async () => {
         try {
-            const response = await getAttendance();
+            const response =
+                await getAttendance(
+                    currentPage,
+                    limit
+                );
 
-            setAttendance(response.data.attendance);
-            setStudent(response.data.student);
-        } catch (error) {
+            setAttendance(
+                response.data.attendance
+            );
+
+            setStudent(
+                response.data.student
+            );
+
+            setTotalPages(
+                response.data.totalPages
+            );
+
+            setPresentCount(
+                response.data.presentCount
+            );
+
+            setAbsentCount(
+                response.data.absentCount
+            );
+
+            setLeaveCount(
+                response.data.leaveCount
+            );
+
+            setTotalDays(
+                response.data.totalDays
+            );
+
+            setPercentage(
+                response.data.percentage
+            );
+        }
+        catch (error) {
             console.log(error);
+
             setAttendance([]);
             setStudent(null);
+            setTotalPages(1);
+            setPresentCount(0);
+            setAbsentCount(0);
+            setLeaveCount(0);
+            setTotalDays(0);
+            setPercentage(0);
         }
     };
 
     useEffect(() => {
         fetchAttendance();
-    }, []);
+    }, [
+        currentPage,
+        limit
+    ]);
 
     useEffect(() => {
         setCurrentPage(1);
     }, [limit]);
 
-    const presentCount = attendance.filter(
-        (record) => record.status === "Present"
-    ).length;
-
-    const absentCount = attendance.filter(
-        (record) => record.status === "Absent"
-    ).length;
-
-    const leaveCount = attendance.filter(
-        (record) => record.status === "Leave"
-    ).length;
-
-    const totalDays = presentCount + absentCount;
-
-    const percentage =
-        totalDays > 0
-            ? ((presentCount / totalDays) * 100).toFixed(2)
-            : "0.00";
-
-    const totalPages = Math.ceil(
-        attendance.length / limit
-    );
-
-    const startIndex = (currentPage - 1) * limit;
-
-    const endIndex = startIndex + limit;
-
-    const currentAttendance = attendance.slice(
-        startIndex,
-        endIndex
-    );
+    const startIndex =
+        (currentPage - 1) * limit;
 
     return (
         <div className="flex flex-col min-h-screen font-fredoka">
@@ -91,7 +129,6 @@ function StudentAttendance() {
                     <Breadcrumb />
 
                     <div className="flex flex-col pt-12 pl-20 mb-10">
-
                         <div className="flex justify-between items-center mb-6">
                             <div>
                                 <h1 className="text-3xl font-medium text-gray-900">
@@ -109,6 +146,7 @@ function StudentAttendance() {
                                 <div className="flex gap-8 mb-5">
                                     <div>
                                         Student:
+
                                         <span className="font-medium ml-1">
                                             {student.name}
                                         </span>
@@ -116,6 +154,7 @@ function StudentAttendance() {
 
                                     <div>
                                         UID:
+
                                         <span className="font-medium ml-1">
                                             {student.uid.toUpperCase()}
                                         </span>
@@ -123,6 +162,7 @@ function StudentAttendance() {
 
                                     <div>
                                         Class:
+
                                         <span className="font-medium ml-1">
                                             {student.class}
                                         </span>
@@ -130,6 +170,7 @@ function StudentAttendance() {
 
                                     <div>
                                         Roll Number:
+
                                         <span className="font-medium ml-1">
                                             {student.rollNumber}
                                         </span>
@@ -139,6 +180,7 @@ function StudentAttendance() {
                                 <div className="flex gap-8 mb-5">
                                     <div>
                                         Total Days:
+
                                         <span className="font-medium ml-1">
                                             {totalDays}
                                         </span>
@@ -146,6 +188,7 @@ function StudentAttendance() {
 
                                     <div>
                                         Present:
+
                                         <span className="font-medium ml-1">
                                             {presentCount}
                                         </span>
@@ -153,6 +196,7 @@ function StudentAttendance() {
 
                                     <div>
                                         Absent:
+
                                         <span className="font-medium ml-1">
                                             {absentCount}
                                         </span>
@@ -160,6 +204,7 @@ function StudentAttendance() {
 
                                     <div>
                                         Leave:
+
                                         <span className="font-medium ml-1">
                                             {leaveCount}
                                         </span>
@@ -167,80 +212,100 @@ function StudentAttendance() {
 
                                     <div>
                                         Attendance:
+
                                         <span className="font-medium ml-1">
-                                            {percentage}%
+                                            {percentage.toFixed(2)}%
                                         </span>
                                     </div>
                                 </div>
                             </>
                         )}
 
-                        <table className="border-collapse border border-gray-400 bg-purple-200">
-                            <thead>
-                                <tr className="bg-purple-300">
-                                    <th className="border border-gray-400 p-3 font-medium">
-                                        S.No.
-                                    </th>
+                        <div className="overflow-x-auto rounded-lg shadow-md">
+                            <table className="w-full border-collapse bg-purple-200 text-left text-gray-900">
+                                <thead>
+                                    <tr className="border-b border-purple-300 bg-purple-300/80">
+                                        <th className="border-r border-purple-300 p-3 font-semibold text-purple-950">
+                                            S.No.
+                                        </th>
 
-                                    <th className="border border-gray-400 p-3 font-medium">
-                                        Date
-                                    </th>
+                                        <th className="border-r border-purple-300 p-3 font-semibold text-purple-950">
+                                            Date
+                                        </th>
 
-                                    <th className="border border-gray-400 p-3 font-medium">
-                                        Attendance
-                                    </th>
-                                </tr>
-                            </thead>
-
-                            <tbody>
-                                {currentAttendance.length === 0 ? (
-                                    <tr>
-                                        <td
-                                            colSpan={3}
-                                            className="border border-gray-400 p-3 text-center text-gray-600"
-                                        >
-                                            No attendance records found
-                                        </td>
+                                        <th className="p-3 font-semibold text-purple-950">
+                                            Attendance
+                                        </th>
                                     </tr>
-                                ) : (
-                                    currentAttendance.map(
-                                        (record, index) => (
-                                            <tr key={record._id}>
-                                                <td className="border border-gray-400 p-3">
-                                                    {startIndex + index + 1}
-                                                </td>
+                                </thead>
 
-                                                <td className="border border-gray-400 p-3">
-                                                    {new Date(
-                                                        record.date
-                                                    ).toLocaleDateString(
-                                                        "en-GB"
-                                                    )}
-                                                </td>
-
-                                                <td
-                                                    className={`border border-gray-400 p-3 text-center ${
-                                                        record.status === "Present"
-                                                            ? "text-emerald-600"
-                                                            : record.status === "Absent"
-                                                            ? "text-rose-600"
-                                                            : "text-yellow-600"
-                                                    }`}
+                                <tbody>
+                                    {attendance.length === 0 ? (
+                                        <tr>
+                                            <td
+                                                colSpan={3}
+                                                className="p-4 text-center text-gray-500"
+                                            >
+                                                No attendance records found
+                                            </td>
+                                        </tr>
+                                    ) : (
+                                        attendance.map(
+                                            (record, index) => (
+                                                <tr
+                                                    key={
+                                                        record._id
+                                                    }
+                                                    className="border-b border-purple-300 last:border-b-0 transition-colors hover:bg-purple-300/40"
                                                 >
-                                                    {record.status}
-                                                </td>
-                                            </tr>
+                                                    <td className="border-r border-purple-300 p-3 font-medium">
+                                                        {startIndex +
+                                                            index +
+                                                            1}
+                                                    </td>
+
+                                                    <td className="border-r border-purple-300 p-3">
+                                                        {new Date(
+                                                            record.date
+                                                        ).toLocaleDateString(
+                                                            "en-GB"
+                                                        )}
+                                                    </td>
+
+                                                    <td
+                                                        className={`p-3 text-center font-medium ${
+                                                            record.status ===
+                                                            "Present"
+                                                                ? "text-emerald-600"
+                                                                : record.status ===
+                                                                  "Absent"
+                                                                ? "text-red-600"
+                                                                : "text-amber-600"
+                                                        }`}
+                                                    >
+                                                        {
+                                                            record.status
+                                                        }
+                                                    </td>
+                                                </tr>
+                                            )
                                         )
-                                    )
-                                )}
-                            </tbody>
-                        </table>
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
 
                         <div className="flex justify-between mt-5 mb-5 items-center">
                             <Pagination
-                                currentPage={currentPage}
-                                totalPages={totalPages}
-                                setCurrentPage={setCurrentPage}
+                                currentPage={
+                                    currentPage
+                                }
+                                totalPages={
+                                    totalPages
+                                }
+                                setCurrentPage={
+                                    setCurrentPage
+                                }
                             />
 
                             <Limit
@@ -248,7 +313,6 @@ function StudentAttendance() {
                                 limit={limit}
                             />
                         </div>
-
                     </div>
                 </div>
             </div>

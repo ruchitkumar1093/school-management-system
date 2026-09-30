@@ -4,6 +4,8 @@ import NavBar from "../../components/navBar";
 import SideBar from "../../components/sideBar";
 import Breadcrumb from "../../components/breadcrumb";
 import ClassFilter from "../../components/classFilter";
+import Pagination from "../../components/pagination";
+import Limit from "../../components/limit";
 
 import {
     getLeaveApplications,
@@ -11,26 +13,21 @@ import {
     rejectLeave
 } from "../../services/principalApi";
 
-
 type LeaveStatus = "Pending" | "Approved" | "Rejected";
-
 
 type LeaveApplication = {
     _id: string;
-
     student: {
         _id: string;
         name: string;
         uid: string;
         class: string;
     };
-
     startDate: string;
     endDate: string;
     reason: string;
     status: LeaveStatus;
 };
-
 
 function LeaveApplications() {
 
@@ -38,58 +35,70 @@ function LeaveApplications() {
         "pending" | "applications"
     >("pending");
 
-
-    const [classFilter, setClassFilter] =
-        useState("All");
-
+    const [classFilter, setClassFilter] = useState("All");
 
     const [applications, setApplications] = useState<
         LeaveApplication[]
     >([]);
 
+    const [currentPage, setCurrentPage] = useState(1);
+    const [limit, setLimit] = useState(5);
+    const [totalPages, setTotalPages] = useState(1);
 
     const [actionLoading, setActionLoading] =
         useState<string | null>(null);
 
-
-    const [loading, setLoading] =
-        useState(true);
-
+    const [loading, setLoading] = useState(true);
 
     async function fetchApplications() {
-
         try {
-
             setLoading(true);
 
-            const response = await getLeaveApplications();
+            const status =
+                activeView === "pending"
+                    ? "Pending"
+                    : "All";
 
-            setApplications(response.data);
+            const response = await getLeaveApplications(
+                status,
+                classFilter,
+                currentPage,
+                limit
+            );
 
-        } catch (error) {
+            setApplications(response.data.leaves);
+            setTotalPages(response.data.totalPages);
 
+        }
+        catch (error) {
             console.error(
                 "Failed to fetch leave applications:",
                 error
             );
-
-        } finally {
-
+        }
+        finally {
             setLoading(false);
-
         }
     }
 
+    useEffect(() => {
+        fetchApplications();
+    }, [
+        activeView,
+        classFilter,
+        currentPage,
+        limit
+    ]);
 
     useEffect(() => {
-
-        fetchApplications();
-
-    }, []);
-
+        setCurrentPage(1);
+    }, [
+        activeView,
+        classFilter,
+        limit
+    ]);
 
     function formatDate(date: string) {
-
         return new Date(date).toLocaleDateString(
             "en-IN",
             {
@@ -100,99 +109,61 @@ function LeaveApplications() {
         );
     }
 
-
     async function handleApprove(id: string) {
-
         try {
-
             setActionLoading(id);
 
             await approveLeave(id);
-
             await fetchApplications();
 
-        } catch (error) {
-
+        }
+        catch (error) {
             console.error(
                 "Failed to approve leave application:",
                 error
             );
-
-        } finally {
-
+        }
+        finally {
             setActionLoading(null);
-
         }
     }
 
-
     async function handleReject(id: string) {
-
         try {
-
             setActionLoading(id);
 
             await rejectLeave(id);
-
             await fetchApplications();
 
-        } catch (error) {
-
+        }
+        catch (error) {
             console.error(
                 "Failed to reject leave application:",
                 error
             );
-
-        } finally {
-
+        }
+        finally {
             setActionLoading(null);
-
         }
     }
 
-
-    const filteredApplications =
-        classFilter === "All"
-            ? applications
-            : applications.filter(
-                (application) =>
-                    application.student.class ===
-                    classFilter
-            );
-
-
-    const pendingApplications =
-        filteredApplications.filter(
-            (application) =>
-                application.status === "Pending"
-        );
-
-
-    const displayedApplications =
-        activeView === "pending"
-            ? pendingApplications
-            : filteredApplications;
-
+    const startIndex =
+        (currentPage - 1) * limit;
 
     return (
         <div className="flex min-h-screen flex-col font-fredoka">
 
             <NavBar />
 
-
             <div className="flex flex-1 bg-purple-100">
 
                 <SideBar />
-
 
                 <div className="flex min-w-0 flex-1 flex-col">
 
                     <Breadcrumb />
 
-
                     <div className="flex flex-1 flex-col px-16 pt-10 pb-12">
-
-                        {/* Header */}
 
                         <div className="mb-7">
 
@@ -206,9 +177,6 @@ function LeaveApplications() {
 
                         </div>
 
-
-                        {/* View Buttons + Class Filter */}
-
                         <div className="mb-7 flex items-end gap-2">
 
                             <button
@@ -216,9 +184,7 @@ function LeaveApplications() {
                                 onClick={() =>
                                     setActiveView("pending")
                                 }
-                                className={`cursor-pointer rounded-lg px-5 py-2.5 text-sm font-medium
-                                transition-colors
-                                ${
+                                className={`cursor-pointer rounded-lg px-5 py-2.5 text-sm font-medium transition-colors ${
                                     activeView === "pending"
                                         ? "bg-purple-800 text-white"
                                         : "bg-purple-200 text-gray-700 hover:bg-purple-300"
@@ -227,15 +193,12 @@ function LeaveApplications() {
                                 Pending Applications
                             </button>
 
-
                             <button
                                 type="button"
                                 onClick={() =>
                                     setActiveView("applications")
                                 }
-                                className={`cursor-pointer rounded-lg px-5 py-2.5 text-sm font-medium
-                                transition-colors
-                                ${
+                                className={`cursor-pointer rounded-lg px-5 py-2.5 text-sm font-medium transition-colors ${
                                     activeView === "applications"
                                         ? "bg-purple-800 text-white"
                                         : "bg-purple-200 text-gray-700 hover:bg-purple-300"
@@ -244,7 +207,6 @@ function LeaveApplications() {
                                 All Applications
                             </button>
 
-
                             <ClassFilter
                                 classFilter={classFilter}
                                 setClassFilter={setClassFilter}
@@ -252,19 +214,13 @@ function LeaveApplications() {
 
                         </div>
 
-
-                        {/* Applications */}
-
                         <div className="w-full">
 
                             <h2 className="mb-4 text-xl font-medium text-gray-900">
-
                                 {activeView === "pending"
                                     ? "Pending Leave Applications"
                                     : "All Leave Applications"}
-
                             </h2>
-
 
                             <div className="overflow-hidden rounded-2xl bg-purple-200 shadow-sm">
 
@@ -316,26 +272,22 @@ function LeaveApplications() {
 
                                         </thead>
 
-
                                         <tbody>
 
                                             {loading ? (
 
                                                 <tr>
-
                                                     <td
                                                         colSpan={9}
                                                         className="px-5 py-10 text-center text-base text-gray-500"
                                                     >
                                                         Loading leave applications...
                                                     </td>
-
                                                 </tr>
 
-                                            ) : displayedApplications.length === 0 ? (
+                                            ) : applications.length === 0 ? (
 
                                                 <tr>
-
                                                     <td
                                                         colSpan={9}
                                                         className="px-5 py-10 text-center text-base text-gray-500"
@@ -344,65 +296,36 @@ function LeaveApplications() {
                                                             ? "No pending leave applications found"
                                                             : "No leave applications found"}
                                                     </td>
-
                                                 </tr>
 
                                             ) : (
 
-                                                displayedApplications.map(
+                                                applications.map(
                                                     (
                                                         application,
                                                         index
                                                     ) => (
 
                                                         <tr
-                                                            key={
-                                                                application._id
-                                                            }
+                                                            key={application._id}
                                                             className="border-b border-white"
                                                         >
 
-                                                            {/* S.No. */}
-
                                                             <td className="px-5 py-4 text-base text-gray-600">
-                                                                {index + 1}
+                                                                {startIndex + index + 1}
                                                             </td>
 
-
-                                                            {/* Student */}
-
                                                             <td className="px-5 py-4 text-base text-gray-600">
-                                                                {
-                                                                    application
-                                                                        .student
-                                                                        .name
-                                                                }
+                                                                {application.student.name}
                                                             </td>
 
-
-                                                            {/* UID */}
-
-                                                            <td className="px-5 py-4 text-base text-gray-600">
-                                                                {
-                                                                    application
-                                                                        .student
-                                                                        .uid
-                                                                }
+                                                            <td className="px-5 py-4 text-base text-gray-600 uppercase">
+                                                                {application.student.uid}
                                                             </td>
 
-
-                                                            {/* Class */}
-
                                                             <td className="px-5 py-4 text-base text-gray-600">
-                                                                {
-                                                                    application
-                                                                        .student
-                                                                        .class
-                                                                }
+                                                                {application.student.class}
                                                             </td>
-
-
-                                                            {/* Start Date */}
 
                                                             <td className="px-5 py-4 text-base text-gray-600">
                                                                 {formatDate(
@@ -410,32 +333,20 @@ function LeaveApplications() {
                                                                 )}
                                                             </td>
 
-
-                                                            {/* End Date */}
-
                                                             <td className="px-5 py-4 text-base text-gray-600">
                                                                 {formatDate(
                                                                     application.endDate
                                                                 )}
                                                             </td>
 
-
-                                                            {/* Reason */}
-
                                                             <td className="max-w-xs px-5 py-4 text-base text-gray-600">
-                                                                {
-                                                                    application.reason
-                                                                }
+                                                                {application.reason}
                                                             </td>
-
-
-                                                            {/* Status */}
 
                                                             <td className="px-5 py-4">
 
                                                                 <span
-                                                                    className={`rounded-full px-3 py-1 text-sm font-medium
-                                                                    ${
+                                                                    className={`rounded-full px-3 py-1 text-sm font-medium ${
                                                                         application.status ===
                                                                         "Approved"
                                                                             ? "bg-green-100 text-green-700"
@@ -445,15 +356,10 @@ function LeaveApplications() {
                                                                             : "bg-yellow-100 text-yellow-700"
                                                                     }`}
                                                                 >
-                                                                    {
-                                                                        application.status
-                                                                    }
+                                                                    {application.status}
                                                                 </span>
 
                                                             </td>
-
-
-                                                            {/* Action */}
 
                                                             <td className="px-5 py-4">
 
@@ -473,19 +379,13 @@ function LeaveApplications() {
                                                                                     application._id
                                                                                 )
                                                                             }
-                                                                            className="cursor-pointer rounded-lg bg-green-700
-                                                                            px-4 py-2 text-sm font-medium text-white
-                                                                            transition-colors hover:bg-green-800
-                                                                            disabled:cursor-not-allowed disabled:opacity-60"
+                                                                            className="cursor-pointer rounded-lg bg-green-700 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-green-800 disabled:cursor-not-allowed disabled:opacity-60"
                                                                         >
-
                                                                             {actionLoading ===
                                                                             application._id
                                                                                 ? "..."
                                                                                 : "Approve"}
-
                                                                         </button>
-
 
                                                                         <button
                                                                             type="button"
@@ -498,17 +398,12 @@ function LeaveApplications() {
                                                                                     application._id
                                                                                 )
                                                                             }
-                                                                            className="cursor-pointer rounded-lg bg-red-700
-                                                                            px-4 py-2 text-sm font-medium text-white
-                                                                            transition-colors hover:bg-red-800
-                                                                            disabled:cursor-not-allowed disabled:opacity-60"
+                                                                            className="cursor-pointer rounded-lg bg-red-700 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-800 disabled:cursor-not-allowed disabled:opacity-60"
                                                                         >
-
                                                                             {actionLoading ===
                                                                             application._id
                                                                                 ? "..."
                                                                                 : "Reject"}
-
                                                                         </button>
 
                                                                     </div>
@@ -537,6 +432,23 @@ function LeaveApplications() {
                                 </div>
 
                             </div>
+
+                        </div>
+
+                        <div className="flex justify-between mt-5 items-center">
+
+                            <div className="mt-1">
+                                <Pagination
+                                    currentPage={currentPage}
+                                    totalPages={totalPages}
+                                    setCurrentPage={setCurrentPage}
+                                />
+                            </div>
+
+                            <Limit
+                                setLimit={setLimit}
+                                limit={limit}
+                            />
 
                         </div>
 

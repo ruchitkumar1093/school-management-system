@@ -20,6 +20,7 @@ import PrincipalAttendance from "../pages/principalPages/attendance";
 import PrincipalViewAttendance from "../pages/principalPages/viewAttendance";
 import Holidays from "../pages/principalPages/holidays";
 import LeaveApplications from "../pages/principalPages/leaves";
+import NotFound from "../pages/notFound";
 
 function PrincipalRoutes() {
     return (
@@ -46,6 +47,7 @@ function PrincipalRoutes() {
             <Route path="viewStudents/studentProfile" element={<StudentProfile />} />
             <Route path="viewSubjects/subjectForm" element={<SubjectForm />} />
             <Route path="viewMarks/marksForm" element={<MarksForm />} />
+            <Route path="*" element={<NotFound />} />
         </Routes>
     );
 }

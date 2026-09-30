@@ -6,17 +6,86 @@ export const viewHome = () => {
 
 
 //GET ALL:
-export const viewTeachers = () => {
-    return api.get("/principal/teachers");
+export const viewTeachers = (
+    classFilter: string,
+    search: string,
+    sortBy: string,
+    orderBy: string,
+    currentPage: number,
+    limit: number
+) => {
+    return api.get("/principal/teachers", {
+        params: {
+            class: classFilter,
+            search,
+            sortBy,
+            order: orderBy,
+            page: currentPage,
+            limit
+        }
+    });
+};
+
+export const viewStudents = (
+    classFilter: string,
+    search: string,
+    sortBy: string,
+    orderBy: string,
+    currentPage: number,
+    limit: number
+) => {
+    return api.get("/principal/students", {
+        params: {
+            class: classFilter,
+            search,
+            sortBy,
+            order: orderBy,
+            page: currentPage,
+            limit
+        }
+    });
+};
+
+export const viewSubjects = (
+    classFilter: string,
+    search: string,
+    sortBy: string,
+    orderBy: string,
+    currentPage: number,
+    limit: number
+) => {
+    return api.get("/principal/subjects", {
+        params: {
+            class: classFilter,
+            search,
+            sortBy,
+            order: orderBy,
+            page: currentPage,
+            limit
+        }
+    });
 }
-export const viewStudents = () => {
-    return api.get("/principal/students");
-}
-export const viewSubjects = () => {
-    return api.get("/principal/subjects");
-}
-export const viewMarks = () => {
-    return api.get("/principal/marks");
+
+export const viewMarks = (
+    classFilter: string,
+    examType: string,
+    search: string,
+    sortBy: string,
+    orderBy: string,
+    currentPage: number,
+    limit: number
+) => {
+    return api.get("/principal/marks", {
+        params: {
+            class: classFilter,
+            exam: examType,
+            search,
+            sortBy,
+            order: orderBy,
+            page: currentPage,
+            limit
+        }
+    });
 }
 
 //TEACHER CRUD:
@@ -81,6 +150,38 @@ export const getAttendanceSummary = (date: string) => {
     });
 };
 
+export const getAttendance = (
+    studentClass: string,
+    date: string,
+    search: string,
+    currentPage: number,
+    limit: number
+) => {
+    return api.get("principal/attendance", {
+        params: {
+            class: studentClass,
+            date,
+            search,
+            page: currentPage,
+            limit
+        }
+    });
+};
+
+export const getStudentAttendance = (
+    studentId: string,
+    currentPage: number,
+    limit: number
+) => {
+    return api.get("principal/attendance/student", {
+        params: {
+            studentId,
+            page: currentPage,
+            limit
+        }
+    });
+};
+
 export const getStudentsForAttendance = (studentClass: string) => {
     return api.get("principal/attendance/students", {
         params: {
@@ -89,28 +190,25 @@ export const getStudentsForAttendance = (studentClass: string) => {
     });
 };
 
-export const getStudentAttendance = (studentId: string) => {
-    return api.get("principal/attendance/student", {
-        params: {
-            studentId
-        }
-    });
-};
-
 //Exams:
-export const getExamResults = (studentClass: string, exam: string) => 
-    api.get("/principal/examResults", {
-    params: {
-        class: studentClass,
-        exam
-    }
-});
-
-export const getAttendance = (studentClass: string, date: string) => {
-    return api.get("principal/attendance", {
+export const getExamResults = (
+    studentClass: string,
+    exam: string,
+    search: string,
+    sortBy: string,
+    orderBy: string,
+    currentPage: number,
+    limit: number
+) => {
+    return api.get("/principal/examResults", {
         params: {
             class: studentClass,
-            date
+            exam,
+            search,
+            sortBy,
+            order: orderBy,
+            page: currentPage,
+            limit
         }
     });
 };
@@ -140,8 +238,20 @@ export const deleteHoliday = (id: string) => {
 };
 
 //Leaves:
-export const getLeaveApplications = () => {
-    return api.get("/principal/leaves");
+export const getLeaveApplications = (
+    status: string,
+    classFilter: string,
+    currentPage: number,
+    limit: number
+) => {
+    return api.get("/principal/leaves", {
+        params: {
+            status,
+            class: classFilter,
+            page: currentPage,
+            limit
+        }
+    });
 };
 
 export const approveLeave = (id: string) => {

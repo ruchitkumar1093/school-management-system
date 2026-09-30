@@ -78,12 +78,12 @@ function MarksForm() {
             try {
 
                 const [studentsResponse, teachersResponse] = await Promise.all([
-                    viewStudents(),
-                    viewTeachers()
+                    viewStudents("All", "", "", "asc", 1, 1000),
+                    viewTeachers("All", "", "", "asc", 1, 1000)
                 ]);
 
-                setStudents(studentsResponse.data);
-                setTeachers(teachersResponse.data);
+                setStudents(studentsResponse.data.students);
+                setTeachers(teachersResponse.data.teachers);
 
             }
             catch (error) {
@@ -484,9 +484,7 @@ function MarksForm() {
 
                                 <button
                                     type="submit"
-                                    className="p-2 bg-purple-300 rounded-lg
-                                    shadow-[0_2px_3px]
-                                    hover:bg-violet-300 cursor-pointer"
+                                    className="rounded-lg bg-purple-300 px-6 py-3 font-medium text-purple-950 shadow-[0_2px_3px] transition-colors hover:bg-violet-300 cursor-pointer"
                                 >
                                     {isAdding ? "Add" : "Update"}
                                 </button>
@@ -494,9 +492,7 @@ function MarksForm() {
                                 <button
                                     onClick={() => navigate(-1)}
                                     type="button"
-                                    className="p-2 bg-purple-300 rounded-lg
-                                    shadow-[0_2px_3px]
-                                    hover:bg-violet-300 cursor-pointer"
+                                    className="rounded-lg bg-purple-300 px-6 py-3 font-medium text-purple-950 shadow-[0_2px_3px] transition-colors hover:bg-violet-300 cursor-pointer"
                                 >
                                     Cancel
                                 </button>

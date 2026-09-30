@@ -20,42 +20,60 @@ function Pagination({
         ) {
             pages.push(i);
         }
-        else {
-            if (pages[pages.length - 1] !== "...") {
-                pages.push("...");
-            }
+        else if (pages[pages.length - 1] !== "...") {
+            pages.push("...");
         }
     }
 
     return (
-        <div className="flex gap-3">
+        <div className="flex items-center gap-1 rounded-xl border border-purple-300 bg-purple-200 p-1.5 shadow-sm">
 
-            <button type="button" className="px-2 rounded-2xl hover:bg-gray-300 cursor-pointer"
+            <button
+                type="button"
                 onClick={() => setCurrentPage(currentPage - 1)}
                 disabled={currentPage <= 1}
+                className="rounded-lg px-3 py-2 text-sm font-medium text-gray-700
+                transition-colors hover:bg-purple-300
+                disabled:cursor-not-allowed disabled:text-gray-400 disabled:hover:bg-transparent"
             >
                 Previous
             </button>
 
-            {pages.map((item, index) =>
-                item === "..." ? (
-                    <span key={index}>{item}</span>
-                ) : (
-                    <button 
-                        key={index}
-                        className={item === currentPage ? "px-4 bg-gray-600 text-white rounded-4xl hover:bg-gray-700 cursor-pointer border-3 border-gray-400" : "p-2 px-4 rounded-3xl hover:bg-gray-300 cursor-pointer"}
-                        type="button"
-                        onClick={() => setCurrentPage(item as number)}
-                    >
-                        {item}
-                    </button>
-                )
-            )}
+            <div className="flex items-center gap-1">
+
+                {pages.map((item, index) =>
+                    item === "..." ? (
+                        <span
+                            key={index}
+                            className="px-2 text-sm font-medium text-gray-500"
+                        >
+                            ...
+                        </span>
+                    ) : (
+                        <button
+                            key={index}
+                            type="button"
+                            onClick={() => setCurrentPage(item as number)}
+                            className={
+                                item === currentPage
+                                    ? "min-w-9 rounded-lg bg-purple-800 px-3 py-2 text-sm font-medium text-white shadow-sm transition-colors"
+                                    : "min-w-9 rounded-lg px-3 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-purple-300"
+                            }
+                        >
+                            {item}
+                        </button>
+                    )
+                )}
+
+            </div>
 
             <button
-                type="button" className="px-2 rounded-2xl hover:bg-gray-300 cursor-pointer"
+                type="button"
                 onClick={() => setCurrentPage(currentPage + 1)}
                 disabled={currentPage >= totalPages}
+                className="rounded-lg px-3 py-2 text-sm font-medium text-gray-700
+                transition-colors hover:bg-purple-300
+                disabled:cursor-not-allowed disabled:text-gray-400 disabled:hover:bg-transparent"
             >
                 Next
             </button>

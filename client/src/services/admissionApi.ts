@@ -8,8 +8,26 @@ export const createAdmission = (data: any) => {
     return api.post("/admissionRequest/createAdmission", data);
 };
 
-export const getAdmission = () => {
-    return api.get("/admissionRequest/getAdmissions");
+export const getAdmission = (
+    status: string,
+    classFilter: string,
+    search: string,
+    sortBy: string,
+    orderBy: string,
+    currentPage: number,
+    limit: number
+) => {
+    return api.get("/admissionRequest/getAdmissions", {
+        params: {
+            status,
+            class: classFilter,
+            search,
+            sortBy,
+            order: orderBy,
+            page: currentPage,
+            limit
+        }
+    });
 };
 
 export const getAdmissionById = (id: string) => {

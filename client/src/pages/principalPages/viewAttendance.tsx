@@ -34,7 +34,7 @@ type Attendance = {
         rollNumber: string;
     };
     date: string;
-    status: "Present" | "Absent";
+    status: "Present" | "Absent" | "Leave";
 };
 
 type Student = {
@@ -62,7 +62,6 @@ type StudentClass =
     | "12th";
 
 function PrincipalAttendance() {
-
     const navigate = useNavigate();
 
     const [viewMode, setViewMode] = useState<"date" | "student">("date");
@@ -83,11 +82,21 @@ function PrincipalAttendance() {
 
     const [studentAttendance, setStudentAttendance] = useState<Attendance[]>([]);
 
+    const [studentStats, setStudentStats] = useState({
+        presentCount: 0,
+        absentCount: 0,
+        leaveCount: 0,
+        totalDays: 0
+    });
+
     const [search, setSearch] = useState("");
+    const [debouncedSearch, setDebouncedSearch] = useState("");
 
     const [currentPage, setCurrentPage] = useState(1);
-
     const [limit, setLimit] = useState(10);
+
+    const [totalPages, setTotalPages] = useState(1);
+    const [studentAttendanceTotalPages, setStudentAttendanceTotalPages] = useState(1);
 
     const classes: StudentClass[] = [
         "1st",
@@ -109,7 +118,8 @@ function PrincipalAttendance() {
             const response = await getAttendanceSummary(selectedDate);
 
             setSummaryData(response.data);
-        } catch (error) {
+        }
+        catch (error) {
             console.log(error);
             setSummaryData([]);
         }
@@ -119,13 +129,19 @@ function PrincipalAttendance() {
         try {
             const response = await getAttendance(
                 selectedClass,
-                selectedDate
+                selectedDate,
+                debouncedSearch,
+                currentPage,
+                limit
             );
 
-            setAttendance(response.data);
-        } catch (error) {
+            setAttendance(response.data.attendance);
+            setTotalPages(response.data.totalPages);
+        }
+        catch (error) {
             console.log(error);
             setAttendance([]);
+            setTotalPages(1);
         }
     };
 
@@ -134,7 +150,8 @@ function PrincipalAttendance() {
             const response = await getStudentsForAttendance(selectedClass);
 
             setStudents(response.data);
-        } catch (error) {
+        }
+        catch (error) {
             console.log(error);
             setStudents([]);
         }
@@ -142,102 +159,117 @@ function PrincipalAttendance() {
 
     const fetchStudentAttendance = async (studentId: string) => {
         try {
-            const response = await getStudentAttendance(studentId);
+            const response = await getStudentAttendance(
+                studentId,
+                currentPage,
+                limit
+            );
 
-            setStudentAttendance(response.data);
-        } catch (error) {
+            setStudentAttendance(response.data.attendance);
+            setStudentAttendanceTotalPages(response.data.totalPages);
+
+            setStudentStats({
+                presentCount: response.data.presentCount,
+                absentCount: response.data.absentCount,
+                leaveCount: response.data.leaveCount,
+                totalDays: response.data.totalDays
+            });
+        }
+        catch (error) {
             console.log(error);
             setStudentAttendance([]);
+            setStudentAttendanceTotalPages(1);
+
+            setStudentStats({
+                presentCount: 0,
+                absentCount: 0,
+                leaveCount: 0,
+                totalDays: 0
+            });
         }
     };
+
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            setDebouncedSearch(search);
+        }, 500);
+
+        return () => {
+            clearTimeout(timer);
+        };
+    }, [search]);
 
     useEffect(() => {
         fetchAttendanceSummary();
     }, [selectedDate]);
 
     useEffect(() => {
-        fetchAttendance();
         fetchStudents();
 
         setSelectedStudent("");
         setStudentAttendance([]);
         setSearch("");
+        setDebouncedSearch("");
         setCurrentPage(1);
+        setStudentAttendanceTotalPages(1);
+
+        setStudentStats({
+            presentCount: 0,
+            absentCount: 0,
+            leaveCount: 0,
+            totalDays: 0
+        });
     }, [selectedClass, selectedDate]);
 
     useEffect(() => {
-        if (selectedStudent) {
-            fetchStudentAttendance(selectedStudent);
-        } else {
-            setStudentAttendance([]);
+        if (viewMode === "date") {
+            fetchAttendance();
         }
-    }, [selectedStudent]);
+    }, [
+        selectedClass,
+        selectedDate,
+        debouncedSearch,
+        currentPage,
+        limit,
+        viewMode
+    ]);
+
+    useEffect(() => {
+        if (viewMode === "student" && selectedStudent) {
+            fetchStudentAttendance(selectedStudent);
+        }
+        else if (viewMode === "student") {
+            setStudentAttendance([]);
+            setStudentAttendanceTotalPages(1);
+
+            setStudentStats({
+                presentCount: 0,
+                absentCount: 0,
+                leaveCount: 0,
+                totalDays: 0
+            });
+        }
+    }, [selectedStudent, currentPage, limit, viewMode]);
 
     useEffect(() => {
         setCurrentPage(1);
-    }, [search, limit]);
+    }, [debouncedSearch, limit]);
 
     const selectedClassSummary = summaryData.find(
         (summary) => summary.class === selectedClass
     );
 
-    let processedAttendance = [...attendance];
-
-    if (search.trim() !== "") {
-        processedAttendance = processedAttendance.filter(
-            (record) =>
-                record.studentId.userId.name
-                    .toLowerCase()
-                    .includes(search.toLowerCase()) ||
-                record.studentId.userId.uid
-                    .toLowerCase()
-                    .includes(search.toLowerCase())
-        );
-    }
-
-    const totalPages = Math.ceil(
-        processedAttendance.length / limit
-    );
-
-    const startIndex = (currentPage - 1) * limit;
-
-    const endIndex = startIndex + limit;
-
-    const currentAttendance = processedAttendance.slice(
-        startIndex,
-        endIndex
-    );
-
-    const studentPresentCount = studentAttendance.filter(
-        (record) => record.status === "Present"
-    ).length;
-
-    const studentAbsentCount = studentAttendance.filter(
-        (record) => record.status === "Absent"
-    ).length;
-
-    const studentTotalDays = studentAttendance.length;
+    const studentPresentCount = studentStats.presentCount;
+    const studentAbsentCount = studentStats.absentCount;
+    const studentLeaveCount = studentStats.leaveCount;
+    const studentTotalDays = studentStats.totalDays;
 
     const studentPercentage =
         studentTotalDays > 0
             ? ((studentPresentCount / studentTotalDays) * 100).toFixed(2)
             : "0.00";
 
-    const studentAttendanceTotalPages = Math.ceil(
-        studentAttendance.length / limit
-    );
-
-    const studentAttendanceStartIndex =
-        (currentPage - 1) * limit;
-
-    const studentAttendanceEndIndex =
-        studentAttendanceStartIndex + limit;
-
-    const currentStudentAttendance =
-        studentAttendance.slice(
-            studentAttendanceStartIndex,
-            studentAttendanceEndIndex
-        );
+    const startIndex = (currentPage - 1) * limit;
 
     const selectedStudentData = students.find(
         (student) => student._id === selectedStudent
@@ -249,12 +281,13 @@ function PrincipalAttendance() {
 
             <div className="flex flex-1 bg-purple-100">
                 <SideBar />
+
                 <div>
                     <Breadcrumb />
+
                     <div className="flex flex-col pt-12 pl-20 mb-10">
                         <div className="flex justify-between items-center mb-6">
                             <div>
-
                                 <h1 className="text-3xl font-medium text-gray-900">
                                     Attendance
                                 </h1>
@@ -262,16 +295,12 @@ function PrincipalAttendance() {
                                 <p className="mt-1 text-sm text-gray-600">
                                     View and Manage Attendance
                                 </p>
-
                             </div>
 
                             <button
                                 type="button"
                                 onClick={() => navigate(-1)}
-                                className="p-2 mx-3 bg-purple-300 rounded-lg
-                            shadow-[0_2px_1px]
-                            hover:bg-violet-300
-                            cursor-pointer"
+                                className="rounded-lg bg-purple-300 px-3 py-3 font-medium text-purple-950 shadow-[0_2px_3px] transition-colors hover:bg-violet-300 cursor-pointer"
                             >
                                 View Summary
                             </button>
@@ -282,9 +311,10 @@ function PrincipalAttendance() {
                                     onClick={() => {
                                         setViewMode("student");
                                         setSearch("");
+                                        setDebouncedSearch("");
                                         setCurrentPage(1);
                                     }}
-                                    className="p-2 bg-purple-300 rounded-lg shadow-[0_2px_1px] hover:bg-violet-300 cursor-pointer"
+                                    className="rounded-lg bg-purple-300 px-3 py-3 font-medium text-purple-950 shadow-[0_2px_3px] transition-colors hover:bg-violet-300 cursor-pointer"
                                 >
                                     View Student Wise
                                 </button>
@@ -294,15 +324,14 @@ function PrincipalAttendance() {
                                     onClick={() => {
                                         setViewMode("date");
                                         setSearch("");
+                                        setDebouncedSearch("");
                                         setCurrentPage(1);
                                     }}
-                                    className="p-2 bg-purple-300 rounded-lg shadow-[0_2px_1px] hover:bg-violet-300 cursor-pointer"
+                                    className="rounded-lg bg-purple-300 px-3 py-3 font-medium text-purple-950 shadow-[0_2px_3px] transition-colors hover:bg-violet-300 cursor-pointer"
                                 >
                                     View Date Wise
                                 </button>
                             )}
-
-
                         </div>
 
                         {viewMode === "date" && (
@@ -355,6 +384,7 @@ function PrincipalAttendance() {
                                             }}
                                             className="border-2 border-gray-500 rounded-sm p-2 focus:outline-none focus:border-gray-900"
                                         />
+
                                         <SearchBar
                                             search={search}
                                             setSearch={setSearch}
@@ -394,67 +424,75 @@ function PrincipalAttendance() {
                                     </div>
                                 </div>
 
-                                <table className="border-collapse border border-gray-400 bg-purple-200">
-                                    <thead>
-                                        <tr className="bg-purple-300">
-                                            <th className="border border-gray-400 p-3 font-medium">
-                                                S.No.
-                                            </th>
+                                <div className="overflow-x-auto rounded-lg shadow-md">
+                                    <table className="w-full border-collapse bg-purple-200 text-left text-gray-900">
+                                        <thead>
+                                            <tr className="border-b border-purple-300 bg-purple-300/80">
+                                                <th className="border-r border-purple-300 p-3 font-semibold text-purple-950">
+                                                    S.No.
+                                                </th>
 
-                                            <th className="border border-gray-400 p-3 font-medium">
-                                                Student Name:
-                                            </th>
+                                                <th className="border-r border-purple-300 p-3 font-semibold text-purple-950">
+                                                    Student Name:
+                                                </th>
 
-                                            <th className="border border-gray-400 p-3 font-medium">
-                                                UID:
-                                            </th>
+                                                <th className="border-r border-purple-300 p-3 font-semibold text-purple-950">
+                                                    UID:
+                                                </th>
 
-                                            <th className="border border-gray-400 p-3 font-medium">
-                                                Attendance:
-                                            </th>
-                                        </tr>
-                                    </thead>
-
-                                    <tbody>
-                                        {currentAttendance.length === 0 ? (
-                                            <tr>
-                                                <td
-                                                    colSpan={4}
-                                                    className="border border-gray-400 p-3 text-center text-gray-600"
-                                                >
-                                                    No attendance records found
-                                                </td>
+                                                <th className="p-3 font-semibold text-purple-950">
+                                                    Attendance:
+                                                </th>
                                             </tr>
-                                        ) : (
-                                            currentAttendance.map(
-                                                (record, index) => (
-                                                    <tr key={record._id}>
-                                                        <td className="border border-gray-400 p-3">
-                                                            {startIndex + index + 1}
-                                                        </td>
+                                        </thead>
 
-                                                        <td className="border border-gray-400 p-3">
-                                                            {record.studentId.userId.name}
-                                                        </td>
-
-                                                        <td className="border border-gray-400 p-3">
-                                                            {record.studentId.userId.uid.toUpperCase()}
-                                                        </td>
-
-                                                        <td
-                                                            className={`border border-gray-400 p-3 text-center ${record.status === "Present"
-                                                                ? ""
-                                                                : "text-red-600"
-                                                                }`}
+                                        <tbody>
+                                            {attendance.length === 0 ? (
+                                                <tr>
+                                                    <td
+                                                        colSpan={4}
+                                                        className="p-4 text-center text-gray-500"
+                                                    >
+                                                        No attendance records found
+                                                    </td>
+                                                </tr>
+                                            ) : (
+                                                attendance.map(
+                                                    (record, index) => (
+                                                        <tr
+                                                            key={record._id}
+                                                            className="border-b border-purple-300 last:border-b-0 transition-colors hover:bg-purple-300/40"
                                                         >
-                                                            {record.status}
-                                                        </td>
-                                                    </tr>
+                                                            <td className="border-r border-purple-300 p-3 font-medium">
+                                                                {startIndex + index + 1}
+                                                            </td>
+
+                                                            <td className="border-r border-purple-300 p-3 font-medium">
+                                                                {record.studentId.userId.name}
+                                                            </td>
+
+                                                            <td className="border-r border-purple-300 p-3">
+                                                                {record.studentId.userId.uid.toUpperCase()}
+                                                            </td>
+
+                                                            <td
+                                                                className={`p-3 text-center font-medium ${
+                                                                    record.status === "Present"
+                                                                        ? "text-emerald-600"
+                                                                        : record.status === "Leave"
+                                                                        ? "text-amber-600"
+                                                                        : "text-red-600"
+                                                                }`}
+                                                            >
+                                                                {record.status}
+                                                            </td>
+                                                        </tr>
+                                                    )
                                                 )
-                                            )
-                                        )}
-                                    </tbody>
-                                </table>
+                                            )}
+                                        </tbody>
+                                    </table>
+                                </div>
 
                                 <div className="flex justify-between mt-5 mb-5 items-center">
                                     <Pagination
@@ -536,7 +574,6 @@ function PrincipalAttendance() {
                                             ))}
                                         </select>
                                     </div>
-
                                 </div>
 
                                 {!selectedStudent && (
@@ -600,6 +637,13 @@ function PrincipalAttendance() {
                                             </div>
 
                                             <div>
+                                                Leave:
+                                                <span className="font-medium ml-1">
+                                                    {studentLeaveCount}
+                                                </span>
+                                            </div>
+
+                                            <div>
                                                 Attendance:
                                                 <span className="font-medium ml-1">
                                                     {studentPercentage}%
@@ -607,63 +651,71 @@ function PrincipalAttendance() {
                                             </div>
                                         </div>
 
-                                        <table className="border-collapse border border-gray-400 bg-purple-200">
-                                            <thead>
-                                                <tr className="bg-purple-300">
-                                                    <th className="border border-gray-400 p-3 font-medium">
-                                                        S.No.
-                                                    </th>
+                                        <div className="overflow-x-auto rounded-lg shadow-md">
+                                            <table className="w-full border-collapse bg-purple-200 text-left text-gray-900">
+                                                <thead>
+                                                    <tr className="border-b border-purple-300 bg-purple-300/80">
+                                                        <th className="border-r border-purple-300 p-3 font-semibold text-purple-950">
+                                                            S.No.
+                                                        </th>
 
-                                                    <th className="border border-gray-400 p-3 font-medium">
-                                                        Date
-                                                    </th>
+                                                        <th className="border-r border-purple-300 p-3 font-semibold text-purple-950">
+                                                            Date
+                                                        </th>
 
-                                                    <th className="border border-gray-400 p-3 font-medium">
-                                                        Attendance
-                                                    </th>
-                                                </tr>
-                                            </thead>
-
-                                            <tbody>
-                                                {currentStudentAttendance.length === 0 ? (
-                                                    <tr>
-                                                        <td
-                                                            colSpan={3}
-                                                            className="border border-gray-400 p-3 text-center text-gray-600"
-                                                        >
-                                                            No attendance records found
-                                                        </td>
+                                                        <th className="p-3 font-semibold text-purple-950">
+                                                            Attendance
+                                                        </th>
                                                     </tr>
-                                                ) : (
-                                                    currentStudentAttendance.map(
-                                                        (record, index) => (
-                                                            <tr key={record._id}>
-                                                                <td className="border border-gray-400 p-3">
-                                                                    {studentAttendanceStartIndex + index + 1}
-                                                                </td>
+                                                </thead>
 
-                                                                <td className="border border-gray-400 p-3">
-                                                                    {new Date(
-                                                                        record.date
-                                                                    ).toLocaleDateString(
-                                                                        "en-GB"
-                                                                    )}
-                                                                </td>
-
-                                                                <td
-                                                                    className={`border border-gray-400 p-3 ${record.status === "Present"
-                                                                        ? "text-emerald-600"
-                                                                        : "text-rose-600"
-                                                                        }`}
+                                                <tbody>
+                                                    {studentAttendance.length === 0 ? (
+                                                        <tr>
+                                                            <td
+                                                                colSpan={3}
+                                                                className="p-4 text-center text-gray-500"
+                                                            >
+                                                                No attendance records found
+                                                            </td>
+                                                        </tr>
+                                                    ) : (
+                                                        studentAttendance.map(
+                                                            (record, index) => (
+                                                                <tr
+                                                                    key={record._id}
+                                                                    className="border-b border-purple-300 last:border-b-0 transition-colors hover:bg-purple-300/40"
                                                                 >
-                                                                    {record.status}
-                                                                </td>
-                                                            </tr>
+                                                                    <td className="border-r border-purple-300 p-3 font-medium">
+                                                                        {startIndex + index + 1}
+                                                                    </td>
+
+                                                                    <td className="border-r border-purple-300 p-3">
+                                                                        {new Date(
+                                                                            record.date
+                                                                        ).toLocaleDateString(
+                                                                            "en-GB"
+                                                                        )}
+                                                                    </td>
+
+                                                                    <td
+                                                                        className={`p-3 font-medium ${
+                                                                            record.status === "Present"
+                                                                                ? "text-emerald-600"
+                                                                                : record.status === "Leave"
+                                                                                ? "text-amber-600"
+                                                                                : "text-rose-600"
+                                                                        }`}
+                                                                    >
+                                                                        {record.status}
+                                                                    </td>
+                                                                </tr>
+                                                            )
                                                         )
-                                                    )
-                                                )}
-                                            </tbody>
-                                        </table>
+                                                    )}
+                                                </tbody>
+                                            </table>
+                                        </div>
 
                                         <div className="flex justify-between mt-5 mb-5 items-center">
                                             <Pagination
@@ -683,7 +735,6 @@ function PrincipalAttendance() {
                         )}
                     </div>
                 </div>
-
             </div>
         </div>
     );

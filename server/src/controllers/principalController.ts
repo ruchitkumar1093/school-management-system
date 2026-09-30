@@ -9,18 +9,67 @@ import Class from "../models/Class";
 import mongoose from "mongoose";
 import bcrypt from "bcrypt";
 import Leave from "../models/Leave";
+import AdmissionRequest from "../models/AdmissionRequest";
 
 //Leaves
+
 export const getLeaveApplications = async (
     req: Request,
     res: Response
 ) => {
     try {
+        const status =
+            req.query.status?.toString() || "All";
 
-        const leaves = await Leave.find()
+        const classFilter =
+            req.query.class?.toString() || "All";
+
+        const currentPage = Math.max(
+            Number(req.query.page) || 1,
+            1
+        );
+
+        const pageLimit = Math.max(
+            Number(req.query.limit) || 5,
+            1
+        );
+
+        const skip =
+            (currentPage - 1) * pageLimit;
+
+        let studentIds;
+
+        if (classFilter !== "All") {
+            const students = await Student.find({
+                class: classFilter as StudentClass
+            }).select("_id");
+
+            studentIds = students.map(
+                student => student._id
+            );
+        }
+
+        const filter: any = {};
+
+        if (status !== "All") {
+            filter.status = status;
+        }
+
+        if (classFilter !== "All") {
+            filter.studentId = {
+                $in: studentIds
+            };
+        }
+
+        const totalLeaves =
+            await Leave.countDocuments(filter);
+
+        const leaves = await Leave.find(filter)
             .sort({
                 createdAt: -1
             })
+            .skip(skip)
+            .limit(pageLimit)
             .populate({
                 path: "studentId",
                 populate: {
@@ -29,49 +78,49 @@ export const getLeaveApplications = async (
                 }
             });
 
-
         const formattedLeaves = leaves.map(
             (leave) => {
 
-                const student = leave.studentId as any;
+                const student =
+                    leave.studentId as any;
 
                 return {
                     _id: leave._id,
-
                     student: {
                         _id: student._id,
                         name: student.userId.name,
                         uid: student.userId.uid,
                         class: student.class
                     },
-
                     startDate: leave.startDate,
                     endDate: leave.endDate,
                     reason: leave.reason,
                     status: leave.status
                 };
-
             }
         );
 
-
-        return res.status(200).json(
-            formattedLeaves
+        const totalPages = Math.ceil(
+            totalLeaves / pageLimit
         );
 
+        return res.status(200).json({
+            leaves: formattedLeaves,
+            totalLeaves,
+            totalPages,
+            currentPage,
+            limit: pageLimit
+        });
     }
     catch (error) {
-
         console.error(
             "Get principal leave applications error:",
             error
         );
 
         return res.status(500).json({
-            message:
-                "Failed to get leave applications"
+            message: "Failed to get leave applications"
         });
-
     }
 };
 
@@ -218,82 +267,660 @@ export const getPrincipalHome = async (
 //GET all
 export const getStudents = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const data = await Student.find().populate("userId", "name uid");
-        res.status(200).json(data);
-    }
+        const {
+            class: classFilter = "All",
+            search = "",
+            sortBy = "None",
+            order = "asc",
+            page = "1",
+            limit = "5"
+        } = req.query;
 
-    catch (error) {
-        next(error);
-    }
-}
+        const currentPage = Math.max(Number(page), 1);
+        const pageLimit = Math.max(Number(limit), 1);
+        const skip = (currentPage - 1) * pageLimit;
 
-export const getTeachers = async (req: Request, res: Response, next: NextFunction) => {
-    try {
-        const data = await Teacher.find().populate("userId", "name");
-        res.status(200).json(data);
-    }
-    catch (error) {
-        next(error);
-    }
-}
+        const match: any = {};
 
-export const getSubjects = async (req: Request, res: Response, next: NextFunction) => {
-    try {
-        const subjects = await Subject.find();
+        if (classFilter !== "All") {
+            match.class = classFilter;
+        }
 
-        const data = await Promise.all(
-            subjects.map(async (subject) => {
+        const pipeline: any[] = [
+            {
+                $lookup: {
+                    from: "users",
+                    localField: "userId",
+                    foreignField: "_id",
+                    as: "userId"
+                }
+            },
+            {
+                $unwind: "$userId"
+            }
+        ];
 
-                const teacher = await Teacher.findOne({
-                    department: subject.name,
-                    classAssigned: subject.class
-                }).populate({
-                    path: "userId",
-                    select: "name"
-                });
+        if (search.toString().trim() !== "") {
+            match["userId.name"] = {
+                $regex: search.toString().trim(),
+                $options: "i"
+            };
+        }
 
-                return {
-                    ...subject.toObject(),
-                    teacherName: teacher
-                        ? (teacher.userId as any).name
-                        : "Not Assigned"
-                };
-            })
-        );
+        pipeline.push({
+            $match: match
+        });
 
-        res.status(200).json(data);
+        if (sortBy === "Student Name") {
+            pipeline.push({
+                $sort: {
+                    "userId.name": order === "desc" ? -1 : 1
+                }
+            });
+        }
+
+        if (sortBy === "Class") {
+            pipeline.push({
+                $addFields: {
+                    classNumber: {
+                        $toInt: {
+                            $getField: {
+                                field: "match",
+                                input: {
+                                    $regexFind: {
+                                        input: "$class",
+                                        regex: "\\d+"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+
+            pipeline.push({
+                $sort: {
+                    classNumber: order === "desc" ? -1 : 1
+                }
+            });
+        }
+
+        if (sortBy === "Roll no") {
+            pipeline.push({
+                $sort: {
+                    rollNumber: order === "desc" ? -1 : 1
+                }
+            });
+        }
+
+        pipeline.push({
+            $facet: {
+                students: [
+                    { $skip: skip },
+                    { $limit: pageLimit }
+                ],
+                total: [
+                    { $count: "count" }
+                ]
+            }
+        });
+
+        const result = await Student.aggregate(pipeline);
+
+        const students = result[0]?.students || [];
+        const totalStudents = result[0]?.total[0]?.count || 0;
+        const totalPages = Math.ceil(totalStudents / pageLimit);
+
+        res.status(200).json({
+            students,
+            totalStudents,
+            totalPages,
+            currentPage,
+            limit: pageLimit
+        });
     }
     catch (error) {
         next(error);
     }
 };
 
-export const getMarks = async (req: Request, res: Response, next: NextFunction) => {
+export const getTeachers = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const marks = await Mark.find().populate({
-            path: "studentId",
-            select: "class userId",
-            populate: {
-                path: "userId",
-                select: "name uid"
-            }
-        })
-            .populate({
-                path: "teacherId",
-                select: "userId",
-                populate: {
-                    path: "userId",
-                    select: "name"
-                }
-            })
-            .populate("subjectId");
-        res.status(200).json(marks);
-    }
+        const {
+            class: classFilter = "All",
+            search = "",
+            sortBy = "None",
+            order = "asc",
+            page = "1",
+            limit = "5"
+        } = req.query;
 
+        const currentPage = Math.max(Number(page), 1);
+        const pageLimit = Math.max(Number(limit), 1);
+        const skip = (currentPage - 1) * pageLimit;
+
+        const match: any = {};
+
+        if (classFilter !== "All") {
+            match.classAssigned = classFilter;
+        }
+
+        const pipeline: any[] = [
+            {
+                $lookup: {
+                    from: "users",
+                    localField: "userId",
+                    foreignField: "_id",
+                    as: "userId"
+                }
+            },
+            {
+                $unwind: "$userId"
+            }
+        ];
+
+        const searchValue = search.toString().trim();
+
+        if (searchValue !== "") {
+            match["userId.name"] = {
+                $regex: searchValue,
+                $options: "i"
+            };
+        }
+
+        pipeline.push({
+            $match: match
+        });
+
+        if (sortBy === "Teacher Name") {
+            pipeline.push({
+                $sort: {
+                    "userId.name": order === "desc" ? -1 : 1
+                }
+            });
+        }
+
+        if (sortBy === "Class Assigned") {
+            pipeline.push({
+                $addFields: {
+                    classNumber: {
+                        $toInt: {
+                            $getField: {
+                                field: "match",
+                                input: {
+                                    $regexFind: {
+                                        input: "$classAssigned",
+                                        regex: "\\d+"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+
+            pipeline.push({
+                $sort: {
+                    classNumber: order === "desc" ? -1 : 1
+                }
+            });
+        }
+
+        pipeline.push({
+            $facet: {
+                teachers: [
+                    { $skip: skip },
+                    { $limit: pageLimit }
+                ],
+                total: [
+                    { $count: "count" }
+                ]
+            }
+        });
+
+        const result = await Teacher.aggregate(pipeline);
+
+        const teachers = result[0]?.teachers || [];
+        const totalTeachers = result[0]?.total[0]?.count || 0;
+        const totalPages = Math.ceil(totalTeachers / pageLimit);
+
+        res.status(200).json({
+            teachers,
+            totalTeachers,
+            totalPages,
+            currentPage,
+            limit: pageLimit
+        });
+    }
     catch (error) {
         next(error);
     }
-}
+};
+
+export const getSubjects = async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+) => {
+    try {
+        const {
+            class: classFilter = "All",
+            search = "",
+            sortBy = "None",
+            order = "asc",
+            page = "1",
+            limit = "5"
+        } = req.query;
+
+        const currentPage = Math.max(Number(page) || 1, 1);
+        const pageLimit = Math.max(Number(limit) || 5, 1);
+        const skip = (currentPage - 1) * pageLimit;
+
+        const match: any = {};
+
+        if (classFilter !== "All") {
+            match.class = classFilter;
+        }
+
+        const searchValue = search.toString().trim();
+
+        if (searchValue !== "") {
+            match.name = {
+                $regex: searchValue,
+                $options: "i"
+            };
+        }
+
+        const pipeline: any[] = [
+            {
+                $lookup: {
+                    from: "teachers",
+                    let: {
+                        subjectName: "$name",
+                        subjectClass: "$class"
+                    },
+                    pipeline: [
+                        {
+                            $match: {
+                                $expr: {
+                                    $and: [
+                                        {
+                                            $eq: [
+                                                "$department",
+                                                "$$subjectName"
+                                            ]
+                                        },
+                                        {
+                                            $eq: [
+                                                "$classAssigned",
+                                                "$$subjectClass"
+                                            ]
+                                        }
+                                    ]
+                                }
+                            }
+                        },
+                        {
+                            $lookup: {
+                                from: "users",
+                                localField: "userId",
+                                foreignField: "_id",
+                                as: "user"
+                            }
+                        },
+                        {
+                            $unwind: {
+                                path: "$user",
+                                preserveNullAndEmptyArrays: true
+                            }
+                        },
+                        {
+                            $project: {
+                                _id: 0,
+                                name: "$user.name"
+                            }
+                        }
+                    ],
+                    as: "teacher"
+                }
+            },
+            {
+                $addFields: {
+                    teacherName: {
+                        $ifNull: [
+                            {
+                                $arrayElemAt: [
+                                    "$teacher.name",
+                                    0
+                                ]
+                            },
+                            "Not Assigned"
+                        ]
+                    }
+                }
+            },
+            {
+                $match: match
+            }
+        ];
+
+        if (sortBy === "Subject Name") {
+            pipeline.push({
+                $sort: {
+                    name: order === "desc" ? -1 : 1
+                }
+            });
+        }
+        else if (sortBy === "Class") {
+            pipeline.push({
+                $addFields: {
+                    classNumber: {
+                        $toInt: {
+                            $getField: {
+                                field: "match",
+                                input: {
+                                    $regexFind: {
+                                        input: "$class",
+                                        regex: "\\d+"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+
+            pipeline.push({
+                $sort: {
+                    classNumber: order === "desc" ? -1 : 1,
+                    name: 1
+                }
+            });
+        }
+        else {
+            pipeline.push({
+                $sort: {
+                    createdAt: -1
+                }
+            });
+        }
+
+        pipeline.push({
+            $facet: {
+                subjects: [
+                    { $skip: skip },
+                    { $limit: pageLimit }
+                ],
+                total: [
+                    { $count: "count" }
+                ]
+            }
+        });
+
+        const result = await Subject.aggregate(pipeline);
+
+        const subjects = result[0]?.subjects || [];
+        const totalSubjects = result[0]?.total[0]?.count || 0;
+        const totalPages = Math.ceil(
+            totalSubjects / pageLimit
+        );
+
+        res.status(200).json({
+            subjects,
+            totalSubjects,
+            totalPages,
+            currentPage,
+            limit: pageLimit
+        });
+    }
+    catch (error) {
+        next(error);
+    }
+};
+
+export const getMarks = async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+) => {
+    try {
+        const {
+            class: classFilter = "All",
+            exam = "All",
+            search = "",
+            sortBy = "None",
+            order = "asc",
+            page = "1",
+            limit = "5"
+        } = req.query;
+
+        const currentPage = Math.max(Number(page) || 1, 1);
+        const pageLimit = Math.max(Number(limit) || 5, 1);
+        const skip = (currentPage - 1) * pageLimit;
+
+        const studentLookup: any[] = [
+            {
+                $lookup: {
+                    from: "users",
+                    localField: "student.userId",
+                    foreignField: "_id",
+                    as: "studentUser"
+                }
+            },
+            {
+                $unwind: {
+                    path: "$studentUser",
+                    preserveNullAndEmptyArrays: true
+                }
+            }
+        ];
+
+        const teacherLookup: any[] = [
+            {
+                $lookup: {
+                    from: "users",
+                    localField: "teacher.userId",
+                    foreignField: "_id",
+                    as: "teacherUser"
+                }
+            },
+            {
+                $unwind: {
+                    path: "$teacherUser",
+                    preserveNullAndEmptyArrays: true
+                }
+            }
+        ];
+
+        const pipeline: any[] = [
+            {
+                $lookup: {
+                    from: "students",
+                    localField: "studentId",
+                    foreignField: "_id",
+                    as: "student"
+                }
+            },
+            {
+                $unwind: {
+                    path: "$student",
+                    preserveNullAndEmptyArrays: true
+                }
+            },
+            ...studentLookup,
+            {
+                $lookup: {
+                    from: "teachers",
+                    localField: "teacherId",
+                    foreignField: "_id",
+                    as: "teacher"
+                }
+            },
+            {
+                $unwind: {
+                    path: "$teacher",
+                    preserveNullAndEmptyArrays: true
+                }
+            },
+            ...teacherLookup,
+            {
+                $lookup: {
+                    from: "subjects",
+                    localField: "subjectId",
+                    foreignField: "_id",
+                    as: "subject"
+                }
+            },
+            {
+                $unwind: {
+                    path: "$subject",
+                    preserveNullAndEmptyArrays: true
+                }
+            }
+        ];
+
+        const match: any = {};
+
+        if (classFilter !== "All") {
+            match["student.class"] = classFilter;
+        }
+
+        if (exam !== "All") {
+            match.exam = exam;
+        }
+
+        const searchValue = search.toString().trim();
+
+        if (searchValue !== "") {
+            match["studentUser.name"] = {
+                $regex: searchValue,
+                $options: "i"
+            };
+        }
+
+        pipeline.push({
+            $match: match
+        });
+
+        if (sortBy === "Student Name") {
+            pipeline.push({
+                $sort: {
+                    "studentUser.name": order === "desc" ? -1 : 1
+                }
+            });
+        }
+        else if (sortBy === "Subject Name") {
+            pipeline.push({
+                $sort: {
+                    "subject.name": order === "desc" ? -1 : 1
+                }
+            });
+        }
+        else if (sortBy === "Class") {
+            pipeline.push({
+                $addFields: {
+                    classNumber: {
+                        $toInt: {
+                            $getField: {
+                                field: "match",
+                                input: {
+                                    $regexFind: {
+                                        input: "$student.class",
+                                        regex: "\\d+"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+
+            pipeline.push({
+                $sort: {
+                    classNumber: order === "desc" ? -1 : 1,
+                    "studentUser.name": 1
+                }
+            });
+        }
+        else if (sortBy === "Marks Obtained") {
+            pipeline.push({
+                $sort: {
+                    marksObtained: order === "desc" ? -1 : 1
+                }
+            });
+        }
+        else {
+            pipeline.push({
+                $sort: {
+                    createdAt: -1
+                }
+            });
+        }
+
+        pipeline.push({
+            $facet: {
+                marks: [
+                    { $skip: skip },
+                    { $limit: pageLimit }
+                ],
+                total: [
+                    { $count: "count" }
+                ]
+            }
+        });
+
+        const result = await Mark.aggregate(pipeline);
+
+        const marks = result[0]?.marks || [];
+        const totalMarks = result[0]?.total[0]?.count || 0;
+        const totalPages = Math.ceil(
+            totalMarks / pageLimit
+        );
+
+        const formattedMarks = marks.map((mark: any) => ({
+            _id: mark._id,
+            studentId: mark.student
+                ? {
+                    class: mark.student.class,
+                    userId: mark.studentUser
+                        ? {
+                            name: mark.studentUser.name,
+                            uid: mark.studentUser.uid
+                        }
+                        : null
+                }
+                : null,
+            teacherId: mark.teacher
+                ? {
+                    userId: mark.teacherUser
+                        ? {
+                            name: mark.teacherUser.name
+                        }
+                        : null
+                }
+                : null,
+            subjectId: mark.subject
+                ? {
+                    name: mark.subject.name
+                }
+                : null,
+            exam: mark.exam,
+            marksObtained: mark.marksObtained,
+            totalMarks: mark.totalMarks
+        }));
+
+        res.status(200).json({
+            marks: formattedMarks,
+            totalMarks,
+            totalPages,
+            currentPage,
+            limit: pageLimit
+        });
+    }
+    catch (error) {
+        next(error);
+    }
+};
 
 type StudentClass =
     | "1st"
@@ -323,6 +950,20 @@ export const getExamResults = async (
         const studentClass = req.query.class as StudentClass;
         const exam = req.query.exam as ExamType;
 
+        const search = req.query.search?.toString().trim() || "";
+        const sortBy = req.query.sortBy?.toString() || "None";
+        const order = req.query.order?.toString() || "asc";
+
+        const currentPage = Math.max(
+            Number(req.query.page) || 1,
+            1
+        );
+
+        const pageLimit = Math.max(
+            Number(req.query.limit) || 5,
+            1
+        );
+
         if (!studentClass || !exam) {
             return res.status(400).json({
                 message: "Class and exam are required"
@@ -350,7 +991,7 @@ export const getExamResults = async (
             select: "name subjectCode"
         });
 
-        const results = students.map(student => {
+        let results = students.map(student => {
 
             const studentMarks = marks.filter(
                 mark =>
@@ -358,7 +999,6 @@ export const getExamResults = async (
                     student._id.toString()
             );
 
-            // Store marks by subject name
             const subjectMarks: Record<
                 string,
                 {
@@ -380,8 +1020,8 @@ export const getExamResults = async (
                 };
             });
 
-            // Subject values for the table
-            const science = subjectMarks["Science"] ?? null;
+            const science =
+                subjectMarks["Science"] ?? null;
 
             const mathematics =
                 subjectMarks["Mathematics"] ?? null;
@@ -395,11 +1035,6 @@ export const getExamResults = async (
             const hindi =
                 subjectMarks["Hindi"] ?? null;
 
-
-            /*
-             * Only subjects that actually exist
-             * for this class are considered required.
-             */
             const requiredSubjects = subjects.map(
                 subject => subject.name
             );
@@ -433,20 +1068,16 @@ export const getExamResults = async (
                 }
             });
 
-
             let percentage: number | null = null;
             let result: string;
 
             if (!hasAnyMarks) {
-
                 result = "Not Assessed";
-
-            } else if (hasMissingMarks) {
-
+            }
+            else if (hasMissingMarks) {
                 result = "Incomplete";
-
-            } else {
-
+            }
+            else {
                 percentage =
                     totalMarks > 0
                         ? Number(
@@ -461,7 +1092,6 @@ export const getExamResults = async (
                     ? "Fail"
                     : "Pass";
             }
-
 
             return {
                 studentName:
@@ -494,7 +1124,85 @@ export const getExamResults = async (
             };
         });
 
-        res.status(200).json(results);
+        if (search !== "") {
+            const searchValue = search.toLowerCase();
+
+            results = results.filter(student =>
+                student.studentName
+                    .toLowerCase()
+                    .includes(searchValue) ||
+                student.uid
+                    .toLowerCase()
+                    .includes(searchValue)
+            );
+        }
+
+        if (sortBy === "Student Name") {
+            results.sort((a, b) => {
+                const comparison =
+                    a.studentName.localeCompare(
+                        b.studentName
+                    );
+
+                return order === "desc"
+                    ? -comparison
+                    : comparison;
+            });
+        }
+        else if (sortBy === "UID") {
+            results.sort((a, b) => {
+                const comparison =
+                    a.uid.localeCompare(b.uid);
+
+                return order === "desc"
+                    ? -comparison
+                    : comparison;
+            });
+        }
+        else if (sortBy === "Total Marks") {
+            results.sort((a, b) => {
+                const comparison =
+                    (a.total?.obtained ?? 0) -
+                    (b.total?.obtained ?? 0);
+
+                return order === "desc"
+                    ? -comparison
+                    : comparison;
+            });
+        }
+        else if (sortBy === "Percentage") {
+            results.sort((a, b) => {
+                const comparison =
+                    (a.percentage ?? -1) -
+                    (b.percentage ?? -1);
+
+                return order === "desc"
+                    ? -comparison
+                    : comparison;
+            });
+        }
+
+        const totalResults = results.length;
+
+        const totalPages = Math.ceil(
+            totalResults / pageLimit
+        );
+
+        const startIndex =
+            (currentPage - 1) * pageLimit;
+
+        const paginatedResults = results.slice(
+            startIndex,
+            startIndex + pageLimit
+        );
+
+        res.status(200).json({
+            results: paginatedResults,
+            totalResults,
+            totalPages,
+            currentPage,
+            limit: pageLimit
+        });
 
     } catch (error) {
         console.log(error);
@@ -856,12 +1564,21 @@ export const getStudentById = async (req: Request, res: Response, next: NextFunc
             });
         }
 
-        res.status(200).json(student);
+        const admissionRequest = await AdmissionRequest.findOne({
+            studentId: student._id
+        }).select(
+            "studentName dateOfBirth gender classApplyingFor previousClass fatherName motherName phone email address city state pinCode bloodGroup aadhaarNumber academicYear"
+        );
+
+        res.status(200).json({
+            ...student.toObject(),
+            admissionRequest
+        });
     }
     catch (error) {
         next(error);
     }
-}
+};
 
 export const updateStudent = async (req: Request, res: Response, next: NextFunction) => {
     try {
@@ -1351,29 +2068,28 @@ export const getAttendance = async (
     next: NextFunction
 ) => {
     try {
-        const studentClass = req.query.class as
-            | "1st"
-            | "2nd"
-            | "3rd"
-            | "4th"
-            | "5th"
-            | "6th"
-            | "7th"
-            | "8th"
-            | "9th"
-            | "10th"
-            | "11th"
-            | "12th";
+        const studentClass =
+            req.query.class?.toString() || "";
 
-        const date = req.query.date;
+        const date =
+            req.query.date?.toString() || "";
 
-        if (!studentClass || typeof studentClass !== "string") {
+        const search =
+            req.query.search?.toString().trim() || "";
+
+        const page =
+            Math.max(Number(req.query.page) || 1, 1);
+
+        const limit =
+            Math.max(Number(req.query.limit) || 10, 1);
+
+        if (!studentClass) {
             return res.status(400).json({
                 message: "Class is required"
             });
         }
 
-        if (!date || typeof date !== "string") {
+        if (!date) {
             return res.status(400).json({
                 message: "Date is required"
             });
@@ -1388,7 +2104,7 @@ export const getAttendance = async (
         }
 
         const students = await Student.find({
-            class: studentClass
+            class: studentClass as StudentClass
         })
             .select("_id class rollNumber userId")
             .populate({
@@ -1399,7 +2115,25 @@ export const getAttendance = async (
                 rollNumber: 1
             });
 
-        const studentIds = students.map(
+        const filteredStudents = search
+            ? students.filter((student: any) => {
+                const name =
+                    student.userId.name.toLowerCase();
+
+                const uid =
+                    student.userId.uid.toLowerCase();
+
+                const searchValue =
+                    search.toLowerCase();
+
+                return (
+                    name.includes(searchValue) ||
+                    uid.includes(searchValue)
+                );
+            })
+            : students;
+
+        const studentIds = filteredStudents.map(
             student => student._id
         );
 
@@ -1432,19 +2166,18 @@ export const getAttendance = async (
         });
 
         const leaveStudentIds = new Set(
-            approvedLeaves.map(
-                leave =>
-                    leave.studentId.toString()
+            approvedLeaves.map(leave =>
+                leave.studentId.toString()
             )
         );
 
         const attendanceRecords = attendance
-            .filter(record =>
+            .filter((record: any) =>
                 !leaveStudentIds.has(
                     record.studentId._id.toString()
                 )
             )
-            .map(record => ({
+            .map((record: any) => ({
                 _id: record._id,
                 studentId: record.studentId,
                 date: record.date,
@@ -1453,11 +2186,12 @@ export const getAttendance = async (
 
         const leaveRecords = approvedLeaves.map(
             leave => {
-                const student = students.find(
-                    student =>
-                        student._id.toString() ===
-                        leave.studentId.toString()
-                );
+                const student =
+                    filteredStudents.find(
+                        student =>
+                            student._id.toString() ===
+                            leave.studentId.toString()
+                    );
 
                 return {
                     _id: `${leave._id}-${date}`,
@@ -1480,8 +2214,29 @@ export const getAttendance = async (
             );
         });
 
-        res.status(200).json(result);
-    } catch (error) {
+        const totalRecords = result.length;
+
+        const totalPages = Math.ceil(
+            totalRecords / limit
+        );
+
+        const startIndex =
+            (page - 1) * limit;
+
+        const paginatedResult = result.slice(
+            startIndex,
+            startIndex + limit
+        );
+
+        res.status(200).json({
+            attendance: paginatedResult,
+            totalRecords,
+            totalPages,
+            currentPage: page,
+            limit
+        });
+    }
+    catch (error) {
         console.log(error);
         next(error);
     }
@@ -1494,6 +2249,16 @@ export const getStudentAttendance = async (
 ) => {
     try {
         const { studentId } = req.query;
+
+        const page = Math.max(
+            Number(req.query.page) || 1,
+            1
+        );
+
+        const limit = Math.max(
+            Number(req.query.limit) || 10,
+            1
+        );
 
         if (!studentId || typeof studentId !== "string") {
             return res.status(400).json({
@@ -1585,8 +2350,24 @@ export const getStudentAttendance = async (
                 );
             });
 
+        const attendanceRecords = attendance.filter(
+            (record: any) => {
+                const dateString =
+                    new Date(record.date)
+                        .toISOString()
+                        .split("T")[0];
+
+                return !filteredLeaveRecords.some(
+                    leaveRecord =>
+                        new Date(leaveRecord.date)
+                            .toISOString()
+                            .split("T")[0] === dateString
+                );
+            }
+        );
+
         const result = [
-            ...attendance,
+            ...attendanceRecords,
             ...filteredLeaveRecords
         ];
 
@@ -1597,7 +2378,45 @@ export const getStudentAttendance = async (
             );
         });
 
-        res.status(200).json(result);
+        const presentCount = attendanceRecords.filter(
+            (record: any) =>
+                record.status === "Present"
+        ).length;
+
+        const absentCount = attendanceRecords.filter(
+            (record: any) =>
+                record.status === "Absent"
+        ).length;
+
+        const leaveCount = filteredLeaveRecords.length;
+
+        const totalDays =
+            presentCount + absentCount;
+
+        const totalRecords = result.length;
+
+        const totalPages = Math.ceil(
+            totalRecords / limit
+        );
+
+        const startIndex = (page - 1) * limit;
+
+        const paginatedResult = result.slice(
+            startIndex,
+            startIndex + limit
+        );
+
+        res.status(200).json({
+            attendance: paginatedResult,
+            totalRecords,
+            totalPages,
+            currentPage: page,
+            limit,
+            presentCount,
+            absentCount,
+            leaveCount,
+            totalDays
+        });
     } catch (error) {
         console.log(error);
         next(error);
