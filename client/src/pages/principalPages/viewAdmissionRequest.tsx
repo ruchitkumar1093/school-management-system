@@ -5,6 +5,7 @@ import { getAdmissionById, rejectAdmissionById, approveAdmission } from "../../s
 import { useNavigate, useSearchParams } from "react-router-dom";
 import Breadcrumb from "../../components/breadcrumb";
 import { useAdmission } from "../../context/admissionContext";
+import Modal from "../../components/modal";
 
 type AdmissionInfo = {
     _id: string;
@@ -33,6 +34,10 @@ function ViewAdmissionRequest() {
     const navigate = useNavigate();
     const { refreshPendingRequests } = useAdmission();
 
+    const [modalOpen, setModalOpen] = useState(false);
+    const [modalTitle, setModalTitle] = useState("");
+    const [modalMessage, setModalMessage] = useState("");
+
     useEffect(() => {
         const fetchAdmission = async () => {
             try {
@@ -52,28 +57,55 @@ function ViewAdmissionRequest() {
     const rejectAdmission = async () => {
         try {
             if (!id) return;
+
             await rejectAdmissionById(id);
             await refreshPendingRequests();
-            alert("Admission Rejected");
-            navigate(-1);
+
+            setModalTitle("Success");
+            setModalMessage("Admission Rejected");
+            setModalOpen(true);
         }
         catch (error: any) {
             console.log(error);
-            alert(error.response?.data?.message || "Failed to reject Admission");
+
+            setModalTitle("Error");
+            setModalMessage(
+                error.response?.data?.message || "Failed to reject Admission"
+            );
+            setModalOpen(true);
         }
     };
 
     const approve = async () => {
         try {
             if (!id) return;
+
             await approveAdmission(id);
             await refreshPendingRequests();
-            alert("Admission Approved");
-            navigate(-1);
+
+            setModalTitle("Success");
+            setModalMessage("Admission Approved");
+            setModalOpen(true);
         }
         catch (error: any) {
             console.log(error);
-            alert(error.response?.data?.message || "Failed to Approve Admission");
+
+            setModalTitle("Error");
+            setModalMessage(
+                error.response?.data?.message || "Failed to Approve Admission"
+            );
+            setModalOpen(true);
+        }
+    };
+
+    const handleModalClose = () => {
+        setModalOpen(false);
+
+        if (
+            modalMessage === "Admission Approved" ||
+            modalMessage === "Admission Rejected"
+        ) {
+            navigate(-1);
         }
     };
 
@@ -341,6 +373,13 @@ function ViewAdmissionRequest() {
                     </main>
                 </div>
             </div>
+
+            <Modal
+                isOpen={modalOpen}
+                title={modalTitle}
+                message={modalMessage}
+                onClose={handleModalClose}
+            />
         </div>
     );
 }

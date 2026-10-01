@@ -11,25 +11,27 @@ function Breadcrumb() {
 
         // Common pages
         viewTeachers: "Teachers",
-        teacherForm: "Teacher Form",
+        teacherForm: "Form",
         viewStudents: "Students",
-        studentForm: "Student Form",
+        studentForm: "Form",
         attendance: "Attendance",
-        viewAttendance: "View Attendance",
+        viewAttendance: "View",
         viewSubjects: "School Subjects",
-        subjectForm: "Subject Form",
+        subjectForm: "Form",
         viewMarks: "Student Marks",
-        marksForm: "Marks Form",
+        marksForm: "Form",
         viewExams: "Exams",
         profile: "Profile",
         changePassword: "Change Password",
         teacherProfile: "Profile",
         studentProfile: "Profile",
+        viewLeaves: "Leaves",
 
         // Principal pages
         admissionRequests: "Admission Requests",
-        viewRequest: "View Request",
-        viewClass: "Class Overview"
+        viewRequest: "View",
+        viewClass: "Class Overview",
+        viewHolidays: "Holidays"
     };
 
     const paths = location.pathname

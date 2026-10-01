@@ -7,6 +7,7 @@ import User from "../models/User";
 import Attendance from "../models/Attendance";
 import mongoose from "mongoose";
 import Leave from "../models/Leave";
+import AdmissionRequest from "../models/AdmissionRequest";
 
 export const getLeaveApplications = async (
     req: Request,
@@ -957,7 +958,16 @@ export const getStudentById = async (req: Request, res: Response, next: NextFunc
             });
         }
 
-        res.status(200).json(student);
+        const admissionRequest = await AdmissionRequest.findOne({
+            studentId: student._id
+        }).select(
+            "studentName dateOfBirth gender classApplyingFor previousClass fatherName motherName phone email address city state pinCode bloodGroup aadhaarNumber academicYear"
+        );
+
+        res.status(200).json({
+            ...student.toObject(),
+            admissionRequest
+        });
     }
     catch (error) {
         next(error);

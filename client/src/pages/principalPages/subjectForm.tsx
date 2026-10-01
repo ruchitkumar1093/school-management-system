@@ -5,6 +5,7 @@ import { useNavigate } from "react-router-dom";
 import { addSubject, updateSubject, getSubjectById } from "../../services/principalApi";
 import { useState, useEffect } from "react";
 import Breadcrumb from "../../components/breadcrumb";
+import Modal from "../../components/modal";
 
 function SubjectForm() {
 
@@ -27,6 +28,10 @@ function SubjectForm() {
         subjectCode: "",
         class: "Select an option"
     });
+
+    const [modalOpen, setModalOpen] = useState(false);
+    const [modalTitle, setModalTitle] = useState("");
+    const [modalMessage, setModalMessage] = useState("");
 
     useEffect(() => {
         const fetchSubject = async () => {
@@ -51,31 +56,53 @@ function SubjectForm() {
 
     const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
+
         try {
             if (isAdding) {
                 await addSubject(formData);
-                alert("Subject Added");
+                setModalTitle("Success");
+                setModalMessage("Subject Added");
             }
             else if (id) {
                 await updateSubject(id, formData);
-                alert("Subject Updated");
+                setModalTitle("Success");
+                setModalMessage("Subject Updated");
             }
-            navigate(-1);
 
+            setModalOpen(true);
         }
         catch (error: any) {
             console.log(error);
-            alert(error.response?.data?.message || "Failed");
+
+            setModalTitle("Error");
+            setModalMessage(
+                error.response?.data?.message || "Failed"
+            );
+            setModalOpen(true);
         }
-    }
+    };
+
+    const handleModalClose = () => {
+        setModalOpen(false);
+
+        if (
+            modalMessage === "Subject Added" ||
+            modalMessage === "Subject Updated"
+        ) {
+            navigate(-1);
+        }
+    };
 
     return (
         <div className="flex flex-col min-h-screen font-fredoka">
             <NavBar />
+
             <div className="flex flex-1 bg-purple-100">
                 <SideBar />
+
                 <div>
                     <Breadcrumb />
+
                     <form onSubmit={handleSubmit} className="flex flex-col gap-7 p-15">
                         <div className="flex flex-col gap-2">
                             <label htmlFor="name">Subject Name:</label>
@@ -85,12 +112,12 @@ function SubjectForm() {
                             })} className="w-sm border-2 border-gray-500 rounded-sm p-2
                     focus:outline-none focus:border-gray-900 transition-colors duration-300 ease-in-out"
                                 id="name" name="name">
-                                <option disabled >Select an option</option>
-                                <option >Science</option>
-                                <option >Mathematics</option>
-                                <option >English</option>
-                                <option >Social Science</option>
-                                <option >Hindi</option>
+                                <option disabled>Select an option</option>
+                                <option>Science</option>
+                                <option>Mathematics</option>
+                                <option>English</option>
+                                <option>Social Science</option>
+                                <option>Hindi</option>
                             </select>
                         </div>
 
@@ -112,31 +139,41 @@ function SubjectForm() {
                             })} className="w-sm border-2 border-gray-500 rounded-sm p-2
                     focus:outline-none focus:border-gray-900 transition-colors duration-300 ease-in-out"
                                 id="class" name="class">
-                                <option disabled >Select an option</option>
-                                <option >1st</option>
-                                <option >2nd</option>
-                                <option >3rd</option>
-                                <option >4th</option>
-                                <option >5th</option>
-                                <option >6th</option>
-                                <option >7th</option>
-                                <option >8th</option>
-                                <option >9th</option>
-                                <option >10th</option>
-                                <option >11th</option>
-                                <option >12th</option>
+                                <option disabled>Select an option</option>
+                                <option>1st</option>
+                                <option>2nd</option>
+                                <option>3rd</option>
+                                <option>4th</option>
+                                <option>5th</option>
+                                <option>6th</option>
+                                <option>7th</option>
+                                <option>8th</option>
+                                <option>9th</option>
+                                <option>10th</option>
+                                <option>11th</option>
+                                <option>12th</option>
                             </select>
                         </div>
+
                         <div className="flex gap-5">
                             <button type="submit" className="rounded-lg bg-purple-300 px-6 py-3 font-medium text-purple-950 shadow-[0_2px_3px] transition-colors hover:bg-violet-300 cursor-pointer">
-                                {isAdding ? "Add" : "Update"}</button>
+                                {isAdding ? "Add" : "Update"}
+                            </button>
+
                             <button onClick={() => navigate(-1)} type="button" className="rounded-lg bg-purple-300 px-6 py-3 font-medium text-purple-950 shadow-[0_2px_3px] transition-colors hover:bg-violet-300 cursor-pointer">
-                                Cancel</button>
+                                Cancel
+                            </button>
                         </div>
                     </form>
                 </div>
-
             </div>
+
+            <Modal
+                isOpen={modalOpen}
+                title={modalTitle}
+                message={modalMessage}
+                onClose={handleModalClose}
+            />
         </div>
     );
 }

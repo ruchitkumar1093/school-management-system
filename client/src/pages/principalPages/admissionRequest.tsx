@@ -15,6 +15,7 @@ import { getAdmission, deleteRejectAdmissions } from "../../services/admissionAp
 import AdmissionTable from "../../components/principalComponents/admissionTable";
 import { useNavigate } from "react-router-dom";
 import Breadcrumb from "../../components/breadcrumb";
+import Modal from "../../components/modal";
 
 type Admission = {
     _id: string;
@@ -42,6 +43,11 @@ function AdmissionRequest() {
     const [orderBy, setOrderBy] = useState("asc");
     const [classFilter, setClassFilter] = useState("All");
     const [status, setStatus] = useState<StatusType>("pending");
+
+    const [modalOpen, setModalOpen] = useState(false);
+    const [modalTitle, setModalTitle] = useState("");
+    const [modalMessage, setModalMessage] = useState("");
+    const [modalConfirm, setModalConfirm] = useState<(() => void) | undefined>();
 
     const fetchAdmissions = async () => {
         try {
@@ -102,9 +108,11 @@ function AdmissionRequest() {
         navigate(`viewRequest?id=${id}`);
     }
 
-    const deleteAdmissions = async () => {
-        try {
-            if (window.confirm("Are you sure you want to delete?")) {
+    const deleteAdmissions = () => {
+        setModalTitle("Confirm Action");
+        setModalMessage("Are you sure you want to delete all rejected admissions?");
+        setModalConfirm(() => async () => {
+            try {
                 const deleteAdmission = await deleteRejectAdmissions();
 
                 console.log(
@@ -112,15 +120,22 @@ function AdmissionRequest() {
                     deleteAdmission.data
                 );
 
-                alert("Deleted Successfully");
-
+                setModalConfirm(undefined);
+                setModalTitle("Success");
+                setModalMessage("Deleted Successfully");
                 await fetchAdmissions();
             }
-        }
-        catch (error: any) {
-            console.log(error);
-            alert(error.response?.data?.message || "Failed");
-        }
+            catch (error: any) {
+                console.log(error);
+
+                setModalConfirm(undefined);
+                setModalTitle("Error");
+                setModalMessage(
+                    error.response?.data?.message || "Failed"
+                );
+            }
+        });
+        setModalOpen(true);
     };
 
     const sortOptions = ["None", "Student Name", "Class"];
@@ -233,6 +248,17 @@ function AdmissionRequest() {
                     </div>
                 </div>
             </div>
+
+            <Modal
+                isOpen={modalOpen}
+                title={modalTitle}
+                message={modalMessage}
+                onClose={() => {
+                    setModalOpen(false);
+                    setModalConfirm(undefined);
+                }}
+                onConfirm={modalConfirm}
+            />
         </div>
     );
 }

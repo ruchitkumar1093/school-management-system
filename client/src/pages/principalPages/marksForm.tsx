@@ -11,7 +11,7 @@ import {
 } from "../../services/principalApi";
 import { useState, useEffect } from "react";
 import Breadcrumb from "../../components/breadcrumb";
-
+import Modal from "../../components/modal";
 
 type FormData = {
     class: string;
@@ -23,7 +23,6 @@ type FormData = {
     totalMarks: string;
 };
 
-
 type Student = {
     _id: string;
     userId: {
@@ -33,7 +32,6 @@ type Student = {
     class: string;
     rollNumber: number;
 };
-
 
 type Teacher = {
     _id: string;
@@ -45,7 +43,6 @@ type Teacher = {
     department: string;
     classAssigned: string;
 };
-
 
 function MarksForm() {
 
@@ -70,6 +67,9 @@ function MarksForm() {
     const [students, setStudents] = useState<Student[]>([]);
     const [teachers, setTeachers] = useState<Teacher[]>([]);
 
+    const [modalOpen, setModalOpen] = useState(false);
+    const [modalTitle, setModalTitle] = useState("");
+    const [modalMessage, setModalMessage] = useState("");
 
     useEffect(() => {
 
@@ -94,7 +94,6 @@ function MarksForm() {
         fetchData();
 
     }, []);
-
 
     useEffect(() => {
 
@@ -129,16 +128,13 @@ function MarksForm() {
 
     }, [id, isAdding]);
 
-
     const filteredStudents = students.filter(
         (student) => student.class === formData.class
     );
 
-
     const filteredTeachers = teachers.filter(
         (teacher) => teacher.classAssigned === formData.class
     );
-
 
     const handleClassChange = (value: string) => {
 
@@ -151,7 +147,6 @@ function MarksForm() {
 
     };
 
-
     const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
 
         e.preventDefault();
@@ -162,29 +157,43 @@ function MarksForm() {
 
                 await addMark(formData);
 
-                alert("Marks Added");
+                setModalTitle("Success");
+                setModalMessage("Marks Added");
 
             }
             else if (id) {
 
                 await updateMark(id, formData);
 
-                alert("Marks Updated");
+                setModalTitle("Success");
+                setModalMessage("Marks Updated");
             }
 
-            navigate(-1);
+            setModalOpen(true);
 
         }
         catch (error: any) {
 
             console.log(error);
 
-            alert(
+            setModalTitle("Error");
+            setModalMessage(
                 error.response?.data?.message || "Failed"
             );
+            setModalOpen(true);
         }
     };
 
+    const handleModalClose = () => {
+        setModalOpen(false);
+
+        if (
+            modalMessage === "Marks Added" ||
+            modalMessage === "Marks Updated"
+        ) {
+            navigate(-1);
+        }
+    };
 
     return (
 
@@ -204,8 +213,6 @@ function MarksForm() {
                         onSubmit={handleSubmit}
                         className="flex flex-col gap-7 p-15"
                     >
-
-                        {/* Class */}
 
                         <div className="flex flex-col gap-2">
 
@@ -246,9 +253,6 @@ function MarksForm() {
                             </select>
 
                         </div>
-
-
-                        {/* Student */}
 
                         <div className="flex flex-col gap-2">
 
@@ -294,9 +298,6 @@ function MarksForm() {
 
                         </div>
 
-
-                        {/* Teacher */}
-
                         <div className="flex flex-col gap-2">
 
                             <label htmlFor="teacher">
@@ -341,9 +342,6 @@ function MarksForm() {
 
                         </div>
 
-
-                        {/* Subject */}
-
                         <div className="flex flex-col gap-2">
 
                             <label htmlFor="subject">
@@ -380,9 +378,6 @@ function MarksForm() {
 
                         </div>
 
-
-                        {/* Exam */}
-
                         <div className="flex flex-col gap-2">
 
                             <label htmlFor="type">
@@ -417,9 +412,6 @@ function MarksForm() {
 
                         </div>
 
-
-                        {/* Marks Obtained */}
-
                         <div className="flex flex-col gap-2">
 
                             <label htmlFor="obt">
@@ -446,9 +438,6 @@ function MarksForm() {
 
                         </div>
 
-
-                        {/* Max Marks */}
-
                         <div className="flex flex-col gap-2">
 
                             <label htmlFor="max">
@@ -474,9 +463,6 @@ function MarksForm() {
                             />
 
                         </div>
-
-
-                        {/* Buttons */}
 
                         <div>
 
@@ -506,6 +492,13 @@ function MarksForm() {
                 </div>
 
             </div>
+
+            <Modal
+                isOpen={modalOpen}
+                title={modalTitle}
+                message={modalMessage}
+                onClose={handleModalClose}
+            />
 
         </div>
     );

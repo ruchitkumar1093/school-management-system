@@ -11,6 +11,7 @@ import {
 import TeacherAttendanceTable from "../../components/attendanceTable";
 import { useState, useEffect } from "react";
 import Breadcrumb from "../../components/breadcrumb";
+import Modal from "../../components/modal";
 
 type Student = {
     _id: string;
@@ -72,6 +73,12 @@ function TeacherAttendance() {
                 ? JSON.parse(savedAttendance)
                 : {};
         });
+
+    const [modalOpen, setModalOpen] = useState(false);
+    const [modalTitle, setModalTitle] = useState("");
+    const [modalMessage, setModalMessage] = useState("");
+    const [modalConfirm, setModalConfirm] =
+        useState<(() => void) | undefined>();
 
     const fetchStudents = async () => {
         try {
@@ -176,9 +183,12 @@ function TeacherAttendance() {
                 );
 
             if (!allStudentsHandled) {
-                alert(
+                setModalTitle("Incomplete Attendance");
+                setModalMessage(
                     "Please mark attendance for all students before submitting."
                 );
+                setModalConfirm(undefined);
+                setModalOpen(true);
                 return;
             }
 
@@ -214,47 +224,53 @@ function TeacherAttendance() {
 
                 setAttendance({});
 
-                alert(
+                setModalTitle("Success");
+                setModalMessage(
                     "Attendance submitted successfully."
                 );
+                setModalConfirm(undefined);
+                setModalOpen(true);
             }
             catch (error: any) {
                 console.log(error);
 
-                alert(
+                setModalTitle("Error");
+                setModalMessage(
                     error.response?.data?.message ||
                     "Failed to submit attendance"
                 );
+                setModalConfirm(undefined);
+                setModalOpen(true);
             }
         };
 
     const handleReset = () => {
 
-        const confirmReset =
-            window.confirm(
-                "Are you sure you want to reset all attendance data?"
-            );
+        setModalTitle("Confirm Action");
+        setModalMessage(
+            "Are you sure you want to reset all attendance data?"
+        );
+        setModalConfirm(() => () => {
+            Object.keys(
+                localStorage
+            ).forEach((key) => {
 
-        if (!confirmReset) {
-            return;
-        }
+                if (
+                    key.startsWith(
+                        "attendance-"
+                    )
+                ) {
+                    localStorage.removeItem(
+                        key
+                    );
+                }
+            });
 
-        Object.keys(
-            localStorage
-        ).forEach((key) => {
-
-            if (
-                key.startsWith(
-                    "attendance-"
-                )
-            ) {
-                localStorage.removeItem(
-                    key
-                );
-            }
+            setAttendance({});
+            setModalConfirm(undefined);
+            setModalOpen(false);
         });
-
-        setAttendance({});
+        setModalOpen(true);
     };
 
     const markedCount =
@@ -294,37 +310,39 @@ function TeacherAttendance() {
 
     const handleMarkAllAbsent = () => {
 
-        const confirmAbsent =
-            window.confirm(
-                "Are you sure you want to mark all students as absent?"
+        setModalTitle("Confirm Action");
+        setModalMessage(
+            "Are you sure you want to mark all students as absent?"
+        );
+        setModalConfirm(() => () => {
+
+            const updatedAttendance: Attendance = {
+                ...attendance
+            };
+
+            allStudentIds.forEach(
+                (studentId) => {
+
+                    if (
+                        !leaveStudentIds.includes(
+                            studentId
+                        )
+                    ) {
+                        updatedAttendance[
+                            studentId
+                        ] = "Absent";
+                    }
+                }
             );
 
-        if (!confirmAbsent) {
-            return;
-        }
+            setAttendance(
+                updatedAttendance
+            );
 
-        const updatedAttendance: Attendance = {
-            ...attendance
-        };
-
-        allStudentIds.forEach(
-            (studentId) => {
-
-                if (
-                    !leaveStudentIds.includes(
-                        studentId
-                    )
-                ) {
-                    updatedAttendance[
-                        studentId
-                    ] = "Absent";
-                }
-            }
-        );
-
-        setAttendance(
-            updatedAttendance
-        );
+            setModalConfirm(undefined);
+            setModalOpen(false);
+        });
+        setModalOpen(true);
     };
 
     const startIndex =
@@ -557,6 +575,17 @@ function TeacherAttendance() {
                 </div>
 
             </div>
+
+            <Modal
+                isOpen={modalOpen}
+                title={modalTitle}
+                message={modalMessage}
+                onClose={() => {
+                    setModalOpen(false);
+                    setModalConfirm(undefined);
+                }}
+                onConfirm={modalConfirm}
+            />
 
         </div>
     );

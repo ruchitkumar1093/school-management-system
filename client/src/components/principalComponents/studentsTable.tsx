@@ -1,4 +1,3 @@
-import React from "react";
 import { FiEdit, FiTrash, FiEye } from "react-icons/fi";
 
 type Student = {

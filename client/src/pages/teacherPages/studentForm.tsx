@@ -5,6 +5,7 @@ import { useNavigate } from "react-router-dom";
 import { addStudent, updateStudent, getStudentById } from "../../services/teacherApi";
 import { useState, useEffect } from "react";
 import Breadcrumb from "../../components/breadcrumb";
+import Modal from "../../components/modal";
 
 function StudentForm() {
 
@@ -22,6 +23,10 @@ function StudentForm() {
         password: "",
         rollNumber: ""
     });
+
+    const [modalOpen, setModalOpen] = useState(false);
+    const [modalTitle, setModalTitle] = useState("");
+    const [modalMessage, setModalMessage] = useState("");
 
     useEffect(() => {
         const fetchStudent = async () => {
@@ -50,21 +55,35 @@ function StudentForm() {
         try {
             if (isAdding) {
                 await addStudent(formData);
-                alert("Student Added");
+                setModalTitle("Success");
+                setModalMessage("Student Added");
             }
             else {
                 if (!id) return;
                 await updateStudent(id, formData);
-                alert("Student Updated");
+                setModalTitle("Success");
+                setModalMessage("Student Updated");
             }
-            navigate(-1);
-
+            setModalOpen(true);
         }
         catch (error) {
             console.log(error);
-            alert("Failed");
+            setModalTitle("Error");
+            setModalMessage("Failed");
+            setModalOpen(true);
         }
-    }
+    };
+
+    const handleModalClose = () => {
+        setModalOpen(false);
+
+        if (
+            modalMessage === "Student Added" ||
+            modalMessage === "Student Updated"
+        ) {
+            navigate(-1);
+        }
+    };
 
     return (
         <div className="flex flex-col min-h-screen font-fredoka">
@@ -114,15 +133,22 @@ function StudentForm() {
                                 type="number" id="rollNo" placeholder="Enter Roll Number" name="rollNo" />
                         </div>
                         <div className="flex gap-5">
-                            <button type="submit" className="p-2 bg-purple-300 rounded-lg
-                shadow-[0_2px_3px] hover:bg-violet-300 cursor-pointer">{isAdding ? "Add" : "Update"}</button>
-                            <button onClick={() => navigate(-1)} type="button" className="p-2 bg-purple-300 rounded-lg
-                shadow-[0_2px_3px] hover:bg-violet-300 cursor-pointer">Cancel</button>
+                            <button type="submit" className="rounded-lg bg-purple-300 px-6 py-3 font-medium text-purple-950 shadow-[0_2px_3px] transition-colors hover:bg-violet-300 cursor-pointer">
+                                {isAdding ? "Add" : "Update"}</button>
+                            <button onClick={() => navigate(-1)} type="button" className="rounded-lg bg-purple-300 px-6 py-3 font-medium text-purple-950 shadow-[0_2px_3px] transition-colors hover:bg-violet-300 cursor-pointer">
+                                Cancel</button>
                         </div>
                     </form>
                 </div>
 
             </div>
+
+            <Modal
+                isOpen={modalOpen}
+                title={modalTitle}
+                message={modalMessage}
+                onClose={handleModalClose}
+            />
         </div>
     );
 }

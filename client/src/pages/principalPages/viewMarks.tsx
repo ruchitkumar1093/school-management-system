@@ -12,6 +12,7 @@ import PrincipalMarksTable from "../../components/principalComponents/marksTable
 import { viewMarks, deleteMark } from "../../services/principalApi";
 import { useNavigate } from "react-router-dom";
 import Breadcrumb from "../../components/breadcrumb";
+import Modal from "../../components/modal";
 
 function PrincipalViewMarks() {
 
@@ -54,6 +55,10 @@ function PrincipalViewMarks() {
     const [orderBy, setOrderBy] = useState("asc");
     const [classFilter, setClassFilter] = useState("All");
     const [examType, setExamType] = useState<ExamType>("All");
+
+    const [modalOpen, setModalOpen] = useState(false);
+    const [modalTitle, setModalTitle] = useState("");
+    const [modalMessage, setModalMessage] = useState("");
 
     const fetchMarks = async () => {
         try {
@@ -122,11 +127,19 @@ function PrincipalViewMarks() {
         try {
             await deleteMark(id);
             await fetchMarks();
-            alert("Mark deleted");
+
+            setModalTitle("Success");
+            setModalMessage("Mark deleted");
+            setModalOpen(true);
         }
         catch (error: any) {
             console.log(error);
-            alert(error.response?.data?.message || "Failed");
+
+            setModalTitle("Error");
+            setModalMessage(
+                error.response?.data?.message || "Failed"
+            );
+            setModalOpen(true);
         }
     }
 
@@ -238,6 +251,13 @@ function PrincipalViewMarks() {
                     </div>
                 </div>
             </div>
+
+            <Modal
+                isOpen={modalOpen}
+                title={modalTitle}
+                message={modalMessage}
+                onClose={() => setModalOpen(false)}
+            />
         </div>
     );
 }

@@ -327,7 +327,7 @@ function PrincipalAttendance() {
                                         setDebouncedSearch("");
                                         setCurrentPage(1);
                                     }}
-                                    className="rounded-lg bg-purple-300 px-3 py-3 font-medium text-purple-950 shadow-[0_2px_3px] transition-colors hover:bg-violet-300 cursor-pointer"
+                                    className="rounded-lg bg-purple-300 px-1 py-3 font-medium text-purple-950 shadow-[0_2px_3px] transition-colors hover:bg-violet-300 cursor-pointer"
                                 >
                                     View Date Wise
                                 </button>

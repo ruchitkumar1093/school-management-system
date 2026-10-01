@@ -2,6 +2,7 @@ import logo from "../assets/logo.png";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { createAdmission } from "../services/admissionApi";
+import Modal from "../components/modal";
 
 function AdmissionForm() {
 
@@ -53,16 +54,36 @@ function AdmissionForm() {
         academicYear: "2026-27"
     });
 
+    const [modalOpen, setModalOpen] = useState(false);
+    const [modalTitle, setModalTitle] = useState("");
+    const [modalMessage, setModalMessage] = useState("");
+
     const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
+
         try {
             await createAdmission(formData);
-            alert("Applied Successfully ✅");
-            navigate(-1);
+
+            setModalTitle("Success");
+            setModalMessage("Applied Successfully");
+            setModalOpen(true);
         }
         catch (error: any) {
             console.log(error);
-            alert(error.response?.data?.message || "Failed to reject Admission");
+
+            setModalTitle("Error");
+            setModalMessage(
+                error.response?.data?.message || "Failed to submit Admission"
+            );
+            setModalOpen(true);
+        }
+    };
+
+    const handleModalClose = () => {
+        setModalOpen(false);
+
+        if (modalMessage === "Applied Successfully") {
+            navigate(-1);
         }
     };
 
@@ -463,21 +484,24 @@ function AdmissionForm() {
                     <div className="flex justify-center gap-5 pt-3">
                         <button
                             type="submit"
-                            className="p-3 px-6 bg-purple-300 rounded-lg
-                            shadow-[0_2px_3px] hover:bg-violet-300
-                            cursor-pointer"
+                            className="rounded-lg bg-purple-300 px-6 py-3 font-medium text-purple-950 shadow-[0_2px_3px] transition-colors hover:bg-violet-300 cursor-pointer"
                         >Submit Admission Application</button>
 
                         <button
                             onClick={() => navigate("/")}
                             type="button"
-                            className="p-3 px-6 bg-gray-200 rounded-lg
-                            shadow-[0_2px_3px] hover:bg-gray-300
-                            cursor-pointer"
+                            className="rounded-lg bg-purple-300 px-6 py-3 font-medium text-purple-950 shadow-[0_2px_3px] transition-colors hover:bg-violet-300 cursor-pointer"
                         >Cancel</button>
                     </div>
                 </form>
             </div>
+
+            <Modal
+                isOpen={modalOpen}
+                title={modalTitle}
+                message={modalMessage}
+                onClose={handleModalClose}
+            />
         </div>
     );
 }

@@ -11,6 +11,7 @@ import PrincipalSubjectsTable from "../../components/principalComponents/subject
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import Breadcrumb from "../../components/breadcrumb";
+import Modal from "../../components/modal";
 
 function PrincipalViewSubjects() {
 
@@ -36,6 +37,10 @@ function PrincipalViewSubjects() {
     const [sortBy, setSortBy] = useState("None");
     const [orderBy, setOrderBy] = useState("asc");
     const [classFilter, setClassFilter] = useState("All");
+
+    const [modalOpen, setModalOpen] = useState(false);
+    const [modalTitle, setModalTitle] = useState("");
+    const [modalMessage, setModalMessage] = useState("");
 
     const fetchSubjects = async () => {
         try {
@@ -103,11 +108,19 @@ function PrincipalViewSubjects() {
         try {
             await deleteSubject(id);
             await fetchSubjects();
-            alert("Subject deleted");
+
+            setModalTitle("Success");
+            setModalMessage("Subject deleted");
+            setModalOpen(true);
         }
         catch (error: any) {
             console.log(error);
-            alert(error.response?.data?.message || "Failed");
+
+            setModalTitle("Error");
+            setModalMessage(
+                error.response?.data?.message || "Failed"
+            );
+            setModalOpen(true);
         }
     }
 
@@ -204,6 +217,13 @@ function PrincipalViewSubjects() {
                     </div>
                 </div>
             </div>
+
+            <Modal
+                isOpen={modalOpen}
+                title={modalTitle}
+                message={modalMessage}
+                onClose={() => setModalOpen(false)}
+            />
         </div>
     );
 }

@@ -12,6 +12,7 @@ import Limit from "../../components/limit";
 import { viewTeachers, deleteTeacher } from "../../services/principalApi";
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import Modal from "../../components/modal";
 
 import Breadcrumb from "../../components/breadcrumb";
 
@@ -39,6 +40,10 @@ function PrincipalViewTeachers() {
     const [sortBy, setSortBy] = useState("None");
     const [orderBy, setOrderBy] = useState("asc");
     const [classFilter, setClassFilter] = useState("All");
+
+    const [modalOpen, setModalOpen] = useState(false);
+    const [modalTitle, setModalTitle] = useState("");
+    const [modalMessage, setModalMessage] = useState("");
 
     const fetchTeachers = async () => {
         try {
@@ -91,11 +96,17 @@ function PrincipalViewTeachers() {
         try {
             await deleteTeacher(id);
             await fetchTeachers();
-            alert("Teacher deleted");
+            setModalTitle("Success");
+            setModalMessage("Teacher deleted");
+            setModalOpen(true);
         }
         catch (error: any) {
             console.log(error);
-            alert(error.response?.data?.message || "Failed");
+            setModalTitle("Error");
+            setModalMessage(
+                error.response?.data?.message || "Failed"
+            );
+            setModalOpen(true);
         }
     }
 
@@ -195,6 +206,12 @@ function PrincipalViewTeachers() {
                     </div>
                 </div>
             </div>
+            <Modal
+                isOpen={modalOpen}
+                title={modalTitle}
+                message={modalMessage}
+                onClose={() => setModalOpen(false)}
+            />
         </div>
     );
 }
