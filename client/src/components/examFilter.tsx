@@ -1,5 +1,3 @@
-import React from "react";
-
 type ExamType = "All" | "class test" | "mid term" | "final";
 
 type Props = {

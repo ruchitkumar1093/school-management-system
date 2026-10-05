@@ -5,6 +5,7 @@ import Limit from "../../components/limit";
 import Breadcrumb from "../../components/breadcrumb";
 import { getAttendance } from "../../services/studentApi";
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 
 type Attendance = {
     _id: string;
@@ -20,6 +21,8 @@ type StudentInfo = {
 };
 
 function StudentAttendance() {
+    const navigate = useNavigate();
+
     const [attendance, setAttendance] =
         useState<Attendance[]>([]);
 
@@ -139,6 +142,13 @@ function StudentAttendance() {
                                     View your Attendance
                                 </p>
                             </div>
+                            <button
+                                onClick={() => navigate("calender")}
+                                type="button"
+                                className="rounded-lg bg-purple-300 px-6 py-3 font-medium text-purple-950 shadow-[0_2px_3px] transition-colors hover:bg-violet-300 cursor-pointer"
+                            >
+                                Attendance Calender
+                            </button>
                         </div>
 
                         {student && (
@@ -273,15 +283,14 @@ function StudentAttendance() {
                                                     </td>
 
                                                     <td
-                                                        className={`p-3 text-center font-medium ${
-                                                            record.status ===
+                                                        className={`p-3 text-center font-medium ${record.status ===
                                                             "Present"
-                                                                ? "text-emerald-600"
-                                                                : record.status ===
-                                                                  "Absent"
+                                                            ? "text-emerald-600"
+                                                            : record.status ===
+                                                                "Absent"
                                                                 ? "text-red-600"
                                                                 : "text-amber-600"
-                                                        }`}
+                                                            }`}
                                                     >
                                                         {
                                                             record.status

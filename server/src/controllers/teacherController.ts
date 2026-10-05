@@ -482,6 +482,9 @@ export const getMarks = async (
         const order =
             req.query.order?.toString() || "asc";
 
+        const subject =
+            req.query.subject?.toString() || "All";
+
         const currentPage = Math.max(
             Number(req.query.page) || 1,
             1
@@ -557,6 +560,14 @@ export const getMarks = async (
             pipeline.push({
                 $match: {
                     exam
+                }
+            });
+        }
+
+        if (subject !== "All") {
+            pipeline.push({
+                $match: {
+                    "subjectId.name": subject
                 }
             });
         }

@@ -1,4 +1,4 @@
-import { FiEdit, FiTrash, FiEye } from "react-icons/fi";
+import { FiEdit, FiTrash, FiEye, FiBarChart2 } from "react-icons/fi";
 
 type Teacher = {
   _id: string;
@@ -15,6 +15,7 @@ type Props = {
   handleEditTeacher: (id: string) => void;
   handleDeleteTeacher: (id: string) => void;
   handleTeacherProfile: (id: string) => void;
+  handleTeacherMarks: (id: string) => void;
   startIndex: number;
 };
 
@@ -23,6 +24,7 @@ function PrincipalTeachersTable({
   handleEditTeacher,
   handleDeleteTeacher,
   handleTeacherProfile,
+  handleTeacherMarks,
   startIndex,
 }: Props) {
   return (
@@ -90,6 +92,7 @@ function PrincipalTeachersTable({
                     >
                       <FiEdit className="h-4 w-4" />
                     </button>
+
                     <button
                       title="Delete"
                       onClick={() => handleDeleteTeacher(tch._id)}
@@ -97,12 +100,21 @@ function PrincipalTeachersTable({
                     >
                       <FiTrash className="h-4 w-4" />
                     </button>
+
                     <button
                       title="View"
                       onClick={() => handleTeacherProfile(tch._id)}
                       className="p-1.5 text-purple-900 transition-colors hover:text-purple-600 cursor-pointer"
                     >
                       <FiEye className="h-4 w-4" />
+                    </button>
+
+                    <button
+                      title="View Marks"
+                      onClick={() => handleTeacherMarks(tch._id)}
+                      className="p-1.5 text-purple-900 transition-colors hover:text-purple-600 cursor-pointer"
+                    >
+                      <FiBarChart2 className="h-4 w-4" />
                     </button>
                   </div>
                 </td>

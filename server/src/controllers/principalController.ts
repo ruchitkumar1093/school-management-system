@@ -11,6 +11,55 @@ import bcrypt from "bcrypt";
 import Leave from "../models/Leave";
 import AdmissionRequest from "../models/AdmissionRequest";
 
+export const assignClassTeacher = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const studentClass = req.params.class as StudentClass;
+        const { teacherId } = req.body;
+
+        if (!teacherId) {
+            return res.status(400).json({
+                message: "Teacher ID is required"
+            });
+        }
+
+        const classData = await Class.findOne({
+            class: studentClass
+        });
+
+        if (!classData) {
+            return res.status(404).json({
+                message: "Class not found"
+            });
+        }
+
+        const teacher = await Teacher.findById(teacherId);
+
+        if (!teacher) {
+            return res.status(404).json({
+                message: "Teacher not found"
+            });
+        }
+
+        if (teacher.classAssigned !== studentClass) {
+            return res.status(400).json({
+                message: "Teacher is not assigned to this class"
+            });
+        }
+
+        await Class.updateOne(
+            { class: studentClass },
+            { $set: { teacherId: teacher._id } }
+        );
+
+        res.status(200).json({
+            message: "Class teacher assigned successfully"
+        });
+    }
+    catch (error) {
+        next(error);
+    }
+};
+
 //Leaves
 
 export const getLeaveApplications = async (
@@ -691,7 +740,9 @@ export const getMarks = async (
             sortBy = "None",
             order = "asc",
             page = "1",
-            limit = "5"
+            limit = "5",
+            subject = "All",
+            teacher = "All"
         } = req.query;
 
         const currentPage = Math.max(Number(page) || 1, 1);
@@ -789,6 +840,16 @@ export const getMarks = async (
             match.exam = exam;
         }
 
+        if (subject !== "All") {
+            match["subject.name"] = subject;
+        }
+
+        if (teacher !== "All" && mongoose.Types.ObjectId.isValid(teacher.toString())) {
+            match.teacherId = new mongoose.Types.ObjectId(
+                teacher.toString()
+            );
+        }
+
         const searchValue = search.toString().trim();
 
         if (searchValue !== "") {
@@ -873,6 +934,7 @@ export const getMarks = async (
 
         const marks = result[0]?.marks || [];
         const totalMarks = result[0]?.total[0]?.count || 0;
+
         const totalPages = Math.ceil(
             totalMarks / pageLimit
         );
@@ -915,6 +977,65 @@ export const getMarks = async (
             totalPages,
             currentPage,
             limit: pageLimit
+        });
+    }
+    catch (error) {
+        next(error);
+    }
+};
+
+export const getMarkTeachers = async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+) => {
+    try {
+        const teachers = await Mark.aggregate([
+            {
+                $group: {
+                    _id: "$teacherId"
+                }
+            },
+            {
+                $match: {
+                    _id: {
+                        $ne: null
+                    }
+                }
+            },
+            {
+                $lookup: {
+                    from: "teachers",
+                    localField: "_id",
+                    foreignField: "_id",
+                    as: "teacher"
+                }
+            },
+            {
+                $unwind: "$teacher"
+            },
+            {
+                $lookup: {
+                    from: "users",
+                    localField: "teacher.userId",
+                    foreignField: "_id",
+                    as: "user"
+                }
+            },
+            {
+                $unwind: "$user"
+            },
+            {
+                $project: {
+                    _id: 0,
+                    id: "$teacher._id",
+                    name: "$user.name"
+                }
+            }
+        ]);
+
+        return res.status(200).json({
+            teachers
         });
     }
     catch (error) {
@@ -1449,6 +1570,11 @@ export const deleteTeacher = async (req: Request, res: Response, next: NextFunct
                 message: "Teacher not found"
             });
         }
+
+        await Class.updateMany(
+            { teacherId: teacher._id },
+            { $set: { teacherId: null } }
+        );
 
         await User.findByIdAndDelete(teacher.userId);
         await Teacher.findByIdAndDelete(req.params.id);
@@ -2439,29 +2565,36 @@ export const getClassOverview = async (req: Request, res: Response) => {
             | "11th"
             | "12th";
 
-        const classData = await Class.findOne({
+        let classData = await Class.findOne({
             class: studentClass
         });
 
         if (!classData) {
-            return res.status(404).json({
-                message: "Class not found"
+            classData = await Class.create({
+                class: studentClass,
+                teacherId: null
             });
         }
 
-        const classTeacher = await Teacher.findById(
-            classData.teacherId
-        );
+        let classTeacher = null;
 
-        if (!classTeacher) {
-            return res.status(404).json({
-                message: "Class teacher not found"
-            });
+        if (classData.teacherId) {
+            const teacher = await Teacher.findById(
+                classData.teacherId
+            );
+
+            if (teacher) {
+                const classTeacherUser = await User.findById(
+                    teacher.userId
+                ).select("name uid");
+
+                classTeacher = {
+                    name: classTeacherUser?.name ?? "N/A",
+                    employeeID: teacher.employeeID,
+                    uid: classTeacherUser?.uid ?? "N/A"
+                };
+            }
         }
-
-        const classTeacherUser = await User.findById(
-            classTeacher.userId
-        ).select("name uid");
 
         const students = await Student.find({
             class: studentClass
@@ -2503,19 +2636,10 @@ export const getClassOverview = async (req: Request, res: Response) => {
 
         return res.status(200).json({
             class: studentClass,
-
-            classTeacher: {
-                name: classTeacherUser?.name ?? "N/A",
-                employeeID: classTeacher.employeeID,
-                uid: classTeacherUser?.uid ?? "N/A"
-            },
-
+            classTeacher,
             students: studentCount,
-
             teachers: teacherCount,
-
             subjects: subjectCount,
-
             overallAttendance
         });
     }

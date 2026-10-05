@@ -3,6 +3,7 @@ import SideBar from "../../components/sideBar";
 import SortBy from "../../components/sortBy";
 import OrderBy from "../../components/orderBy";
 import ExamFilter from "../../components/examFilter";
+import SubjectFilter from "../../components/subjectFilter";
 import SearchBar from "../../components/searchBar";
 import Pagination from "../../components/pagination";
 import Limit from "../../components/limit";
@@ -55,6 +56,9 @@ function TeacherViewMarks() {
     const [examType, setExamType] =
         useState<ExamType>("All");
 
+    const [subjectFilter, setSubjectFilter] =
+        useState("All");
+
     const [modalOpen, setModalOpen] = useState(false);
     const [modalTitle, setModalTitle] = useState("");
     const [modalMessage, setModalMessage] = useState("");
@@ -74,7 +78,8 @@ function TeacherViewMarks() {
                 sortBy,
                 orderBy,
                 currentPage,
-                limit
+                limit,
+                subjectFilter
             );
 
             setMarksData(marks.data.marks);
@@ -105,7 +110,8 @@ function TeacherViewMarks() {
         sortBy,
         orderBy,
         currentPage,
-        limit
+        limit,
+        subjectFilter
     ]);
 
     useEffect(() => {
@@ -115,7 +121,8 @@ function TeacherViewMarks() {
         debouncedSearch,
         sortBy,
         orderBy,
-        limit
+        limit,
+        subjectFilter
     ]);
 
     function handleAddMarks() {
@@ -152,20 +159,31 @@ function TeacherViewMarks() {
 
     return (
         <div className="flex flex-col min-h-screen font-fredoka">
+
             <NavBar />
+
             <div className="flex flex-1 bg-purple-100">
+
                 <SideBar />
+
                 <div>
+
                     <Breadcrumb />
+
                     <div className="flex flex-col pt-12 pl-20 mb-10 mr-5">
+
                         <div className="flex justify-between items-center mb-10">
+
                             <div>
+
                                 <h1 className="text-3xl font-medium text-gray-900">
                                     Marks
                                 </h1>
+
                                 <p className="mt-1 text-sm text-gray-600">
                                     View and Manage Student Marks
                                 </p>
+
                             </div>
 
                             <button
@@ -175,10 +193,13 @@ function TeacherViewMarks() {
                             >
                                 Add Marks
                             </button>
+
                         </div>
 
                         <div className="flex justify-between items-center mb-3">
+
                             <div className="flex gap-8 mb-3">
+
                                 <SortBy
                                     sortOptions={sortOptions}
                                     sortBy={sortBy}
@@ -195,41 +216,59 @@ function TeacherViewMarks() {
                                     examType={examType}
                                     setExamType={setExamType}
                                 />
+
+                                <SubjectFilter
+                                    subjectFilter={subjectFilter}
+                                    setSubjectFilter={setSubjectFilter}
+                                />
+
                             </div>
 
                             <div>
+
                                 <SearchBar
                                     search={search}
                                     setSearch={setSearch}
                                 />
+
                             </div>
+
                         </div>
 
                         <div className="flex flex-wrap gap-10">
+
                             <TeacherMarksTable
                                 marksData={marksData}
                                 handleEditMarks={handleEditMarks}
                                 handleDeleteMarks={handleDeleteMarks}
                                 startIndex={startIndex}
                             />
+
                         </div>
 
                         <div className="flex justify-between mt-5 items-center">
+
                             <div className="mt-1">
+
                                 <Pagination
                                     currentPage={currentPage}
                                     totalPages={totalPages}
                                     setCurrentPage={setCurrentPage}
                                 />
+
                             </div>
 
                             <Limit
                                 setLimit={setLimit}
                                 limit={limit}
                             />
+
                         </div>
+
                     </div>
+
                 </div>
+
             </div>
 
             <Modal
@@ -238,6 +277,7 @@ function TeacherViewMarks() {
                 message={modalMessage}
                 onClose={() => setModalOpen(false)}
             />
+
         </div>
     );
 }

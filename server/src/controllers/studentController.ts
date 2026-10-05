@@ -1,6 +1,8 @@
 import { Request, Response, NextFunction } from "express";
 import Subject from "../models/Subject";
 import Student from "../models/Student";
+import User from "../models/User";
+import Class from "../models/Class";
 import Mark from "../models/Mark";
 import Teacher from "../models/Teacher";
 import Attendance from "../models/Attendance";
@@ -159,6 +161,26 @@ export const getStudentHome = async (
             });
         }
 
+        const classData = await Class.findOne({
+            class: student.class
+        });
+
+        let classTeacher = null;
+
+        if (classData?.teacherId) {
+            const teacher = await Teacher.findById(
+                classData.teacherId
+            );
+
+            if (teacher) {
+                const teacherUser = await User.findById(
+                    teacher.userId
+                ).select("name");
+
+                classTeacher = teacherUser?.name ?? null;
+            }
+        }
+
         const [totalSubjects, totalAttendance, presentAttendance] =
             await Promise.all([
                 Subject.countDocuments({
@@ -186,7 +208,8 @@ export const getStudentHome = async (
             class: student.class,
             rollNumber: student.rollNumber,
             attendancePercentage,
-            totalSubjects
+            totalSubjects,
+            classTeacher
         });
     }
     catch (error) {

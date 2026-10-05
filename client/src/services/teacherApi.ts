@@ -49,7 +49,8 @@ export const viewMarks = (
     sortBy: string,
     orderBy: string,
     currentPage: number,
-    limit: number
+    limit: number,
+    subject: string
 ) => {
     return api.get("teacher/marks", {
         params: {
@@ -58,7 +59,8 @@ export const viewMarks = (
             sortBy,
             order: orderBy,
             page: currentPage,
-            limit
+            limit,
+            subject
         }
     });
 };

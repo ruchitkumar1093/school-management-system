@@ -73,7 +73,9 @@ export const viewMarks = (
     sortBy: string,
     orderBy: string,
     currentPage: number,
-    limit: number
+    limit: number,
+    subjectFilter: string,
+    teacherFilter: string
 ) => {
     return api.get("/principal/marks", {
         params: {
@@ -83,10 +85,16 @@ export const viewMarks = (
             sortBy,
             order: orderBy,
             page: currentPage,
-            limit
+            limit,
+            subject: subjectFilter,
+            teacher: teacherFilter
         }
     });
 }
+
+export const getMarkTeachers = () => {
+    return api.get("/principal/marks/teachers");
+};
 
 //TEACHER CRUD:
 export const addTeacher = (data: any) => {
@@ -260,4 +268,14 @@ export const approveLeave = (id: string) => {
 
 export const rejectLeave = (id: string) => {
     return api.patch(`/principal/leaves/${id}/reject`);
+};
+
+export const assignClassTeacher = (
+    studentClass: string,
+    teacherId: string
+) => {
+    return api.put(
+        `/principal/class-overview/${studentClass}/teacher`,
+        { teacherId }
+    );
 };

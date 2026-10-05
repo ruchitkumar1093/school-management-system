@@ -114,6 +114,10 @@ function PrincipalViewTeachers() {
         navigate(`teacherProfile?id=${id}`);
     }
 
+    function handleTeacherMarks(id: string) {
+        navigate(`../viewMarks?teacher=${id}`);
+    }
+
     const startIndex = (currentPage - 1) * limit;
 
     const sortOptions = ["None", "Teacher Name", "Class Assigned"];
@@ -184,6 +188,7 @@ function PrincipalViewTeachers() {
                                 handleEditTeacher={handleEditTeacher}
                                 handleDeleteTeacher={handleDeleteTeacher}
                                 handleTeacherProfile={handleTeacherProfile}
+                                handleTeacherMarks={handleTeacherMarks}
                                 startIndex={startIndex}
                             />
                         </div>
@@ -206,6 +211,7 @@ function PrincipalViewTeachers() {
                     </div>
                 </div>
             </div>
+
             <Modal
                 isOpen={modalOpen}
                 title={modalTitle}

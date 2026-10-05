@@ -1,31 +1,29 @@
 import express from "express";
 const router = express.Router();
+import { getHolidays, addHoliday, updateHoliday, deleteHoliday} from "../controllers/holidayController";
 import {
     getSubjects, getStudents, getTeachers, createTeacher, getMarks, 
     updateTeacher, getTeacherById, deleteTeacher, updateStudent, deleteStudent, 
     getStudentById, getSubjectById, createSubject, updateSubject, deleteSubject, getMarkById,
     createMark, updateMark, deleteMark, getExamResults, getAttendanceSummary, getStudentsForAttendance,
     getStudentAttendance, getAttendance, getClassOverview, getPrincipalHome, getLeaveApplications,
-    approveLeave, rejectLeave
+    approveLeave, rejectLeave, assignClassTeacher, getMarkTeachers
 } from "../controllers/principalController";
 
-import { getHolidays, addHoliday, updateHoliday, deleteHoliday} from "../controllers/holidayController";
-
+router.get("/marks/teachers", getMarkTeachers);
 router.get("/home", getPrincipalHome);
-
-//GET all:
 router.get("/teachers", getTeachers);
 router.get("/students", getStudents);
 router.get("/subjects", getSubjects);
 router.get("/marks", getMarks);
+router.get("/examResults", getExamResults);
+router.get("/class-overview/:class", getClassOverview);
+router.put("/class-overview/:class/teacher", assignClassTeacher);
 
 //Leaves:
 router.get("/leaves", getLeaveApplications);
 router.patch("/leaves/:id/approve", approveLeave);
 router.patch("/leaves/:id/reject", rejectLeave);
-
-//Exam:
-router.get("/examResults", getExamResults);
 
 //Holidays:
 router.get("/getHolidays", getHolidays);
@@ -61,8 +59,5 @@ router.get("/mark/:id", getMarkById);
 router.post("/marks/addMark", createMark);
 router.put("/updateMark/:id", updateMark);
 router.delete("/deleteMark/:id", deleteMark);
-
-//Class
-router.get("/class-overview/:class", getClassOverview);
 
 export default router;
