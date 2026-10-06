@@ -14,6 +14,7 @@ import TeacherViewAttendance from "../pages/teacherPages/viewAttendance";
 import Holidays from "../pages/teacherPages/holidays";
 import LeaveApplications from "../pages/teacherPages/leaves";
 import NotFound from "../pages/notFound";
+import TeacherLeaveApplications from "../pages/teacherPages/leaveApplications";
 
 
 function TeacherRoutes() {
@@ -27,6 +28,7 @@ function TeacherRoutes() {
             <Route path="/viewMarks" element= {<TeacherViewMarks />} />
             <Route path="/viewExams" element={<TeacherViewExams />} />
             <Route path="/viewHolidays" element={<Holidays />} />
+            <Route path="/myLeaves" element={<TeacherLeaveApplications />} />   
             <Route path="/viewLeaves" element={<LeaveApplications />} />
             <Route path="/changePassword" element= {<TeacherChangePassword />} />
 

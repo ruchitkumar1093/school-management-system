@@ -4,6 +4,35 @@ export const viewHome = () => {
     return api.get("/principal/home");
 }
 
+export const getDeletedTeachers = (
+    search: string,
+    currentPage: number,
+    limit: number
+) => {
+    return api.get("/principal/deleted-teachers", {
+        params: {
+            search,
+            page: currentPage,
+            limit
+        }
+    });
+};
+
+export const getAttendanceDates = () => {
+    return api.get("/principal/attendance-dates");
+};
+
+export const restoreTeacher = (id: string) => {
+    return api.patch(`/principal/restoreTeacher/${id}`);
+};
+
+export const deactivateStudent = (id: string) => {
+    return api.patch(`/principal/deactivateStudent/${id}`);
+};
+
+export const activateStudent = (id: string) => {
+    return api.patch(`/principal/activateStudent/${id}`);
+};
 
 //GET ALL:
 export const viewTeachers = (
@@ -92,8 +121,58 @@ export const viewMarks = (
     });
 }
 
+export const getDeletedStudents = (
+    search: string,
+    currentPage: number,
+    limit: number
+) => {
+    return api.get("/principal/deleted-students", {
+        params: {
+            search,
+            page: currentPage,
+            limit
+        }
+    });
+};
+
+export const restoreStudent = (id: string) => {
+    return api.patch(`/principal/restoreStudent/${id}`);
+};
+
 export const getMarkTeachers = () => {
     return api.get("/principal/marks/teachers");
+};
+
+export const deactivateTeacher = (id: string) => {
+    return api.patch(`/principal/deactivateTeacher/${id}`);
+};
+
+export const activateTeacher = (id: string) => {
+    return api.patch(`/principal/activateTeacher/${id}`);
+};
+
+export const getTeacherLeaveApplications = (
+    status: string,
+    department: string,
+    currentPage: number,
+    limit: number
+) => {
+    return api.get("/principal/teacher-leave", {
+        params: {
+            status,
+            department,
+            page: currentPage,
+            limit
+        }
+    });
+};
+
+export const approveTeacherLeave = (id: string) => {
+    return api.patch(`/principal/teacher-leave/${id}/approve`);
+};
+
+export const rejectTeacherLeave = (id: string) => {
+    return api.patch(`/principal/teacher-leave/${id}/reject`);
 };
 
 //TEACHER CRUD:

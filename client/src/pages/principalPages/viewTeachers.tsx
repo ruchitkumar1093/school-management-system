@@ -95,7 +95,14 @@ function PrincipalViewTeachers() {
     async function handleDeleteTeacher(id: string) {
         try {
             await deleteTeacher(id);
-            await fetchTeachers();
+
+            if (teachersData.length === 1 && currentPage > 1) {
+                setCurrentPage(currentPage - 1);
+            }
+            else {
+                await fetchTeachers();
+            }
+
             setModalTitle("Success");
             setModalMessage("Teacher deleted");
             setModalOpen(true);
@@ -116,6 +123,10 @@ function PrincipalViewTeachers() {
 
     function handleTeacherMarks(id: string) {
         navigate(`../viewMarks?teacher=${id}`);
+    }
+
+    function handleDeletedTeachers() {
+        navigate("deletedTeachers");
     }
 
     const startIndex = (currentPage - 1) * limit;
@@ -145,13 +156,23 @@ function PrincipalViewTeachers() {
                                 </p>
                             </div>
 
-                            <button
-                                onClick={handleAddTeacher}
-                                type="button"
-                                className="rounded-lg bg-purple-300 px-6 py-3 font-medium text-purple-950 shadow-[0_2px_3px] transition-colors hover:bg-violet-300 cursor-pointer"
-                            >
-                                Add Teacher
-                            </button>
+                            <div className="flex gap-4">
+                                <button
+                                    onClick={handleDeletedTeachers}
+                                    type="button"
+                                    className="rounded-lg bg-purple-300 px-6 py-3 font-medium text-purple-950 shadow-[0_2px_3px] transition-colors hover:bg-violet-300 cursor-pointer"
+                                >
+                                    Deleted Teachers
+                                </button>
+
+                                <button
+                                    onClick={handleAddTeacher}
+                                    type="button"
+                                    className="rounded-lg bg-purple-300 px-6 py-3 font-medium text-purple-950 shadow-[0_2px_3px] transition-colors hover:bg-violet-300 cursor-pointer"
+                                >
+                                    Add Teacher
+                                </button>
+                            </div>
                         </div>
 
                         <div className="flex justify-between items-center mb-3">

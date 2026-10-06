@@ -7,7 +7,7 @@ const userSchema = new mongoose.Schema(
             required: true,
             trim: true
         },
-        
+
         uid: {
             type: String,
             required: true,
@@ -25,6 +25,11 @@ const userSchema = new mongoose.Schema(
             type: String,
             enum: ["principal", "teacher", "student"],
             required: true
+        },
+
+        isActive: {
+            type: Boolean,
+            default: true
         }
     },
     {

@@ -7,7 +7,10 @@ import {
     getStudentById, getSubjectById, createSubject, updateSubject, deleteSubject, getMarkById,
     createMark, updateMark, deleteMark, getExamResults, getAttendanceSummary, getStudentsForAttendance,
     getStudentAttendance, getAttendance, getClassOverview, getPrincipalHome, getLeaveApplications,
-    approveLeave, rejectLeave, assignClassTeacher, getMarkTeachers
+    approveLeave, rejectLeave, assignClassTeacher, getMarkTeachers, getDeletedStudents,
+    restoreStudent, getDeletedTeachers, restoreTeacher, deactivateStudent, activateStudent,
+    deactivateTeacher, activateTeacher, getTeacherLeaveApplications, approveTeacherLeave,
+    rejectTeacherLeave, getAttendanceDates
 } from "../controllers/principalController";
 
 router.get("/marks/teachers", getMarkTeachers);
@@ -19,6 +22,19 @@ router.get("/marks", getMarks);
 router.get("/examResults", getExamResults);
 router.get("/class-overview/:class", getClassOverview);
 router.put("/class-overview/:class/teacher", assignClassTeacher);
+router.get("/deleted-students", getDeletedStudents);
+router.patch("/restoreStudent/:id", restoreStudent);
+router.get("/deleted-teachers", getDeletedTeachers);
+router.patch("/restoreTeacher/:id", restoreTeacher);
+router.patch("/deactivateStudent/:id", deactivateStudent);
+router.patch("/activateStudent/:id", activateStudent);
+router.patch("/deactivateTeacher/:id", deactivateTeacher);
+router.patch("/activateTeacher/:id", activateTeacher);
+
+//Teacher Leaves:
+router.get("/teacher-leave", getTeacherLeaveApplications);
+router.patch("/teacher-leave/:id/approve", approveTeacherLeave);
+router.patch("/teacher-leave/:id/reject", rejectTeacherLeave);
 
 //Leaves:
 router.get("/leaves", getLeaveApplications);
@@ -36,6 +52,7 @@ router.get("/attendance/summary", getAttendanceSummary);
 router.get("/attendance/students", getStudentsForAttendance);
 router.get("/attendance/student", getStudentAttendance);
 router.get("/attendance", getAttendance);
+router.get("/attendance-dates", getAttendanceDates);
 
 //CRUD teacher
 router.get("/teacher/:id", getTeacherById);

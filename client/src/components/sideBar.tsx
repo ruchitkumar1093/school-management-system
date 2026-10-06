@@ -45,7 +45,8 @@ function SideBar() {
         { label: "My Student Marks", path: "/teacher/viewMarks" },
         { label: "Exams", path: "/teacher/viewExams" },
         { label: "Holidays", path: "/teacher/viewHolidays" },
-        { label: "Leaves", path: "/teacher/viewLeaves" }
+        { label: "Student Leaves", path: "/teacher/viewLeaves" },
+        { label: "Apply Leave", path: "/teacher/myLeaves" }
     ];
 
     const studentLinks: Link[] = [
@@ -54,7 +55,7 @@ function SideBar() {
         { label: "My Subjects", path: "/student/viewSubjects" },
         { label: "My Marks", path: "/student/viewMarks" },
         { label: "Holidays", path: "/student/viewHolidays" },
-        { label: "Leaves", path: "/student/viewLeaves" }
+        { label: "Apply Leave", path: "/student/viewLeaves" }
     ];
 
     const linksByRole: Record<Role, Link[]> = {

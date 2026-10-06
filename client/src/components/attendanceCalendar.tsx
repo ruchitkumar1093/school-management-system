@@ -9,15 +9,21 @@ type AttendanceDay = {
     status: "Present" | "Absent" | "Leave";
 };
 
+type Holiday = {
+    id: string;
+    date: string;
+    name: string;
+};
+
 type AttendanceCalendarProps = {
     attendance: AttendanceDay[];
+    holidays: Holiday[];
 };
 
 function AttendanceCalendar({
-    attendance
+    attendance,
+    holidays
 }: AttendanceCalendarProps) {
-    console.log(attendance);
-    
     const today = new Date();
 
     const [currentMonth, setCurrentMonth] = useState(
@@ -165,6 +171,19 @@ function AttendanceCalendar({
         );
     }
 
+    function getHoliday(date: Date) {
+        const formattedDate = formatDate(date);
+
+        return holidays.find(
+            (holiday) =>
+                holiday.date === formattedDate
+        );
+    }
+
+    function isSunday(date: Date) {
+        return date.getDay() === 0;
+    }
+
     function isToday(date: Date) {
         return (
             formatDate(date) ===
@@ -190,9 +209,7 @@ function AttendanceCalendar({
 
     return (
         <div className="w-full max-w-3xl rounded-2xl bg-purple-200 p-6 shadow-sm">
-
             <div className="mb-6 flex items-center justify-between">
-
                 <button
                     type="button"
                     onClick={previousMonth}
@@ -202,9 +219,7 @@ function AttendanceCalendar({
                 </button>
 
                 <div className="flex flex-col items-center">
-
                     <div className="mb-3 flex items-center gap-2">
-
                         <select
                             value={currentMonth.getMonth()}
                             onChange={(e) => {
@@ -262,13 +277,11 @@ function AttendanceCalendar({
                                 )
                             )}
                         </select>
-
                     </div>
 
                     <p className="mt-1 text-xs text-gray-600">
                         Attendance record
                     </p>
-
                 </div>
 
                 <button
@@ -278,11 +291,9 @@ function AttendanceCalendar({
                 >
                     <FiChevronRight className="text-xl" />
                 </button>
-
             </div>
 
             <div className="grid grid-cols-7 border-b border-white">
-
                 {weekdays.map((day) => (
                     <div
                         key={day}
@@ -291,11 +302,9 @@ function AttendanceCalendar({
                         {day}
                     </div>
                 ))}
-
             </div>
 
             <div className="grid grid-cols-7 border-l border-white">
-
                 {calendarDays.map(
                     (
                         {
@@ -306,6 +315,12 @@ function AttendanceCalendar({
                     ) => {
                         const attendanceRecord =
                             getAttendance(date);
+
+                        const holiday =
+                            getHoliday(date);
+
+                        const sunday =
+                            isSunday(date);
 
                         const todayDate =
                             isToday(date);
@@ -319,9 +334,7 @@ function AttendanceCalendar({
                                         : "text-gray-400"
                                 }`}
                             >
-
                                 <div className="flex items-start justify-between">
-
                                     <span
                                         className={`flex h-7 w-7 items-center justify-center rounded-full text-sm ${
                                             todayDate
@@ -331,10 +344,23 @@ function AttendanceCalendar({
                                     >
                                         {date.getDate()}
                                     </span>
-
                                 </div>
 
-                                {attendanceRecord && currentMonth && (
+                                {currentMonth && sunday ? (
+                                    <div className="mt-3 rounded-md bg-gray-200 px-2 py-1 text-center text-xs font-medium text-gray-600">
+                                        Sunday
+                                    </div>
+                                ) : currentMonth && holiday ? (
+                                    <div
+                                        className="mt-3 rounded-md bg-purple-300 px-2 py-1 text-center text-xs font-medium text-purple-900"
+                                        title={holiday.name}
+                                    >
+                                        <div>Holiday</div>
+                                        <div className="truncate">
+                                            {holiday.name}
+                                        </div>
+                                    </div>
+                                ) : currentMonth && attendanceRecord ? (
                                     <div
                                         className={`mt-3 rounded-md px-2 py-1 text-center text-xs font-medium ${getStatusClass(
                                             attendanceRecord.status
@@ -342,17 +368,14 @@ function AttendanceCalendar({
                                     >
                                         {attendanceRecord.status}
                                     </div>
-                                )}
-
+                                ) : null}
                             </div>
                         );
                     }
                 )}
-
             </div>
 
             <div className="mt-5 flex flex-wrap items-center justify-center gap-5">
-
                 <div className="flex items-center gap-2">
                     <span className="h-3 w-3 rounded-full bg-green-500" />
                     <span className="text-xs text-gray-700">
@@ -374,8 +397,20 @@ function AttendanceCalendar({
                     </span>
                 </div>
 
-            </div>
+                <div className="flex items-center gap-2">
+                    <span className="h-3 w-3 rounded-full bg-purple-600" />
+                    <span className="text-xs text-gray-700">
+                        Holiday
+                    </span>
+                </div>
 
+                <div className="flex items-center gap-2">
+                    <span className="h-3 w-3 rounded-full bg-gray-400" />
+                    <span className="text-xs text-gray-700">
+                        Sunday
+                    </span>
+                </div>
+            </div>
         </div>
     );
 }

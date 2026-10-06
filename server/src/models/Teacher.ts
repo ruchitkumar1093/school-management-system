@@ -27,6 +27,16 @@ const teacherSchema = new mongoose.Schema(
                 "7th", "8th", "9th", "10th", "11th", "12th"],
             required: true,
             trim: true
+        },
+
+        isDeleted:{
+            type: Boolean,
+            default: false
+        },
+
+        deletedAt:{
+            type: Date,
+            default: null
         }
     }
 );

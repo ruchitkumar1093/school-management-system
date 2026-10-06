@@ -11,6 +11,100 @@ import bcrypt from "bcrypt";
 import Leave from "../models/Leave";
 import AdmissionRequest from "../models/AdmissionRequest";
 
+export const getAttendanceDates = async (
+    req: Request,
+    res: Response
+) => {
+    try {
+        const attendanceDates = await Attendance.distinct("date");
+
+        const formattedDates = attendanceDates.map(
+            (date: Date) => date.toISOString().split("T")[0]
+        );
+
+        return res.status(200).json(formattedDates);
+    }
+    catch (error) {
+        console.error("Get attendance dates error:", error);
+
+        return res.status(500).json({
+            message: "Failed to get attendance dates"
+        });
+    }
+};
+
+export const deactivateStudent = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const student = await Student.findById(req.params.id);
+
+        if (!student) {
+            return res.status(404).json({
+                message: "Student not found"
+            });
+        }
+
+        const user = await User.findById(student.userId);
+
+        if (!user) {
+            return res.status(404).json({
+                message: "User not found"
+            });
+        }
+
+        if (user.isActive === false) {
+            return res.status(400).json({
+                message: "Student account is already deactivated"
+            });
+        }
+
+        user.isActive = false;
+        await user.save();
+
+        res.status(200).json({
+            message: "Student account deactivated"
+        });
+    }
+    catch (error) {
+        next(error);
+    }
+};
+
+export const activateStudent = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const student = await Student.findById(req.params.id);
+
+        if (!student) {
+            return res.status(404).json({
+                message: "Student not found"
+            });
+        }
+
+        const user = await User.findById(student.userId);
+
+        if (!user) {
+            return res.status(404).json({
+                message: "User not found"
+            });
+        }
+
+        if (user.isActive !== false) {
+            return res.status(400).json({
+                message: "Student account is already active"
+            });
+        }
+
+        user.isActive = true;
+        await user.save();
+
+        res.status(200).json({
+            message: "Student account activated"
+        });
+    }
+    catch (error) {
+        next(error);
+    }
+};
+
 export const assignClassTeacher = async (req: Request, res: Response, next: NextFunction) => {
     try {
         const studentClass = req.params.class as StudentClass;
@@ -98,7 +192,9 @@ export const getLeaveApplications = async (
             );
         }
 
-        const filter: any = {};
+        const filter: any = {
+            studentId: { $exists: true }
+        };
 
         if (status !== "All") {
             filter.status = status;
@@ -281,6 +377,227 @@ export const rejectLeave = async (
     }
 };
 
+export const getTeacherLeaveApplications = async (
+    req: Request,
+    res: Response
+) => {
+    try {
+        const status =
+            req.query.status?.toString() || "All";
+
+        const department =
+            req.query.department?.toString() || "All";
+
+        const currentPage = Math.max(
+            Number(req.query.page) || 1,
+            1
+        );
+
+        const pageLimit = Math.max(
+            Number(req.query.limit) || 5,
+            1
+        );
+
+        const skip =
+            (currentPage - 1) * pageLimit;
+
+        let teacherIds;
+
+        if (department !== "All") {
+            const teachers = await Teacher.find({
+                department: department as
+                    | "Science"
+                    | "Mathematics"
+                    | "English"
+                    | "Social Science"
+                    | "Hindi"
+            }).select("_id");
+
+            teacherIds = teachers.map(
+                teacher => teacher._id
+            );
+        }
+
+        const filter: any = {
+            teacherId: { $exists: true }
+        };
+
+        if (status !== "All") {
+            filter.status = status;
+        }
+
+        if (department !== "All") {
+            filter.teacherId = {
+                $in: teacherIds
+            };
+        }
+
+        const totalLeaves =
+            await Leave.countDocuments(filter);
+
+        const leaves = await Leave.find(filter)
+            .sort({
+                createdAt: -1
+            })
+            .skip(skip)
+            .limit(pageLimit)
+            .populate({
+                path: "teacherId",
+                populate: {
+                    path: "userId",
+                    select: "name uid"
+                }
+            });
+
+        const formattedLeaves = leaves.map(
+            (leave) => {
+                const teacher =
+                    leave.teacherId as any;
+
+                return {
+                    _id: leave._id,
+                    teacher: {
+                        _id: teacher._id,
+                        name: teacher.userId.name,
+                        uid: teacher.userId.uid,
+                        employeeID: teacher.employeeID,
+                        department: teacher.department,
+                        classAssigned: teacher.classAssigned
+                    },
+                    startDate: leave.startDate,
+                    endDate: leave.endDate,
+                    reason: leave.reason,
+                    status: leave.status
+                };
+            }
+        );
+
+        const totalPages = Math.ceil(
+            totalLeaves / pageLimit
+        );
+
+        return res.status(200).json({
+            leaves: formattedLeaves,
+            totalLeaves,
+            totalPages,
+            currentPage,
+            limit: pageLimit
+        });
+    }
+    catch (error) {
+        console.error(
+            "Get teacher leave applications error:",
+            error
+        );
+
+        return res.status(500).json({
+            message: "Failed to get teacher leave applications"
+        });
+    }
+};
+
+export const approveTeacherLeave = async (
+    req: Request,
+    res: Response
+) => {
+    try {
+        const { id } = req.params;
+
+        const leave = await Leave.findById(id);
+
+        if (!leave) {
+            return res.status(404).json({
+                message: "Leave application not found"
+            });
+        }
+
+        if (!leave.teacherId) {
+            return res.status(400).json({
+                message: "This is not a teacher leave application"
+            });
+        }
+
+        if (leave.status !== "Pending") {
+            return res.status(400).json({
+                message:
+                    "Only pending leave applications can be approved"
+            });
+        }
+
+        leave.status = "Approved";
+
+        await leave.save();
+
+        return res.status(200).json({
+            message:
+                "Teacher leave application approved successfully",
+            leave
+        });
+    }
+    catch (error) {
+        console.error(
+            "Approve teacher leave error:",
+            error
+        );
+
+        return res.status(500).json({
+            message:
+                "Failed to approve teacher leave application"
+        });
+    }
+};
+
+export const rejectTeacherLeave = async (
+    req: Request,
+    res: Response
+) => {
+    try {
+        const { id } = req.params;
+
+        const leave = await Leave.findById(id);
+
+        if (!leave) {
+            return res.status(404).json({
+                message: "Leave application not found"
+            });
+        }
+
+        if (!leave.teacherId) {
+            return res.status(400).json({
+                message: "This is not a teacher leave application"
+            });
+        }
+
+        if (leave.status !== "Pending") {
+            return res.status(400).json({
+                message:
+                    "Only pending leave applications can be rejected"
+            });
+        }
+
+        leave.status = "Rejected";
+
+        await leave.save();
+
+        return res.status(200).json({
+            message:
+                "Teacher leave application rejected successfully",
+            leave
+        });
+    }
+    catch (error) {
+        console.error(
+            "Reject teacher leave error:",
+            error
+        );
+
+        return res.status(500).json({
+            message:
+                "Failed to reject teacher leave application"
+        });
+    }
+};
+
 export const getPrincipalHome = async (
     req: Request,
     res: Response
@@ -313,6 +630,111 @@ export const getPrincipalHome = async (
     }
 };
 
+export const getDeletedStudents = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const {
+            search = "",
+            page = "1",
+            limit = "5"
+        } = req.query;
+
+        const currentPage = Math.max(Number(page), 1);
+        const pageLimit = Math.max(Number(limit), 1);
+        const skip = (currentPage - 1) * pageLimit;
+
+        const match: any = {
+            isDeleted: true
+        };
+
+        const pipeline: any[] = [
+            {
+                $lookup: {
+                    from: "users",
+                    localField: "userId",
+                    foreignField: "_id",
+                    as: "userId"
+                }
+            },
+            {
+                $unwind: "$userId"
+            }
+        ];
+
+        if (search.toString().trim() !== "") {
+            match["userId.name"] = {
+                $regex: search.toString().trim(),
+                $options: "i"
+            };
+        }
+
+        pipeline.push({
+            $match: match
+        });
+
+        pipeline.push({
+            $sort: {
+                deletedAt: -1
+            }
+        });
+
+        pipeline.push({
+            $facet: {
+                students: [
+                    { $skip: skip },
+                    { $limit: pageLimit }
+                ],
+                total: [
+                    { $count: "count" }
+                ]
+            }
+        });
+
+        const result = await Student.aggregate(pipeline);
+
+        const students = result[0]?.students || [];
+        const totalStudents = result[0]?.total[0]?.count || 0;
+        const totalPages = Math.ceil(totalStudents / pageLimit);
+
+        res.status(200).json({
+            students,
+            totalStudents,
+            totalPages,
+            currentPage,
+            limit: pageLimit
+        });
+    }
+    catch (error) {
+        next(error);
+    }
+};
+
+export const restoreStudent = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const student = await Student.findOne({
+            _id: req.params.id,
+            isDeleted: true
+        });
+
+        if (!student) {
+            return res.status(404).json({
+                message: "Deleted student not found"
+            });
+        }
+
+        student.isDeleted = false;
+        student.deletedAt = null;
+
+        await student.save();
+
+        res.status(200).json({
+            message: "Student restored"
+        });
+    }
+    catch (error) {
+        next(error);
+    }
+};
+
 //GET all
 export const getStudents = async (req: Request, res: Response, next: NextFunction) => {
     try {
@@ -329,7 +751,12 @@ export const getStudents = async (req: Request, res: Response, next: NextFunctio
         const pageLimit = Math.max(Number(limit), 1);
         const skip = (currentPage - 1) * pageLimit;
 
-        const match: any = {};
+        const match: any = {
+            $or: [
+                { isDeleted: false },
+                { isDeleted: { $exists: false } }
+            ]
+        };
 
         if (classFilter !== "All") {
             match.class = classFilter;
@@ -448,7 +875,12 @@ export const getTeachers = async (req: Request, res: Response, next: NextFunctio
         const pageLimit = Math.max(Number(limit), 1);
         const skip = (currentPage - 1) * pageLimit;
 
-        const match: any = {};
+        const match: any = {
+            $or: [
+                { isDeleted: false },
+                { isDeleted: { $exists: false } }
+            ]
+        };
 
         if (classFilter !== "All") {
             match.classAssigned = classFilter;
@@ -539,6 +971,113 @@ export const getTeachers = async (req: Request, res: Response, next: NextFunctio
             totalPages,
             currentPage,
             limit: pageLimit
+        });
+    }
+    catch (error) {
+        next(error);
+    }
+};
+
+export const getDeletedTeachers = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const {
+            search = "",
+            page = "1",
+            limit = "5"
+        } = req.query;
+
+        const currentPage = Math.max(Number(page), 1);
+        const pageLimit = Math.max(Number(limit), 1);
+        const skip = (currentPage - 1) * pageLimit;
+
+        const match: any = {
+            isDeleted: true
+        };
+
+        const pipeline: any[] = [
+            {
+                $lookup: {
+                    from: "users",
+                    localField: "userId",
+                    foreignField: "_id",
+                    as: "userId"
+                }
+            },
+            {
+                $unwind: "$userId"
+            }
+        ];
+
+        const searchValue = search.toString().trim();
+
+        if (searchValue !== "") {
+            match["userId.name"] = {
+                $regex: searchValue,
+                $options: "i"
+            };
+        }
+
+        pipeline.push({
+            $match: match
+        });
+
+        pipeline.push({
+            $sort: {
+                deletedAt: -1
+            }
+        });
+
+        pipeline.push({
+            $facet: {
+                teachers: [
+                    { $skip: skip },
+                    { $limit: pageLimit }
+                ],
+                total: [
+                    { $count: "count" }
+                ]
+            }
+        });
+
+        const result = await Teacher.aggregate(pipeline);
+
+        const teachers = result[0]?.teachers || [];
+        const totalTeachers = result[0]?.total[0]?.count || 0;
+        const totalPages = Math.ceil(totalTeachers / pageLimit);
+
+        res.status(200).json({
+            teachers,
+            totalTeachers,
+            totalPages,
+            currentPage,
+            limit: pageLimit
+        });
+    }
+    catch (error) {
+        next(error);
+    }
+};
+
+export const restoreTeacher = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const teacher = await Teacher.findOne({
+            _id: req.params.id,
+            isDeleted: true
+        });
+
+        if (!teacher) {
+            return res.status(404).json({
+                message: "Deleted teacher not found"
+            });
+        }
+
+        teacher.isDeleted = false;
+        teacher.deletedAt = null;
+
+        await teacher.save();
+
+        res.status(200).json({
+            message: "Teacher restored"
         });
     }
     catch (error) {
@@ -1576,21 +2115,23 @@ export const deleteTeacher = async (req: Request, res: Response, next: NextFunct
             { $set: { teacherId: null } }
         );
 
-        await User.findByIdAndDelete(teacher.userId);
-        await Teacher.findByIdAndDelete(req.params.id);
+        teacher.isDeleted = true;
+        teacher.deletedAt = new Date();
+
+        await teacher.save();
 
         res.status(200).json({
-            message: "teacher Deleted"
+            message: "Teacher deleted"
         });
     }
     catch (error) {
         next(error);
     }
-}
+};
 
 export const getTeacherById = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const teacher = await Teacher.findById(req.params.id).populate("userId", "name uid role");
+        const teacher = await Teacher.findById(req.params.id).populate("userId", "name uid role isActive");
 
         if (!teacher) {
             return res.status(404).json({
@@ -1682,7 +2223,7 @@ export const updateTeacher = async (req: Request, res: Response, next: NextFunct
 
 export const getStudentById = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const student = await Student.findById(req.params.id).populate("userId", "name uid role");
+        const student = await Student.findById(req.params.id).populate("userId", "name uid role isActive");
 
         if (!student) {
             return res.status(404).json({
@@ -1699,6 +2240,78 @@ export const getStudentById = async (req: Request, res: Response, next: NextFunc
         res.status(200).json({
             ...student.toObject(),
             admissionRequest
+        });
+    }
+    catch (error) {
+        next(error);
+    }
+};
+
+export const deactivateTeacher = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const teacher = await Teacher.findById(req.params.id);
+
+        if (!teacher) {
+            return res.status(404).json({
+                message: "Teacher not found"
+            });
+        }
+
+        const user = await User.findById(teacher.userId);
+
+        if (!user) {
+            return res.status(404).json({
+                message: "User not found"
+            });
+        }
+
+        if (user.isActive === false) {
+            return res.status(400).json({
+                message: "Teacher account is already deactivated"
+            });
+        }
+
+        user.isActive = false;
+        await user.save();
+
+        res.status(200).json({
+            message: "Teacher account deactivated"
+        });
+    }
+    catch (error) {
+        next(error);
+    }
+};
+
+export const activateTeacher = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const teacher = await Teacher.findById(req.params.id);
+
+        if (!teacher) {
+            return res.status(404).json({
+                message: "Teacher not found"
+            });
+        }
+
+        const user = await User.findById(teacher.userId);
+
+        if (!user) {
+            return res.status(404).json({
+                message: "User not found"
+            });
+        }
+
+        if (user.isActive !== false) {
+            return res.status(400).json({
+                message: "Teacher account is already active"
+            });
+        }
+
+        user.isActive = true;
+        await user.save();
+
+        res.status(200).json({
+            message: "Teacher account activated"
         });
     }
     catch (error) {
@@ -1771,17 +2384,19 @@ export const deleteStudent = async (req: Request, res: Response, next: NextFunct
             });
         }
 
-        await User.findByIdAndDelete(student.userId);
-        await Student.findByIdAndDelete(req.params.id);
+        student.isDeleted = true;
+        student.deletedAt = new Date();
+
+        await student.save();
 
         res.status(200).json({
-            message: "student Deleted"
+            message: "Student deleted"
         });
     }
     catch (error) {
         next(error);
     }
-}
+};
 
 //Marks CRUD
 
@@ -2066,9 +2681,9 @@ export const getAttendanceSummary = async (
         }).select("studentId");
 
         const leaveStudentIds = new Set(
-            approvedLeaves.map(
-                leave => leave.studentId.toString()
-            )
+            approvedLeaves
+                .filter(leave => leave.studentId)
+                .map(leave => leave.studentId!.toString())
         );
 
         const classes = [
@@ -2292,9 +2907,11 @@ export const getAttendance = async (
         });
 
         const leaveStudentIds = new Set(
-            approvedLeaves.map(leave =>
-                leave.studentId.toString()
-            )
+            approvedLeaves
+                .filter(leave => leave.studentId)
+                .map(leave =>
+                    leave.studentId!.toString()
+                )
         );
 
         const attendanceRecords = attendance
@@ -2310,13 +2927,14 @@ export const getAttendance = async (
                 status: record.status
             }));
 
-        const leaveRecords = approvedLeaves.map(
-            leave => {
+        const leaveRecords = approvedLeaves
+            .filter(leave => leave.studentId)
+            .map(leave => {
                 const student =
                     filteredStudents.find(
                         student =>
                             student._id.toString() ===
-                            leave.studentId.toString()
+                            leave.studentId!.toString()
                     );
 
                 return {
@@ -2325,8 +2943,7 @@ export const getAttendance = async (
                     date: selectedDate,
                     status: "Leave"
                 };
-            }
-        );
+            });
 
         const result = [
             ...attendanceRecords,

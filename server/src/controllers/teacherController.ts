@@ -8,6 +8,137 @@ import Attendance from "../models/Attendance";
 import mongoose from "mongoose";
 import Leave from "../models/Leave";
 import AdmissionRequest from "../models/AdmissionRequest";
+import Holiday from "../models/Holiday";
+
+export const applyLeave = async (
+    req: Request,
+    res: Response
+) => {
+    try {
+        const userId = req.user?.userId;
+
+        const {
+            startDate,
+            endDate,
+            reason
+        } = req.body;
+
+        if (
+            !startDate ||
+            !endDate ||
+            !reason?.trim()
+        ) {
+            return res.status(400).json({
+                message:
+                    "Start date, end date and reason are required"
+            });
+        }
+
+        if (endDate < startDate) {
+            return res.status(400).json({
+                message:
+                    "End date cannot be before start date"
+            });
+        }
+
+        const teacher = await Teacher.findOne({
+            userId
+        });
+
+        if (!teacher) {
+            return res.status(404).json({
+                message: "Teacher not found"
+            });
+        }
+
+        const leave = await Leave.create({
+            teacherId: teacher._id,
+            startDate: new Date(startDate),
+            endDate: new Date(endDate),
+            reason: reason.trim(),
+            status: "Pending"
+        });
+
+        return res.status(201).json(leave);
+    }
+    catch (error) {
+        console.error(
+            "Apply teacher leave error:",
+            error
+        );
+
+        return res.status(500).json({
+            message: "Failed to apply for leave"
+        });
+    }
+};
+
+export const getMyLeaves = async (
+    req: Request,
+    res: Response
+) => {
+    try {
+        const userId = req.user?.userId;
+
+        const teacher = await Teacher.findOne({
+            userId
+        });
+
+        if (!teacher) {
+            return res.status(404).json({
+                message: "Teacher not found"
+            });
+        }
+
+        const currentPage = Math.max(
+            Number(req.query.page) || 1,
+            1
+        );
+
+        const pageLimit = Math.max(
+            Number(req.query.limit) || 5,
+            1
+        );
+
+        const totalLeaves = await Leave.countDocuments({
+            teacherId: teacher._id
+        });
+
+        const skip =
+            (currentPage - 1) * pageLimit;
+
+        const leaves = await Leave.find({
+            teacherId: teacher._id
+        })
+            .sort({
+                createdAt: -1
+            })
+            .skip(skip)
+            .limit(pageLimit);
+
+        const totalPages = Math.ceil(
+            totalLeaves / pageLimit
+        );
+
+        return res.status(200).json({
+            leaves,
+            totalLeaves,
+            totalPages,
+            currentPage,
+            limit: pageLimit
+        });
+    }
+    catch (error) {
+        console.error(
+            "Get teacher leaves error:",
+            error
+        );
+
+        return res.status(500).json({
+            message: "Failed to get leave applications"
+        });
+    }
+};
 
 export const getLeaveApplications = async (
     req: Request,
@@ -1627,9 +1758,9 @@ export const getStudentsForAttendance = async (
         }).select("studentId");
 
         const studentsOnLeave = new Set(
-            approvedLeaves.map(
-                leave => leave.studentId.toString()
-            )
+            approvedLeaves
+                .filter(leave => leave.studentId)
+                .map(leave => leave.studentId!.toString())
         );
 
         const studentsWithLeaveStatus =
@@ -1644,9 +1775,9 @@ export const getStudentsForAttendance = async (
             student => student._id.toString()
         );
 
-        const leaveStudentIds = approvedLeaves.map(
-            leave => leave.studentId.toString()
-        );
+        const leaveStudentIds = approvedLeaves
+            .filter(leave => leave.studentId)
+            .map(leave => leave.studentId!.toString());
 
         const totalStudents =
             studentsWithLeaveStatus.length;
@@ -1689,7 +1820,24 @@ export const createAttendance = async (
     try {
         const { date, attendance } = req.body;
 
-        // Find the logged-in teacher
+        const selectedDate = new Date(date);
+
+        if (selectedDate.getDay() === 0) {
+            return res.status(400).json({
+                message: "Attendance cannot be marked on Sunday"
+            });
+        }
+
+        const holiday = await Holiday.findOne({
+            date: selectedDate
+        });
+
+        if (holiday) {
+            return res.status(400).json({
+                message: `Attendance cannot be marked because ${holiday.name} is a holiday`
+            });
+        }
+
         const teacher = await Teacher.findOne({
             userId: req.user?.userId
         });
@@ -1700,7 +1848,6 @@ export const createAttendance = async (
             });
         }
 
-        // Get all students belonging to the teacher's assigned class
         const students = await Student.find({
             class: teacher.classAssigned
         }).select("_id");
@@ -1709,7 +1856,6 @@ export const createAttendance = async (
             student._id.toString()
         );
 
-        // Check that all submitted students belong to this teacher's class
         const invalidStudent = attendance.some(
             (record: { studentId: string; status: string }) =>
                 !studentIds.includes(record.studentId)
@@ -1721,10 +1867,9 @@ export const createAttendance = async (
             });
         }
 
-        // Check if attendance has already been submitted for this date
         const existingAttendance = await Attendance.findOne({
             studentId: { $in: studentIds },
-            date: new Date(date)
+            date: selectedDate
         });
 
         if (existingAttendance) {
@@ -1733,7 +1878,6 @@ export const createAttendance = async (
             });
         }
 
-        // Prepare attendance records
         const attendanceRecords = attendance.map(
             (record: {
                 studentId: string;
@@ -1741,12 +1885,11 @@ export const createAttendance = async (
             }) => ({
                 studentId: record.studentId,
                 teacherId: teacher._id,
-                date: new Date(date),
+                date: selectedDate,
                 status: record.status
             })
         );
 
-        // Save all attendance records
         await Attendance.insertMany(attendanceRecords);
 
         res.status(201).json({
@@ -1870,10 +2013,9 @@ export const getAttendance = async (
             });
 
         const leaveStudentIds = new Set(
-            approvedLeaves.map(
-                leave =>
-                    leave.studentId.toString()
-            )
+            approvedLeaves
+                .filter(leave => leave.studentId)
+                .map(leave => leave.studentId!.toString())
         );
 
         const attendanceWithoutLeave =
@@ -1892,22 +2034,24 @@ export const getAttendance = async (
                 }));
 
         const leaveRecords =
-            approvedLeaves.map(leave => {
+            approvedLeaves
+                .filter(leave => leave.studentId)
+                .map(leave => {
 
-                const student =
-                    filteredStudents.find(
-                        student =>
-                            student._id.toString() ===
-                            leave.studentId.toString()
-                    );
+                    const student =
+                        filteredStudents.find(
+                            student =>
+                                student._id.toString() ===
+                                leave.studentId!.toString()
+                        );
 
-                return {
-                    _id: `${leave._id}-${date}`,
-                    studentId: student,
-                    date: selectedDate,
-                    status: "Leave"
-                };
-            });
+                    return {
+                        _id: `${leave._id}-${date}`,
+                        studentId: student,
+                        date: selectedDate,
+                        status: "Leave"
+                    };
+                });
 
         const result = [
             ...attendanceWithoutLeave,

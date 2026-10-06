@@ -65,6 +65,26 @@ export const viewMarks = (
     });
 };
 
+export const applyLeave = (data: {
+    startDate: string;
+    endDate: string;
+    reason: string;
+}) => {
+    return api.post("/teacher/leave", data);
+};
+
+export const getMyLeaves = (
+    currentPage: number,
+    limit: number
+) => {
+    return api.get("/teacher/leave", {
+        params: {
+            page: currentPage,
+            limit
+        }
+    });
+};
+
 //STUDENT CRUD:
 export const deleteStudent = (id: string) => {
     return api.delete(`/teacher/deleteStudent/${id}`);

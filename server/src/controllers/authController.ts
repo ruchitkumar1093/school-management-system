@@ -14,6 +14,12 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
             });
         }
 
+        if (user.isActive === false) {
+            return res.status(403).json({
+                message: "Account is deactivated"
+            });
+        }
+
         const isMatch = await bcrypt.compare(password, user.password);
 
         if (!isMatch) {

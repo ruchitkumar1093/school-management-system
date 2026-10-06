@@ -15,7 +15,7 @@ const classes = [
     "10th",
     "11th",
     "12th"
-];
+] as const;
 
 const cities = [
     "Chandigarh",
@@ -44,15 +44,17 @@ const bloodGroups = [
     "AB-",
     "O+",
     "O-"
-];
+] as const;
 
 const genders = [
     "Male",
     "Female",
     "Other"
-];
+] as const;
 
-const getPreviousClass = (studentClass: string) => {
+const getPreviousClass = (
+    studentClass: typeof classes[number]
+) => {
     const index = classes.indexOf(studentClass);
 
     if (index <= 0) {
@@ -62,7 +64,7 @@ const getPreviousClass = (studentClass: string) => {
     return classes[index - 1];
 };
 
-const getRandomItem = <T>(items: T[]) => {
+const getRandomItem = <T>(items: readonly T[]) => {
     return items[Math.floor(Math.random() * items.length)];
 };
 
@@ -109,7 +111,8 @@ export async function up() {
             continue;
         }
 
-        const studentClass = student.class;
+        const studentClass =
+            student.class as typeof classes[number];
         const city = getRandomItem(cities);
         const state = getRandomItem(states);
         const gender = getRandomItem(genders);

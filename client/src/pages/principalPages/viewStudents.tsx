@@ -4,7 +4,6 @@ import SortBy from "../../components/sortBy";
 import OrderBy from "../../components/orderBy";
 import ClassFilter from "../../components/classFilter";
 import SearchBar from "../../components/searchBar";
-
 import Pagination from "../../components/pagination";
 import Limit from "../../components/limit";
 
@@ -91,7 +90,13 @@ function PrincipalViewStudents() {
     async function handleDeleteStudent(id: string) {
         try {
             await deleteStudent(id);
-            await fetchStudents();
+
+            if (studentsData.length === 1 && currentPage > 1) {
+                setCurrentPage(currentPage - 1);
+            }
+            else {
+                await fetchStudents();
+            }
 
             setModalTitle("Success");
             setModalMessage("Student deleted");
@@ -110,6 +115,10 @@ function PrincipalViewStudents() {
 
     function handleStudentProfile(id: string) {
         navigate(`studentProfile?id=${id}`);
+    }
+
+    function handleDeletedStudents() {
+        navigate("deletedStudents");
     }
 
     const sortOptions = ["None", "Student Name", "Class", "Roll no"];
@@ -138,6 +147,14 @@ function PrincipalViewStudents() {
                                     View and Manage Students
                                 </p>
                             </div>
+
+                            <button
+                                type="button"
+                                onClick={handleDeletedStudents}
+                                className="rounded-lg bg-purple-300 px-6 py-3 font-medium text-purple-950 shadow-[0_2px_3px] transition-colors hover:bg-violet-300 cursor-pointer"
+                            >
+                                Deleted Students
+                            </button>
                         </div>
 
                         <div className="flex justify-between items-center mb-3">

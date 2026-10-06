@@ -7,6 +7,7 @@ import HolidayCalendar from "../../components/holidayCalendar";
 
 import {
     getHolidays,
+    getAttendanceDates,
     addHoliday,
     updateHoliday,
     deleteHoliday
@@ -21,17 +22,21 @@ type Holiday = {
 function Holidays() {
 
     const [holidays, setHolidays] = useState<Holiday[]>([]);
+    const [attendanceDates, setAttendanceDates] = useState<string[]>([]);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
 
-        const fetchHolidays = async () => {
+        const fetchData = async () => {
 
             try {
 
-                const response = await getHolidays();
+                const [holidaysResponse, attendanceResponse] = await Promise.all([
+                    getHolidays(),
+                    getAttendanceDates()
+                ]);
 
-                const formattedHolidays = response.data.map(
+                const formattedHolidays = holidaysResponse.data.map(
                     (holiday: {
                         _id: string;
                         date: string;
@@ -43,12 +48,15 @@ function Holidays() {
                     })
                 );
 
+                const formattedAttendanceDates = attendanceResponse.data;
+
                 setHolidays(formattedHolidays);
+                setAttendanceDates(formattedAttendanceDates);
 
             }
             catch (error) {
 
-                console.error("Failed to fetch holidays:", error);
+                console.error("Failed to fetch holiday data:", error);
 
             }
             finally {
@@ -58,7 +66,7 @@ function Holidays() {
             }
         };
 
-        fetchHolidays();
+        fetchData();
 
     }, []);
 
@@ -87,9 +95,14 @@ function Holidays() {
             ]);
 
         }
-        catch (error) {
+        catch (error: any) {
 
             console.error("Failed to add holiday:", error);
+
+            throw new Error(
+                error.response?.data?.message ||
+                "Failed to add holiday"
+            );
 
         }
 
@@ -124,9 +137,14 @@ function Holidays() {
             );
 
         }
-        catch (error) {
+        catch (error: any) {
 
             console.error("Failed to update holiday:", error);
+
+            throw new Error(
+                error.response?.data?.message ||
+                "Failed to update holiday"
+            );
 
         }
 
@@ -146,9 +164,14 @@ function Holidays() {
             );
 
         }
-        catch (error) {
+        catch (error: any) {
 
             console.error("Failed to delete holiday:", error);
+
+            throw new Error(
+                error.response?.data?.message ||
+                "Failed to delete holiday"
+            );
 
         }
 
@@ -170,7 +193,6 @@ function Holidays() {
 
                     <div className="flex flex-1 flex-col px-16 pt-10 pb-12">
 
-                        {/* Header */}
                         <div className="mb-8">
 
                             <h1 className="text-3xl font-medium text-gray-900">
@@ -183,8 +205,6 @@ function Holidays() {
 
                         </div>
 
-
-                        {/* Calendar */}
                         {loading ? (
 
                             <p className="text-gray-600">
@@ -195,6 +215,7 @@ function Holidays() {
 
                             <HolidayCalendar
                                 holidays={holidays}
+                                attendanceDates={attendanceDates}
                                 editable={true}
                                 onAddHoliday={handleAddHoliday}
                                 onUpdateHoliday={handleUpdateHoliday}

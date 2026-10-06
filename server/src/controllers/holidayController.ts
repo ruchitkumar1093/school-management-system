@@ -1,6 +1,6 @@
 import { Request, Response } from "express";
 import Holiday from "../models/Holiday";
-
+import Attendance from "../models/Attendance";
 
 // Get all holidays
 export const getHolidays = async (
@@ -37,8 +37,10 @@ export const addHoliday = async (
             });
         }
 
+        const holidayDate = new Date(date);
+
         const existingHoliday = await Holiday.findOne({
-            date: new Date(date)
+            date: holidayDate
         });
 
         if (existingHoliday) {
@@ -47,8 +49,18 @@ export const addHoliday = async (
             });
         }
 
+        const existingAttendance = await Attendance.findOne({
+            date: holidayDate
+        });
+
+        if (existingAttendance) {
+            return res.status(409).json({
+                message: "A holiday cannot be created because attendance has already been marked for this date"
+            });
+        }
+
         const holiday = await Holiday.create({
-            date: new Date(date),
+            date: holidayDate,
             name: name.trim()
         });
 
@@ -87,8 +99,10 @@ export const updateHoliday = async (
             });
         }
 
+        const holidayDate = new Date(date);
+
         const duplicateHoliday = await Holiday.findOne({
-            date: new Date(date),
+            date: holidayDate,
             _id: { $ne: id }
         });
 
@@ -98,7 +112,17 @@ export const updateHoliday = async (
             });
         }
 
-        existingHoliday.date = new Date(date);
+        const existingAttendance = await Attendance.findOne({
+            date: holidayDate
+        });
+
+        if (existingAttendance) {
+            return res.status(409).json({
+                message: "This holiday cannot be moved to this date because attendance has already been marked for this date"
+            });
+        }
+
+        existingHoliday.date = holidayDate;
         existingHoliday.name = name.trim();
 
         await existingHoliday.save();

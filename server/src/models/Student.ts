@@ -16,15 +16,27 @@ const studentSchema = new mongoose.Schema(
             required: true,
             trim: true
         },
+
         section: {
             type: String,
             enum: ["A", "B", "C", "D"],
             trim: true
         },
+
         rollNumber: {
             type: Number,
             required: true,
             trim: true
+        },
+
+        isDeleted: {
+            type: Boolean,
+            default: false
+        },
+
+        deletedAt: {
+            type: Date,
+            default: null
         }
     }
 );

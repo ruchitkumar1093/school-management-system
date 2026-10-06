@@ -1,15 +1,13 @@
 import { useEffect, useState } from "react";
-
 import NavBar from "../../components/navBar";
 import SideBar from "../../components/sideBar";
 import Breadcrumb from "../../components/breadcrumb";
 import Pagination from "../../components/pagination";
 import Limit from "../../components/limit";
-
 import {
     applyLeave,
     getMyLeaves
-} from "../../services/studentApi";
+} from "../../services/teacherApi";
 
 type LeaveStatus = "Pending" | "Approved" | "Rejected";
 

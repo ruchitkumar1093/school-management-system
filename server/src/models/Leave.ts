@@ -4,8 +4,12 @@ const leaveSchema = new mongoose.Schema(
     {
         studentId: {
             type: mongoose.Schema.Types.ObjectId,
-            ref: "Student",
-            required: true
+            ref: "Student"
+        },
+
+        teacherId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "Teacher"
         },
 
         startDate: {

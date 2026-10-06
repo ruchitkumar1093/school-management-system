@@ -4,7 +4,7 @@ import { getHolidays } from "../controllers/holidayController";
 import { getStudents, getSubjects, getMarks, createStudent, getStudentById,
     updateStudent, deleteStudent, getMarkById, createMark, updateMark, deleteMark, getExamResults,
     getStudentsForAttendance, createAttendance, getAttendance, getStudentAttendance, getTeacherHome,
-    getTeacher, getLeaveApplications, approveLeave, rejectLeave, getAttendanceStudents
+    getTeacher, getLeaveApplications, approveLeave, rejectLeave, getAttendanceStudents, applyLeave, getMyLeaves
  } 
 from "../controllers/teacherController";
 
@@ -20,6 +20,10 @@ router.get("/examResults", getExamResults);
 router.get("/leaves", getLeaveApplications);
 router.patch("/leaves/:id/approve", approveLeave);
 router.patch("/leaves/:id/reject", rejectLeave);
+
+//Apply Leave:
+router.post("/leave", applyLeave);
+router.get("/leave", getMyLeaves);
 
 //Attendance:
 router.get("/attendance/students", getAttendanceStudents);
