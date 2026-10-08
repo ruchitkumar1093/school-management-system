@@ -25,6 +25,7 @@ function AttendanceCalendar({
     holidays
 }: AttendanceCalendarProps) {
     const today = new Date();
+console.log(attendance);
 
     const [currentMonth, setCurrentMonth] = useState(
         new Date(

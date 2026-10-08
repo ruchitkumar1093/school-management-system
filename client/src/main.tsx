@@ -7,7 +7,7 @@ import './index.css'
 import App from './App.tsx'
 
 createRoot(document.getElementById('root')!).render(
-  <StrictMode>
+  // <StrictMode>
     <BrowserRouter>
       <AuthProvider>
         <AdmissionProvider>
@@ -15,5 +15,5 @@ createRoot(document.getElementById('root')!).render(
         </AdmissionProvider>
       </AuthProvider>
     </BrowserRouter>
-  </StrictMode>,
+  // </StrictMode>,
 )

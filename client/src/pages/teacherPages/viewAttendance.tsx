@@ -6,12 +6,10 @@ import Limit from "../../components/limit";
 import { useNavigate } from "react-router-dom";
 import Breadcrumb from "../../components/breadcrumb";
 import {
-    getAttendance,
-    getAttendanceStudents,
-    getStudentAttendance
+    getAttendance, getAttendanceStudents, getStudentAttendance
 } from "../../services/teacherApi";
 import TeacherViewAttendanceTable from "../../components/viewAttendanceTable";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 
 type Attendance = {
     _id: string;
@@ -35,7 +33,6 @@ type Student = {
         uid: string;
     };
     class: string;
-    rollNumber: string;
 };
 
 function TeacherViewAttendance() {
@@ -102,47 +99,86 @@ function TeacherViewAttendance() {
     const [studentPercentage, setStudentPercentage] =
         useState("0.00");
 
+    const dateAttendanceCache = useRef(
+        new Map<
+            string,
+            {
+                attendance: Attendance[];
+                totalPages: number;
+                presentCount: number;
+                absentCount: number;
+                leaveCount: number;
+            }
+        >()
+    );
+
+    const studentAttendanceCache = useRef(
+        new Map<
+            string,
+            {
+                attendance: Attendance[];
+                totalPages: number;
+                presentCount: number;
+                absentCount: number;
+                leaveCount: number;
+                totalDays: number;
+                percentage: string;
+            }
+        >()
+    );
+    const studentsLoaded = useRef(false);
+
     const fetchAttendance = async () => {
+        const cacheKey =
+            `${date}|${debouncedSearch}|${currentPage}|${limit}`;
+
+        const cachedData =
+            dateAttendanceCache.current.get(cacheKey);
+
+        if (cachedData) {
+            setAttendanceData(cachedData.attendance);
+            setDateWiseTotalPages(cachedData.totalPages);
+            setPresentCount(cachedData.presentCount);
+            setAbsentCount(cachedData.absentCount);
+            setLeaveCount(cachedData.leaveCount);
+
+            return;
+        }
+
         try {
-            const response =
-                await getAttendance(
-                    date,
-                    debouncedSearch,
-                    currentPage,
-                    limit
-                );
-
-            setAttendanceData(
-                response.data.attendance
+            const response = await getAttendance(
+                date,
+                debouncedSearch,
+                currentPage,
+                limit
             );
 
-            setDateWiseTotalPages(
-                response.data.totalPages
+            const data = {
+                attendance: response.data.attendance,
+                totalPages: response.data.totalPages,
+                presentCount: response.data.presentCount,
+                absentCount: response.data.absentCount,
+                leaveCount: response.data.leaveCount
+            };
+
+            dateAttendanceCache.current.set(
+                cacheKey,
+                data
             );
 
-            setPresentCount(
-                response.data.presentCount
-            );
-
-            setAbsentCount(
-                response.data.absentCount
-            );
-
-            setLeaveCount(
-                response.data.leaveCount
-            );
+            setAttendanceData(data.attendance);
+            setDateWiseTotalPages(data.totalPages);
+            setPresentCount(data.presentCount);
+            setAbsentCount(data.absentCount);
+            setLeaveCount(data.leaveCount);
         }
         catch (error) {
             console.log(error);
 
             setAttendanceData([]);
-
             setDateWiseTotalPages(1);
-
             setPresentCount(0);
-
             setAbsentCount(0);
-
             setLeaveCount(0);
         }
     };
@@ -152,13 +188,10 @@ function TeacherViewAttendance() {
             const response =
                 await getAttendanceStudents();
 
-            setStudents(
-                response.data
-            );
+            setStudents(response.data);
         }
         catch (error) {
             console.log(error);
-
             setStudents([]);
         }
     };
@@ -166,6 +199,46 @@ function TeacherViewAttendance() {
     const fetchStudentAttendance = async (
         studentId: string
     ) => {
+        const cacheKey =
+            `${studentId}|${currentPage}|${limit}`;
+
+        const cachedData =
+            studentAttendanceCache.current.get(
+                cacheKey
+            );
+
+        if (cachedData) {
+            setStudentAttendance(
+                cachedData.attendance
+            );
+
+            setStudentWiseTotalPages(
+                cachedData.totalPages
+            );
+
+            setStudentPresentCount(
+                cachedData.presentCount
+            );
+
+            setStudentAbsentCount(
+                cachedData.absentCount
+            );
+
+            setStudentLeaveCount(
+                cachedData.leaveCount
+            );
+
+            setStudentTotalDays(
+                cachedData.totalDays
+            );
+
+            setStudentPercentage(
+                cachedData.percentage
+            );
+
+            return;
+        }
+
         try {
             const response =
                 await getStudentAttendance(
@@ -174,49 +247,58 @@ function TeacherViewAttendance() {
                     limit
                 );
 
+            const data = {
+                attendance: response.data.attendance,
+                totalPages: response.data.totalPages,
+                presentCount: response.data.presentCount,
+                absentCount: response.data.absentCount,
+                leaveCount: response.data.leaveCount,
+                totalDays: response.data.totalDays,
+                percentage: response.data.percentage
+            };
+
+            studentAttendanceCache.current.set(
+                cacheKey,
+                data
+            );
+
             setStudentAttendance(
-                response.data.attendance
+                data.attendance
             );
 
             setStudentWiseTotalPages(
-                response.data.totalPages
+                data.totalPages
             );
 
             setStudentPresentCount(
-                response.data.presentCount
+                data.presentCount
             );
 
             setStudentAbsentCount(
-                response.data.absentCount
+                data.absentCount
             );
 
             setStudentLeaveCount(
-                response.data.leaveCount
+                data.leaveCount
             );
 
             setStudentTotalDays(
-                response.data.totalDays
+                data.totalDays
             );
 
             setStudentPercentage(
-                response.data.percentage
+                data.percentage
             );
         }
         catch (error) {
             console.log(error);
 
             setStudentAttendance([]);
-
             setStudentWiseTotalPages(1);
-
             setStudentPresentCount(0);
-
             setStudentAbsentCount(0);
-
             setStudentLeaveCount(0);
-
             setStudentTotalDays(0);
-
             setStudentPercentage("0.00");
         }
     };
@@ -232,38 +314,42 @@ function TeacherViewAttendance() {
     }, [search]);
 
     useEffect(() => {
-        if (viewMode === "date") {
-            fetchAttendance();
+        if (viewMode !== "date") {
+            return;
         }
+
+        fetchAttendance();
     }, [
         date,
         debouncedSearch,
         currentPage,
-        limit,
-        viewMode
+        limit
     ]);
 
     useEffect(() => {
+        if (viewMode !== "student" || studentsLoaded.current) {
+            return;
+        }
+
         fetchStudents();
-    }, []);
+        studentsLoaded.current = true;
+    }, [viewMode]);
 
     useEffect(() => {
         if (
-            viewMode === "student" &&
-            selectedStudent
+            viewMode !== "student" ||
+            !selectedStudent
         ) {
-            fetchStudentAttendance(
-                selectedStudent
-            );
+            return;
         }
-        else {
-            setStudentAttendance([]);
-        }
+
+        fetchStudentAttendance(
+            selectedStudent
+        );
     }, [
         selectedStudent,
         currentPage,
-        limit,
-        viewMode
+        limit
     ]);
 
     useEffect(() => {
@@ -536,204 +622,203 @@ function TeacherViewAttendance() {
 
                                 {selectedStudent &&
                                     selectedStudentData && (
-                                    <>
-                                        <div className="flex gap-8 mb-2">
-                                            <div>
-                                                Student:
+                                        <>
+                                            <div className="flex gap-8 mb-2">
+                                                <div>
+                                                    Student:
 
-                                                <span className="font-medium ml-1">
-                                                    {
-                                                        selectedStudentData
-                                                            .userId.name
-                                                    }
-                                                </span>
+                                                    <span className="font-medium ml-1">
+                                                        {
+                                                            selectedStudentData
+                                                                .userId.name
+                                                        }
+                                                    </span>
+                                                </div>
+
+                                                <div>
+                                                    UID:
+
+                                                    <span className="font-medium ml-1">
+                                                        {
+                                                            selectedStudentData
+                                                                .userId.uid
+                                                                .toUpperCase()
+                                                        }
+                                                    </span>
+                                                </div>
+
+                                                <div>
+                                                    Class:
+
+                                                    <span className="font-medium ml-1">
+                                                        {
+                                                            selectedStudentData
+                                                                .class
+                                                        }
+                                                    </span>
+                                                </div>
                                             </div>
 
-                                            <div>
-                                                UID:
+                                            <div className="flex gap-8 mb-5">
+                                                <div>
+                                                    Total Days:
 
-                                                <span className="font-medium ml-1">
-                                                    {
-                                                        selectedStudentData
-                                                            .userId.uid
-                                                            .toUpperCase()
-                                                    }
-                                                </span>
+                                                    <span className="font-medium ml-1">
+                                                        {
+                                                            studentTotalDays
+                                                        }
+                                                    </span>
+                                                </div>
+
+                                                <div>
+                                                    Present:
+
+                                                    <span className="font-medium ml-1">
+                                                        {
+                                                            studentPresentCount
+                                                        }
+                                                    </span>
+                                                </div>
+
+                                                <div>
+                                                    Absent:
+
+                                                    <span className="font-medium ml-1">
+                                                        {
+                                                            studentAbsentCount
+                                                        }
+                                                    </span>
+                                                </div>
+
+                                                <div>
+                                                    Leave:
+
+                                                    <span className="font-medium ml-1">
+                                                        {
+                                                            studentLeaveCount
+                                                        }
+                                                    </span>
+                                                </div>
+
+                                                <div>
+                                                    Attendance:
+
+                                                    <span className="font-medium ml-1">
+                                                        {
+                                                            studentPercentage
+                                                        }%
+                                                    </span>
+                                                </div>
                                             </div>
 
-                                            <div>
-                                                Class:
+                                            <div className="flex flex-wrap gap-10">
+                                                <div className="overflow-x-auto rounded-lg shadow-md">
+                                                    <table className="w-full border-collapse bg-purple-200 text-left text-gray-900">
+                                                        <thead>
+                                                            <tr className="border-b border-purple-300 bg-purple-300/80">
+                                                                <th className="border-r border-purple-300 p-3 font-semibold text-purple-950">
+                                                                    S.No.
+                                                                </th>
 
-                                                <span className="font-medium ml-1">
-                                                    {
-                                                        selectedStudentData
-                                                            .class
-                                                    }
-                                                </span>
-                                            </div>
-                                        </div>
+                                                                <th className="border-r border-purple-300 p-3 font-semibold text-purple-950">
+                                                                    Date
+                                                                </th>
 
-                                        <div className="flex gap-8 mb-5">
-                                            <div>
-                                                Total Days:
-
-                                                <span className="font-medium ml-1">
-                                                    {
-                                                        studentTotalDays
-                                                    }
-                                                </span>
-                                            </div>
-
-                                            <div>
-                                                Present:
-
-                                                <span className="font-medium ml-1">
-                                                    {
-                                                        studentPresentCount
-                                                    }
-                                                </span>
-                                            </div>
-
-                                            <div>
-                                                Absent:
-
-                                                <span className="font-medium ml-1">
-                                                    {
-                                                        studentAbsentCount
-                                                    }
-                                                </span>
-                                            </div>
-
-                                            <div>
-                                                Leave:
-
-                                                <span className="font-medium ml-1">
-                                                    {
-                                                        studentLeaveCount
-                                                    }
-                                                </span>
-                                            </div>
-
-                                            <div>
-                                                Attendance:
-
-                                                <span className="font-medium ml-1">
-                                                    {
-                                                        studentPercentage
-                                                    }%
-                                                </span>
-                                            </div>
-                                        </div>
-
-                                        <div className="flex flex-wrap gap-10">
-                                            <div className="overflow-x-auto rounded-lg shadow-md">
-                                                <table className="w-full border-collapse bg-purple-200 text-left text-gray-900">
-                                                    <thead>
-                                                        <tr className="border-b border-purple-300 bg-purple-300/80">
-                                                            <th className="border-r border-purple-300 p-3 font-semibold text-purple-950">
-                                                                S.No.
-                                                            </th>
-
-                                                            <th className="border-r border-purple-300 p-3 font-semibold text-purple-950">
-                                                                Date
-                                                            </th>
-
-                                                            <th className="p-3 font-semibold text-purple-950">
-                                                                Attendance
-                                                            </th>
-                                                        </tr>
-                                                    </thead>
-
-                                                    <tbody>
-                                                        {studentAttendance.length === 0 ? (
-                                                            <tr>
-                                                                <td
-                                                                    colSpan={3}
-                                                                    className="p-4 text-center text-gray-500"
-                                                                >
-                                                                    No attendance records found
-                                                                </td>
+                                                                <th className="p-3 font-semibold text-purple-950">
+                                                                    Attendance
+                                                                </th>
                                                             </tr>
-                                                        ) : (
-                                                            studentAttendance.map(
-                                                                (
-                                                                    record,
-                                                                    index
-                                                                ) => (
-                                                                    <tr
-                                                                        key={
-                                                                            record._id
-                                                                        }
-                                                                        className="border-b border-purple-300 last:border-b-0 transition-colors hover:bg-purple-300/40"
+                                                        </thead>
+
+                                                        <tbody>
+                                                            {studentAttendance.length === 0 ? (
+                                                                <tr>
+                                                                    <td
+                                                                        colSpan={3}
+                                                                        className="p-4 text-center text-gray-500"
                                                                     >
-                                                                        <td className="border-r border-purple-300 p-3 font-medium">
-                                                                            {
-                                                                                studentWiseStartIndex +
-                                                                                index +
-                                                                                1
+                                                                        No attendance records found
+                                                                    </td>
+                                                                </tr>
+                                                            ) : (
+                                                                studentAttendance.map(
+                                                                    (
+                                                                        record,
+                                                                        index
+                                                                    ) => (
+                                                                        <tr
+                                                                            key={
+                                                                                record._id
                                                                             }
-                                                                        </td>
+                                                                            className="border-b border-purple-300 last:border-b-0 transition-colors hover:bg-purple-300/40"
+                                                                        >
+                                                                            <td className="border-r border-purple-300 p-3 font-medium">
+                                                                                {
+                                                                                    studentWiseStartIndex +
+                                                                                    index +
+                                                                                    1
+                                                                                }
+                                                                            </td>
 
-                                                                        <td className="border-r border-purple-300 p-3">
-                                                                            {
-                                                                                new Date(
-                                                                                    record.date
-                                                                                ).toLocaleDateString(
-                                                                                    "en-GB"
-                                                                                )
-                                                                            }
-                                                                        </td>
+                                                                            <td className="border-r border-purple-300 p-3">
+                                                                                {
+                                                                                    new Date(
+                                                                                        record.date
+                                                                                    ).toLocaleDateString(
+                                                                                        "en-GB"
+                                                                                    )
+                                                                                }
+                                                                            </td>
 
-                                                                        <td
-                                                                            className={`p-3 text-center font-medium ${
-                                                                                record.status ===
-                                                                                "Present"
+                                                                            <td
+                                                                                className={`p-3 text-center font-medium ${record.status ===
+                                                                                    "Present"
                                                                                     ? "text-emerald-600"
                                                                                     : record.status ===
-                                                                                      "Absent"
-                                                                                    ? "text-red-600"
-                                                                                    : "text-amber-600"
-                                                                            }`}
-                                                                        >
-                                                                            {
-                                                                                record.status
-                                                                            }
-                                                                        </td>
-                                                                    </tr>
+                                                                                        "Absent"
+                                                                                        ? "text-red-600"
+                                                                                        : "text-amber-600"
+                                                                                    }`}
+                                                                            >
+                                                                                {
+                                                                                    record.status
+                                                                                }
+                                                                            </td>
+                                                                        </tr>
+                                                                    )
                                                                 )
-                                                            )
-                                                        )}
-                                                    </tbody>
-                                                </table>
+                                                            )}
+                                                        </tbody>
+                                                    </table>
+                                                </div>
                                             </div>
-                                        </div>
 
-                                        <div className="flex justify-between mt-5 mb-5 items-center">
-                                            <div className="mt-1">
-                                                <Pagination
-                                                    currentPage={
-                                                        currentPage
+                                            <div className="flex justify-between mt-5 mb-5 items-center">
+                                                <div className="mt-1">
+                                                    <Pagination
+                                                        currentPage={
+                                                            currentPage
+                                                        }
+                                                        totalPages={
+                                                            studentWiseTotalPages
+                                                        }
+                                                        setCurrentPage={
+                                                            setCurrentPage
+                                                        }
+                                                    />
+                                                </div>
+
+                                                <Limit
+                                                    setLimit={
+                                                        setLimit
                                                     }
-                                                    totalPages={
-                                                        studentWiseTotalPages
-                                                    }
-                                                    setCurrentPage={
-                                                        setCurrentPage
+                                                    limit={
+                                                        limit
                                                     }
                                                 />
                                             </div>
-
-                                            <Limit
-                                                setLimit={
-                                                    setLimit
-                                                }
-                                                limit={
-                                                    limit
-                                                }
-                                            />
-                                        </div>
-                                    </>
-                                )}
+                                        </>
+                                    )}
 
                                 {!selectedStudent && (
                                     <div className="text-lg text-gray-600">

@@ -5,15 +5,12 @@ import Pagination from "../../components/pagination";
 import Limit from "../../components/limit";
 import { useNavigate } from "react-router-dom";
 import Breadcrumb from "../../components/breadcrumb";
-
 import {
     getAttendance,
-    getAttendanceSummary,
     getStudentsForAttendance,
     getStudentAttendance
 } from "../../services/principalApi";
-
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 
 type Summary = {
     class: string;
@@ -61,71 +58,88 @@ type StudentClass =
     | "11th"
     | "12th";
 
+type AttendanceCache = {
+    attendance: Attendance[];
+    summary: Summary;
+    totalPages: number;
+};
+
+type StudentAttendanceCache = {
+    attendance: Attendance[];
+    totalPages: number;
+    stats: {
+        presentCount: number;
+        absentCount: number;
+        leaveCount: number;
+        totalDays: number;
+    };
+};
+
+const classes: StudentClass[] = [
+    "1st",
+    "2nd",
+    "3rd",
+    "4th",
+    "5th",
+    "6th",
+    "7th",
+    "8th",
+    "9th",
+    "10th",
+    "11th",
+    "12th"
+];
+
 function PrincipalAttendance() {
     const navigate = useNavigate();
-
     const [viewMode, setViewMode] = useState<"date" | "student">("date");
-
     const [selectedClass, setSelectedClass] = useState<StudentClass>("1st");
-
     const [selectedDate, setSelectedDate] = useState(
         new Date().toISOString().split("T")[0]
     );
-
-    const [summaryData, setSummaryData] = useState<Summary[]>([]);
-
+    const [summaryData, setSummaryData] = useState<Summary | null>(null);
     const [attendance, setAttendance] = useState<Attendance[]>([]);
-
     const [students, setStudents] = useState<Student[]>([]);
-
     const [selectedStudent, setSelectedStudent] = useState("");
-
     const [studentAttendance, setStudentAttendance] = useState<Attendance[]>([]);
-
     const [studentStats, setStudentStats] = useState({
         presentCount: 0,
         absentCount: 0,
         leaveCount: 0,
         totalDays: 0
     });
-
     const [search, setSearch] = useState("");
     const [debouncedSearch, setDebouncedSearch] = useState("");
-
     const [currentPage, setCurrentPage] = useState(1);
+    const [studentCurrentPage, setStudentCurrentPage] = useState(1);
     const [limit, setLimit] = useState(10);
-
+    const [studentLimit, setStudentLimit] = useState(10);
     const [totalPages, setTotalPages] = useState(1);
     const [studentAttendanceTotalPages, setStudentAttendanceTotalPages] = useState(1);
 
-    const classes: StudentClass[] = [
-        "1st",
-        "2nd",
-        "3rd",
-        "4th",
-        "5th",
-        "6th",
-        "7th",
-        "8th",
-        "9th",
-        "10th",
-        "11th",
-        "12th"
-    ];
+    const attendanceCache = useRef<Map<string, AttendanceCache>>(new Map());
+    const studentsCache = useRef<Map<StudentClass, Student[]>>(new Map());
+    const studentAttendanceCache = useRef<Map<string, StudentAttendanceCache>>(new Map());
 
-    const fetchAttendanceSummary = async () => {
-        try {
-            const response = await getAttendanceSummary(selectedDate);
+    const getAttendanceCacheKey = () => {
+        return `${selectedClass}-${selectedDate}-${debouncedSearch}-${currentPage}-${limit}`;
+    };
 
-            setSummaryData(response.data);
-        }
-        catch (error) {
-            console.log(error);
-            setSummaryData([]);
-        }
+    const getStudentAttendanceCacheKey = (studentId: string) => {
+        return `${studentId}-${studentCurrentPage}-${studentLimit}`;
     };
 
     const fetchAttendance = async () => {
+        const cacheKey = getAttendanceCacheKey();
+        const cachedData = attendanceCache.current.get(cacheKey);
+
+        if (cachedData) {
+            setAttendance(cachedData.attendance);
+            setSummaryData(cachedData.summary);
+            setTotalPages(cachedData.totalPages);
+            return;
+        }
+
         try {
             const response = await getAttendance(
                 selectedClass,
@@ -135,20 +149,37 @@ function PrincipalAttendance() {
                 limit
             );
 
-            setAttendance(response.data.attendance);
-            setTotalPages(response.data.totalPages);
+            const data: AttendanceCache = {
+                attendance: response.data.attendance,
+                summary: response.data.summary,
+                totalPages: response.data.totalPages
+            };
+
+            attendanceCache.current.set(cacheKey, data);
+
+            setAttendance(data.attendance);
+            setSummaryData(data.summary);
+            setTotalPages(data.totalPages);
         }
         catch (error) {
             console.log(error);
             setAttendance([]);
+            setSummaryData(null);
             setTotalPages(1);
         }
     };
 
     const fetchStudents = async () => {
+        const cachedStudents = studentsCache.current.get(selectedClass);
+
+        if (cachedStudents) {
+            setStudents(cachedStudents);
+            return;
+        }
+
         try {
             const response = await getStudentsForAttendance(selectedClass);
-
+            studentsCache.current.set(selectedClass, response.data);
             setStudents(response.data);
         }
         catch (error) {
@@ -158,28 +189,46 @@ function PrincipalAttendance() {
     };
 
     const fetchStudentAttendance = async (studentId: string) => {
+        const cacheKey = getStudentAttendanceCacheKey(studentId);
+        const cachedData = studentAttendanceCache.current.get(cacheKey);
+
+        if (cachedData) {
+            setStudentAttendance(cachedData.attendance);
+            setStudentAttendanceTotalPages(cachedData.totalPages);
+            setStudentStats(cachedData.stats);
+            return;
+        }
+
         try {
             const response = await getStudentAttendance(
                 studentId,
-                currentPage,
-                limit
+                studentCurrentPage,
+                studentLimit
             );
 
-            setStudentAttendance(response.data.attendance);
-            setStudentAttendanceTotalPages(response.data.totalPages);
-
-            setStudentStats({
+            const stats = {
                 presentCount: response.data.presentCount,
                 absentCount: response.data.absentCount,
                 leaveCount: response.data.leaveCount,
                 totalDays: response.data.totalDays
-            });
+            };
+
+            const data: StudentAttendanceCache = {
+                attendance: response.data.attendance,
+                totalPages: response.data.totalPages,
+                stats
+            };
+
+            studentAttendanceCache.current.set(cacheKey, data);
+
+            setStudentAttendance(data.attendance);
+            setStudentAttendanceTotalPages(data.totalPages);
+            setStudentStats(data.stats);
         }
         catch (error) {
             console.log(error);
             setStudentAttendance([]);
             setStudentAttendanceTotalPages(1);
-
             setStudentStats({
                 presentCount: 0,
                 absentCount: 0,
@@ -200,28 +249,6 @@ function PrincipalAttendance() {
     }, [search]);
 
     useEffect(() => {
-        fetchAttendanceSummary();
-    }, [selectedDate]);
-
-    useEffect(() => {
-        fetchStudents();
-
-        setSelectedStudent("");
-        setStudentAttendance([]);
-        setSearch("");
-        setDebouncedSearch("");
-        setCurrentPage(1);
-        setStudentAttendanceTotalPages(1);
-
-        setStudentStats({
-            presentCount: 0,
-            absentCount: 0,
-            leaveCount: 0,
-            totalDays: 0
-        });
-    }, [selectedClass, selectedDate]);
-
-    useEffect(() => {
         if (viewMode === "date") {
             fetchAttendance();
         }
@@ -230,34 +257,28 @@ function PrincipalAttendance() {
         selectedDate,
         debouncedSearch,
         currentPage,
-        limit,
-        viewMode
+        limit
     ]);
+
+    useEffect(() => {
+        if (viewMode === "student") {
+            fetchStudents();
+        }
+    }, [selectedClass, viewMode]);
 
     useEffect(() => {
         if (viewMode === "student" && selectedStudent) {
             fetchStudentAttendance(selectedStudent);
         }
-        else if (viewMode === "student") {
-            setStudentAttendance([]);
-            setStudentAttendanceTotalPages(1);
-
-            setStudentStats({
-                presentCount: 0,
-                absentCount: 0,
-                leaveCount: 0,
-                totalDays: 0
-            });
-        }
-    }, [selectedStudent, currentPage, limit, viewMode]);
+    }, [
+        selectedStudent,
+        studentCurrentPage,
+        studentLimit
+    ]);
 
     useEffect(() => {
         setCurrentPage(1);
     }, [debouncedSearch, limit]);
-
-    const selectedClassSummary = summaryData.find(
-        (summary) => summary.class === selectedClass
-    );
 
     const studentPresentCount = studentStats.presentCount;
     const studentAbsentCount = studentStats.absentCount;
@@ -270,6 +291,8 @@ function PrincipalAttendance() {
             : "0.00";
 
     const startIndex = (currentPage - 1) * limit;
+    const studentStartIndex =
+        (studentCurrentPage - 1) * studentLimit;
 
     const selectedStudentData = students.find(
         (student) => student._id === selectedStudent
@@ -278,41 +301,33 @@ function PrincipalAttendance() {
     return (
         <div className="flex flex-col min-h-screen font-fredoka">
             <NavBar />
-
             <div className="flex flex-1 bg-purple-100">
                 <SideBar />
-
                 <div>
                     <Breadcrumb />
-
                     <div className="flex flex-col pt-12 pl-20 mb-10">
                         <div className="flex justify-between items-center mb-6">
                             <div>
                                 <h1 className="text-3xl font-medium text-gray-900">
                                     Attendance
                                 </h1>
-
                                 <p className="mt-1 text-sm text-gray-600">
                                     View and Manage Attendance
                                 </p>
                             </div>
-
                             <button
                                 type="button"
-                                onClick={() => navigate(-1)}
+                                onClick={() => navigate("/principal/attendance")}
                                 className="rounded-lg bg-purple-300 px-3 py-3 font-medium text-purple-950 shadow-[0_2px_3px] transition-colors hover:bg-violet-300 cursor-pointer"
                             >
                                 View Summary
                             </button>
-
                             {viewMode === "date" ? (
                                 <button
                                     type="button"
                                     onClick={() => {
                                         setViewMode("student");
-                                        setSearch("");
-                                        setDebouncedSearch("");
-                                        setCurrentPage(1);
+                                        setStudentCurrentPage(1);
                                     }}
                                     className="rounded-lg bg-purple-300 px-3 py-3 font-medium text-purple-950 shadow-[0_2px_3px] transition-colors hover:bg-violet-300 cursor-pointer"
                                 >
@@ -323,9 +338,6 @@ function PrincipalAttendance() {
                                     type="button"
                                     onClick={() => {
                                         setViewMode("date");
-                                        setSearch("");
-                                        setDebouncedSearch("");
-                                        setCurrentPage(1);
                                     }}
                                     className="rounded-lg bg-purple-300 px-1 py-3 font-medium text-purple-950 shadow-[0_2px_3px] transition-colors hover:bg-violet-300 cursor-pointer"
                                 >
@@ -333,7 +345,6 @@ function PrincipalAttendance() {
                                 </button>
                             )}
                         </div>
-
                         {viewMode === "date" && (
                             <>
                                 <div className="flex justify-between items-center mb-6">
@@ -344,7 +355,6 @@ function PrincipalAttendance() {
                                         >
                                             Class:
                                         </label>
-
                                         <select
                                             id="class"
                                             value={selectedClass}
@@ -365,14 +375,12 @@ function PrincipalAttendance() {
                                                 </option>
                                             ))}
                                         </select>
-
                                         <label
                                             htmlFor="date"
                                             className="text-lg ml-4"
                                         >
                                             Date:
                                         </label>
-
                                         <input
                                             max={new Date().toISOString().split("T")[0]}
                                             type="date"
@@ -384,14 +392,12 @@ function PrincipalAttendance() {
                                             }}
                                             className="border-2 border-gray-500 rounded-sm p-2 focus:outline-none focus:border-gray-900"
                                         />
-
                                         <SearchBar
                                             search={search}
                                             setSearch={setSearch}
                                         />
                                     </div>
                                 </div>
-
                                 <div className="flex gap-8 mb-5">
                                     <div>
                                         Class:
@@ -399,31 +405,27 @@ function PrincipalAttendance() {
                                             {selectedClass}
                                         </span>
                                     </div>
-
                                     <div>
                                         Present:
                                         <span className="font-medium ml-1">
-                                            {selectedClassSummary?.present ?? 0}
+                                            {summaryData?.present ?? 0}
                                         </span>
                                     </div>
-
                                     <div>
                                         Absent:
                                         <span className="font-medium ml-1">
-                                            {selectedClassSummary?.absent ?? 0}
+                                            {summaryData?.absent ?? 0}
                                         </span>
                                     </div>
-
                                     <div>
                                         Attendance:
                                         <span className="font-medium ml-1">
-                                            {selectedClassSummary
-                                                ? `${selectedClassSummary.percentage.toFixed(2)}%`
+                                            {summaryData
+                                                ? `${summaryData.percentage.toFixed(2)}%`
                                                 : "0.00%"}
                                         </span>
                                     </div>
                                 </div>
-
                                 <div className="overflow-x-auto rounded-lg shadow-md">
                                     <table className="w-full border-collapse bg-purple-200 text-left text-gray-900">
                                         <thead>
@@ -431,21 +433,17 @@ function PrincipalAttendance() {
                                                 <th className="border-r border-purple-300 p-3 font-semibold text-purple-950">
                                                     S.No.
                                                 </th>
-
                                                 <th className="border-r border-purple-300 p-3 font-semibold text-purple-950">
                                                     Student Name:
                                                 </th>
-
                                                 <th className="border-r border-purple-300 p-3 font-semibold text-purple-950">
                                                     UID:
                                                 </th>
-
                                                 <th className="p-3 font-semibold text-purple-950">
                                                     Attendance:
                                                 </th>
                                             </tr>
                                         </thead>
-
                                         <tbody>
                                             {attendance.length === 0 ? (
                                                 <tr>
@@ -466,23 +464,19 @@ function PrincipalAttendance() {
                                                             <td className="border-r border-purple-300 p-3 font-medium">
                                                                 {startIndex + index + 1}
                                                             </td>
-
                                                             <td className="border-r border-purple-300 p-3 font-medium">
                                                                 {record.studentId.userId.name}
                                                             </td>
-
                                                             <td className="border-r border-purple-300 p-3">
                                                                 {record.studentId.userId.uid.toUpperCase()}
                                                             </td>
-
                                                             <td
-                                                                className={`p-3 text-center font-medium ${
-                                                                    record.status === "Present"
-                                                                        ? "text-emerald-600"
-                                                                        : record.status === "Leave"
+                                                                className={`p-3 text-center font-medium ${record.status === "Present"
+                                                                    ? "text-emerald-600"
+                                                                    : record.status === "Leave"
                                                                         ? "text-amber-600"
                                                                         : "text-red-600"
-                                                                }`}
+                                                                    }`}
                                                             >
                                                                 {record.status}
                                                             </td>
@@ -493,14 +487,12 @@ function PrincipalAttendance() {
                                         </tbody>
                                     </table>
                                 </div>
-
                                 <div className="flex justify-between mt-5 mb-5 items-center">
                                     <Pagination
                                         currentPage={currentPage}
                                         totalPages={totalPages}
                                         setCurrentPage={setCurrentPage}
                                     />
-
                                     <Limit
                                         setLimit={setLimit}
                                         limit={limit}
@@ -508,7 +500,6 @@ function PrincipalAttendance() {
                                 </div>
                             </>
                         )}
-
                         {viewMode === "student" && (
                             <>
                                 <div className="flex justify-between items-center mb-6">
@@ -519,7 +510,6 @@ function PrincipalAttendance() {
                                         >
                                             Class:
                                         </label>
-
                                         <select
                                             id="studentClass"
                                             value={selectedClass}
@@ -528,7 +518,7 @@ function PrincipalAttendance() {
                                                     e.target.value as StudentClass
                                                 );
                                                 setSelectedStudent("");
-                                                setCurrentPage(1);
+                                                setStudentCurrentPage(1);
                                             }}
                                             className="border-2 border-gray-500 rounded-sm p-2 focus:outline-none focus:border-gray-900"
                                         >
@@ -541,27 +531,24 @@ function PrincipalAttendance() {
                                                 </option>
                                             ))}
                                         </select>
-
                                         <label
                                             htmlFor="student"
                                             className="text-lg ml-4"
                                         >
                                             Student:
                                         </label>
-
                                         <select
                                             id="student"
                                             value={selectedStudent}
                                             onChange={(e) => {
                                                 setSelectedStudent(e.target.value);
-                                                setCurrentPage(1);
+                                                setStudentCurrentPage(1);
                                             }}
                                             className="border-2 border-gray-500 rounded-sm p-2 focus:outline-none focus:border-gray-900"
                                         >
                                             <option value="">
                                                 Select Student
                                             </option>
-
                                             {students.map((student) => (
                                                 <option
                                                     key={student._id}
@@ -575,13 +562,11 @@ function PrincipalAttendance() {
                                         </select>
                                     </div>
                                 </div>
-
                                 {!selectedStudent && (
                                     <div className="text-gray-600">
                                         Please select a student to view attendance.
                                     </div>
                                 )}
-
                                 {selectedStudent && selectedStudentData && (
                                     <>
                                         <div className="flex gap-8 mb-5">
@@ -591,21 +576,18 @@ function PrincipalAttendance() {
                                                     {selectedStudentData.userId.name}
                                                 </span>
                                             </div>
-
                                             <div>
                                                 UID:
                                                 <span className="font-medium ml-1">
                                                     {selectedStudentData.userId.uid.toUpperCase()}
                                                 </span>
                                             </div>
-
                                             <div>
                                                 Class:
                                                 <span className="font-medium ml-1">
                                                     {selectedStudentData.class}
                                                 </span>
                                             </div>
-
                                             <div>
                                                 Roll Number:
                                                 <span className="font-medium ml-1">
@@ -613,7 +595,6 @@ function PrincipalAttendance() {
                                                 </span>
                                             </div>
                                         </div>
-
                                         <div className="flex gap-8 mb-5">
                                             <div>
                                                 Total Days:
@@ -621,28 +602,24 @@ function PrincipalAttendance() {
                                                     {studentTotalDays}
                                                 </span>
                                             </div>
-
                                             <div>
                                                 Present:
                                                 <span className="font-medium ml-1">
                                                     {studentPresentCount}
                                                 </span>
                                             </div>
-
                                             <div>
                                                 Absent:
                                                 <span className="font-medium ml-1">
                                                     {studentAbsentCount}
                                                 </span>
                                             </div>
-
                                             <div>
                                                 Leave:
                                                 <span className="font-medium ml-1">
                                                     {studentLeaveCount}
                                                 </span>
                                             </div>
-
                                             <div>
                                                 Attendance:
                                                 <span className="font-medium ml-1">
@@ -650,7 +627,6 @@ function PrincipalAttendance() {
                                                 </span>
                                             </div>
                                         </div>
-
                                         <div className="overflow-x-auto rounded-lg shadow-md">
                                             <table className="w-full border-collapse bg-purple-200 text-left text-gray-900">
                                                 <thead>
@@ -658,17 +634,14 @@ function PrincipalAttendance() {
                                                         <th className="border-r border-purple-300 p-3 font-semibold text-purple-950">
                                                             S.No.
                                                         </th>
-
                                                         <th className="border-r border-purple-300 p-3 font-semibold text-purple-950">
                                                             Date
                                                         </th>
-
                                                         <th className="p-3 font-semibold text-purple-950">
                                                             Attendance
                                                         </th>
                                                     </tr>
                                                 </thead>
-
                                                 <tbody>
                                                     {studentAttendance.length === 0 ? (
                                                         <tr>
@@ -687,9 +660,8 @@ function PrincipalAttendance() {
                                                                     className="border-b border-purple-300 last:border-b-0 transition-colors hover:bg-purple-300/40"
                                                                 >
                                                                     <td className="border-r border-purple-300 p-3 font-medium">
-                                                                        {startIndex + index + 1}
+                                                                        {studentStartIndex + index + 1}
                                                                     </td>
-
                                                                     <td className="border-r border-purple-300 p-3">
                                                                         {new Date(
                                                                             record.date
@@ -697,15 +669,13 @@ function PrincipalAttendance() {
                                                                             "en-GB"
                                                                         )}
                                                                     </td>
-
                                                                     <td
-                                                                        className={`p-3 font-medium ${
-                                                                            record.status === "Present"
-                                                                                ? "text-emerald-600"
-                                                                                : record.status === "Leave"
+                                                                        className={`p-3 font-medium ${record.status === "Present"
+                                                                            ? "text-emerald-600"
+                                                                            : record.status === "Leave"
                                                                                 ? "text-amber-600"
                                                                                 : "text-rose-600"
-                                                                        }`}
+                                                                            }`}
                                                                     >
                                                                         {record.status}
                                                                     </td>
@@ -716,17 +686,15 @@ function PrincipalAttendance() {
                                                 </tbody>
                                             </table>
                                         </div>
-
                                         <div className="flex justify-between mt-5 mb-5 items-center">
                                             <Pagination
-                                                currentPage={currentPage}
+                                                currentPage={studentCurrentPage}
                                                 totalPages={studentAttendanceTotalPages}
-                                                setCurrentPage={setCurrentPage}
+                                                setCurrentPage={setStudentCurrentPage}
                                             />
-
                                             <Limit
-                                                setLimit={setLimit}
-                                                limit={limit}
+                                                setLimit={setStudentLimit}
+                                                limit={studentLimit}
                                             />
                                         </div>
                                     </>

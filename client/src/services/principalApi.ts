@@ -18,10 +18,6 @@ export const getDeletedTeachers = (
     });
 };
 
-export const getAttendanceDates = () => {
-    return api.get("/principal/attendance-dates");
-};
-
 export const restoreTeacher = (id: string) => {
     return api.patch(`/principal/restoreTeacher/${id}`);
 };
@@ -41,7 +37,8 @@ export const viewTeachers = (
     sortBy: string,
     orderBy: string,
     currentPage: number,
-    limit: number
+    limit: number,
+    showDeleted: boolean
 ) => {
     return api.get("/principal/teachers", {
         params: {
@@ -50,9 +47,14 @@ export const viewTeachers = (
             sortBy,
             order: orderBy,
             page: currentPage,
-            limit
+            limit,
+            showDeleted
         }
     });
+};
+
+export const permanentlyDeleteTeacher = (id: string) => {
+    return api.delete(`/principal/teachers/${id}/permanent`);
 };
 
 export const viewStudents = (
@@ -61,7 +63,8 @@ export const viewStudents = (
     sortBy: string,
     orderBy: string,
     currentPage: number,
-    limit: number
+    limit: number,
+    showDeleted: boolean
 ) => {
     return api.get("/principal/students", {
         params: {
@@ -70,7 +73,8 @@ export const viewStudents = (
             sortBy,
             order: orderBy,
             page: currentPage,
-            limit
+            limit,
+            showDeleted
         }
     });
 };
@@ -187,6 +191,26 @@ export const getTeacherById = (id: string) => {
 };
 export const deleteTeacher = (id: string) => {
     return api.delete(`/principal/deleteTeacher/${id}`);
+};
+
+export const permanentlyDeleteStudent = (id: string) => {
+    return api.delete(`/principal/students/${id}/permanent`);
+};
+
+export const deleteTeachers = (ids: string[]) => {
+    return api.delete("/principal/teachers", {
+        data: {
+            ids
+        }
+    });
+};
+
+export const deleteStudents = (ids: string[]) => {
+    return api.delete("/principal/students", {
+        data: {
+            ids
+        }
+    });
 };
 
 //STUDENT CRUD:

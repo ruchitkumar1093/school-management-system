@@ -4,8 +4,6 @@ type Student = {
     name: string;
     uid: string;
   };
-  class: string;
-  rollNumber: string;
   onLeave: boolean;
 };
 
@@ -17,6 +15,7 @@ type Props = {
   students: Student[];
   attendance: Attendance;
   setAttendance: React.Dispatch<React.SetStateAction<Attendance>>;
+  markAllStatus: "Present" | "Absent" | null;
   startIndex: number;
 };
 
@@ -25,6 +24,7 @@ function TeacherAttendanceTable({
   startIndex,
   attendance,
   setAttendance,
+  markAllStatus,
 }: Props) {
   return (
     <div className="overflow-x-auto rounded-lg shadow-md">
@@ -34,12 +34,15 @@ function TeacherAttendanceTable({
             <th className="border-r border-purple-300 p-3 font-semibold text-purple-950">
               S.No.
             </th>
+
             <th className="border-r border-purple-300 p-3 font-semibold text-purple-950">
               Student Name:
             </th>
+
             <th className="border-r border-purple-300 p-3 font-semibold text-purple-950">
               UID:
             </th>
+
             <th className="p-3 font-semibold text-purple-950">
               Attendance:
             </th>
@@ -58,7 +61,20 @@ function TeacherAttendanceTable({
             </tr>
           ) : (
             students.map((student, index) => {
-              const status = attendance[student._id];
+              /*
+               * Individual attendance has priority over
+               * the global "mark all" status.
+               *
+               * Example:
+               *
+               * markAllStatus = "Present"
+               * attendance[id] = "Absent"
+               *
+               * Result = "Absent"
+               */
+              const status =
+                attendance[student._id] ??
+                markAllStatus;
 
               return (
                 <tr
@@ -98,14 +114,18 @@ function TeacherAttendanceTable({
                             type="radio"
                             name={`attendance-${student._id}`}
                             value="Present"
-                            checked={status === "Present"}
+                            checked={
+                              status === "Present"
+                            }
                             onChange={() =>
                               setAttendance((prev) => ({
                                 ...prev,
-                                [student._id]: "Present",
+                                [student._id]:
+                                  "Present",
                               }))
                             }
                           />
+
                           Present
                         </label>
 
@@ -121,14 +141,18 @@ function TeacherAttendanceTable({
                             type="radio"
                             name={`attendance-${student._id}`}
                             value="Absent"
-                            checked={status === "Absent"}
+                            checked={
+                              status === "Absent"
+                            }
                             onChange={() =>
                               setAttendance((prev) => ({
                                 ...prev,
-                                [student._id]: "Absent",
+                                [student._id]:
+                                  "Absent",
                               }))
                             }
                           />
+
                           Absent
                         </label>
                       </div>

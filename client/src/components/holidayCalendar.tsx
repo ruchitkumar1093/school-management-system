@@ -472,12 +472,6 @@ function HolidayCalendar({
                             const todayDate =
                                 isToday(date);
 
-                            const attendanceMarked =
-                                editable &&
-                                hasAttendance(
-                                    formatDate(date)
-                                );
-
                             const isSunday =
                                 date.getDay() === 0;
 
@@ -494,11 +488,9 @@ function HolidayCalendar({
                                             ? "text-gray-900"
                                             : "text-gray-400"
                                         }
-                                    ${attendanceMarked
-                                            ? "cursor-not-allowed bg-purple-200 text-gray-500"
-                                            : editable
-                                                ? "cursor-pointer hover:bg-purple-300"
-                                                : "cursor-default"
+                                    ${editable
+                                            ? "cursor-pointer hover:bg-purple-300"
+                                            : "cursor-default"
                                         }`}
                                 >
 
@@ -531,19 +523,9 @@ function HolidayCalendar({
                                         </p>
                                     )}
 
-                                    {attendanceMarked && (
-                                        <p
-                                            className="mt-2 truncate rounded-md bg-gray-400 px-2 py-1 text-xs font-medium text-gray-700"
-                                            title="Attendance already marked"
-                                        >
-                                            Attendance marked
-                                        </p>
-                                    )}
-
                                     {editable &&
                                         isSunday &&
-                                        !holiday &&
-                                        !attendanceMarked && (
+                                        !holiday && (
                                             <p className="mt-2 text-xs text-gray-500">
                                                 Sunday
                                             </p>
@@ -567,11 +549,6 @@ function HolidayCalendar({
                         <div className="flex items-center gap-2">
                             <span className="h-2.5 w-2.5 rounded-full bg-gray-400" />
                             Sunday
-                        </div>
-
-                        <div className="flex items-center gap-2">
-                            <span className="h-2.5 w-2.5 rounded-full bg-gray-500" />
-                            Attendance marked
                         </div>
 
                     </div>

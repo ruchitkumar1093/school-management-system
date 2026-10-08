@@ -78,8 +78,8 @@ function MarksForm() {
             try {
 
                 const [studentsResponse, teachersResponse] = await Promise.all([
-                    viewStudents("All", "", "", "asc", 1, 1000),
-                    viewTeachers("All", "", "", "asc", 1, 1000)
+                    viewStudents("All", "", "", "asc", 1, 1000, false),
+                    viewTeachers("All", "", "", "asc", 1, 1000, false)
                 ]);
 
                 setStudents(studentsResponse.data.students);

@@ -10,7 +10,8 @@ import {
     approveLeave, rejectLeave, assignClassTeacher, getMarkTeachers, getDeletedStudents,
     restoreStudent, getDeletedTeachers, restoreTeacher, deactivateStudent, activateStudent,
     deactivateTeacher, activateTeacher, getTeacherLeaveApplications, approveTeacherLeave,
-    rejectTeacherLeave, getAttendanceDates
+    rejectTeacherLeave, permanentlyDeleteTeacher, permanentlyDeleteStudent,
+    deleteTeachers, deleteStudents
 } from "../controllers/principalController";
 
 router.get("/marks/teachers", getMarkTeachers);
@@ -30,6 +31,11 @@ router.patch("/deactivateStudent/:id", deactivateStudent);
 router.patch("/activateStudent/:id", activateStudent);
 router.patch("/deactivateTeacher/:id", deactivateTeacher);
 router.patch("/activateTeacher/:id", activateTeacher);
+router.delete("/students/:id/permanent", permanentlyDeleteStudent);
+router.delete("/students", deleteStudents);
+
+router.delete("/teachers/:id/permanent", permanentlyDeleteTeacher);
+router.delete("/teachers", deleteTeachers);
 
 //Teacher Leaves:
 router.get("/teacher-leave", getTeacherLeaveApplications);
@@ -52,7 +58,6 @@ router.get("/attendance/summary", getAttendanceSummary);
 router.get("/attendance/students", getStudentsForAttendance);
 router.get("/attendance/student", getStudentAttendance);
 router.get("/attendance", getAttendance);
-router.get("/attendance-dates", getAttendanceDates);
 
 //CRUD teacher
 router.get("/teacher/:id", getTeacherById);

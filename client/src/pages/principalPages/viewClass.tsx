@@ -84,7 +84,8 @@ function PrincipalViewClass() {
                 "Teacher Name",
                 "asc",
                 1,
-                1000
+                1000,
+                false
             );
 
             setTeachers(response.data.teachers);

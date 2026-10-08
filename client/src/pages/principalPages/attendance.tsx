@@ -11,6 +11,10 @@ type Summary = {
     present: number;
     absent: number;
     percentage: number;
+    teacher: {
+        name: string;
+        uid: string;
+    } | null;
 };
 
 function PrincipalAttendance() {
@@ -48,10 +52,10 @@ function PrincipalAttendance() {
 
                 <div className="flex flex-col">
                     <Breadcrumb />
+
                     <div className="flex flex-col pt-12 pl-20 mb-10 max-w-6xl">
                         <div className="items-center mb-6">
                             <div>
-
                                 <h1 className="text-3xl font-medium text-gray-900">
                                     Attendance Summary
                                 </h1>
@@ -59,22 +63,21 @@ function PrincipalAttendance() {
                                 <p className="mt-1 text-sm text-gray-600">
                                     View and Manage Attendance
                                 </p>
-
                             </div>
-
-
                         </div>
+
                         <div className="mb-4 flex justify-between">
                             <input
                                 type="date"
                                 value={selectedDate}
                                 max={new Date().toISOString().split("T")[0]}
                                 onChange={(e) => setSelectedDate(e.target.value)}
-                                className="border-2 border-gray-500 rounded-sm p-2
-                            focus:outline-none focus:border-gray-900"
+                                className="border-2 border-gray-500 rounded-sm p-2 focus:outline-none focus:border-gray-900"
                             />
+
                             <button
-                                type="button" onClick={() => navigate("viewAttendance")}
+                                type="button"
+                                onClick={() => navigate("viewAttendance")}
                                 className="rounded-lg bg-purple-300 px-3 py-3 font-medium text-purple-950 shadow-[0_2px_3px] transition-colors hover:bg-violet-300 cursor-pointer"
                             >
                                 View Attendance

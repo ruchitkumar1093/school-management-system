@@ -11,28 +11,6 @@ import bcrypt from "bcrypt";
 import Leave from "../models/Leave";
 import AdmissionRequest from "../models/AdmissionRequest";
 
-export const getAttendanceDates = async (
-    req: Request,
-    res: Response
-) => {
-    try {
-        const attendanceDates = await Attendance.distinct("date");
-
-        const formattedDates = attendanceDates.map(
-            (date: Date) => date.toISOString().split("T")[0]
-        );
-
-        return res.status(200).json(formattedDates);
-    }
-    catch (error) {
-        console.error("Get attendance dates error:", error);
-
-        return res.status(500).json({
-            message: "Failed to get attendance dates"
-        });
-    }
-};
-
 export const deactivateStudent = async (req: Request, res: Response, next: NextFunction) => {
     try {
         const student = await Student.findById(req.params.id);
@@ -744,19 +722,22 @@ export const getStudents = async (req: Request, res: Response, next: NextFunctio
             sortBy = "None",
             order = "asc",
             page = "1",
-            limit = "5"
+            limit = "5",
+            showDeleted = "false"
         } = req.query;
 
         const currentPage = Math.max(Number(page), 1);
         const pageLimit = Math.max(Number(limit), 1);
         const skip = (currentPage - 1) * pageLimit;
 
-        const match: any = {
-            $or: [
+        const match: any = {};
+
+        if (showDeleted !== "true") {
+            match.$or = [
                 { isDeleted: false },
                 { isDeleted: { $exists: false } }
-            ]
-        };
+            ];
+        }
 
         if (classFilter !== "All") {
             match.class = classFilter;
@@ -868,19 +849,22 @@ export const getTeachers = async (req: Request, res: Response, next: NextFunctio
             sortBy = "None",
             order = "asc",
             page = "1",
-            limit = "5"
+            limit = "5",
+            showDeleted = "false"
         } = req.query;
 
         const currentPage = Math.max(Number(page), 1);
         const pageLimit = Math.max(Number(limit), 1);
         const skip = (currentPage - 1) * pageLimit;
 
-        const match: any = {
-            $or: [
+        const match: any = {};
+
+        if (showDeleted !== "true") {
+            match.$or = [
                 { isDeleted: false },
                 { isDeleted: { $exists: false } }
-            ]
-        };
+            ];
+        }
 
         if (classFilter !== "All") {
             match.classAssigned = classFilter;
@@ -1084,6 +1068,50 @@ export const restoreTeacher = async (req: Request, res: Response, next: NextFunc
         next(error);
     }
 };
+
+export const permanentlyDeleteTeacher = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const teacher = await Teacher.findById(req.params.id);
+
+        if (!teacher) {
+            return res.status(404).json({
+                message: "Teacher not found"
+            });
+        }
+
+        await User.findByIdAndDelete(teacher.userId);
+        await Teacher.findByIdAndDelete(req.params.id);
+
+        res.status(200).json({
+            message: "teacher Deleted"
+        });
+    }
+    catch (error) {
+        next(error);
+    }
+}
+
+export const permanentlyDeleteStudent = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const student = await Student.findById(req.params.id);
+
+        if (!student) {
+            return res.status(404).json({
+                message: "Student not found"
+            });
+        }
+
+        await User.findByIdAndDelete(student.userId);
+        await Student.findByIdAndDelete(req.params.id);
+
+        res.status(200).json({
+            message: "student Deleted"
+        });
+    }
+    catch (error) {
+        next(error);
+    }
+}
 
 export const getSubjects = async (
     req: Request,
@@ -2129,6 +2157,58 @@ export const deleteTeacher = async (req: Request, res: Response, next: NextFunct
     }
 };
 
+export const deleteTeachers = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const { ids } = req.body;
+
+        if (!Array.isArray(ids) || ids.length === 0) {
+            return res.status(400).json({
+                message: "Teacher IDs are required"
+            });
+        }
+
+        const teachers = await Teacher.find({
+            _id: { $in: ids },
+            $or: [
+                { isDeleted: false },
+                { isDeleted: { $exists: false } }
+            ]
+        }).select("_id");
+
+        if (teachers.length === 0) {
+            return res.status(404).json({
+                message: "No active teachers found"
+            });
+        }
+
+        const teacherIds = teachers.map(
+            teacher => teacher._id
+        );
+
+        await Class.updateMany(
+            { teacherId: { $in: teacherIds } },
+            { $set: { teacherId: null } }
+        );
+
+        await Teacher.updateMany(
+            { _id: { $in: teacherIds } },
+            {
+                $set: {
+                    isDeleted: true,
+                    deletedAt: new Date()
+                }
+            }
+        );
+
+        res.status(200).json({
+            message: "Teachers deleted"
+        });
+    }
+    catch (error) {
+        next(error);
+    }
+};
+
 export const getTeacherById = async (req: Request, res: Response, next: NextFunction) => {
     try {
         const teacher = await Teacher.findById(req.params.id).populate("userId", "name uid role isActive");
@@ -2391,6 +2471,53 @@ export const deleteStudent = async (req: Request, res: Response, next: NextFunct
 
         res.status(200).json({
             message: "Student deleted"
+        });
+    }
+    catch (error) {
+        next(error);
+    }
+};
+
+export const deleteStudents = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const { ids } = req.body;
+
+        if (!Array.isArray(ids) || ids.length === 0) {
+            return res.status(400).json({
+                message: "Student IDs are required"
+            });
+        }
+
+        const students = await Student.find({
+            _id: { $in: ids },
+            $or: [
+                { isDeleted: false },
+                { isDeleted: { $exists: false } }
+            ]
+        }).select("_id");
+
+        if (students.length === 0) {
+            return res.status(404).json({
+                message: "No active students found"
+            });
+        }
+
+        const studentIds = students.map(
+            student => student._id
+        );
+
+        await Student.updateMany(
+            { _id: { $in: studentIds } },
+            {
+                $set: {
+                    isDeleted: true,
+                    deletedAt: new Date()
+                }
+            }
+        );
+
+        res.status(200).json({
+            message: "Students deleted"
         });
     }
     catch (error) {
@@ -2668,7 +2795,16 @@ export const getAttendanceSummary = async (
 
         const attendance = await Attendance.find({
             date: selectedDate
-        }).select("studentId status");
+        })
+            .select("studentId teacherId status")
+            .populate({
+                path: "teacherId",
+                select: "userId",
+                populate: {
+                    path: "userId",
+                    select: "name uid"
+                }
+            });
 
         const approvedLeaves = await Leave.find({
             status: "Approved",
@@ -2744,11 +2880,26 @@ export const getAttendanceSummary = async (
                     ? (present / total) * 100
                     : 0;
 
+            const teacherRecord =
+                classAttendance.find(
+                    record => record.teacherId
+                );
+
+            const teacher =
+                teacherRecord?.teacherId &&
+                    typeof teacherRecord.teacherId === "object"
+                    ? {
+                        name: (teacherRecord.teacherId as any).userId.name,
+                        uid: (teacherRecord.teacherId as any).userId.uid
+                    }
+                    : null;
+
             return {
                 class: studentClass,
                 present,
                 absent,
-                percentage
+                percentage,
+                teacher
             };
         });
 
@@ -2874,9 +3025,10 @@ export const getAttendance = async (
             })
             : students;
 
-        const studentIds = filteredStudents.map(
+        const studentIds = students.map(
             student => student._id
         );
+        console.log('studentIds', studentIds);
 
         const attendance = await Attendance.find({
             studentId: {
@@ -2892,6 +3044,7 @@ export const getAttendance = async (
                     select: "name uid"
                 }
             });
+        console.log('attendance', attendance);
 
         const approvedLeaves = await Leave.find({
             studentId: {
@@ -2914,8 +3067,43 @@ export const getAttendance = async (
                 )
         );
 
+        const classAttendance = attendance.filter(
+            (record: any) =>
+                !leaveStudentIds.has(
+                    record.studentId._id.toString()
+                )
+        );
+
+        const present =
+            classAttendance.filter(
+                (record: any) =>
+                    record.status === "Present"
+            ).length;
+
+        const absent =
+            classAttendance.filter(
+                (record: any) =>
+                    record.status === "Absent"
+            ).length;
+
+        const total = present + absent;
+
+        const percentage =
+            total > 0
+                ? (present / total) * 100
+                : 0;
+
+        const filteredStudentIds = new Set(
+            filteredStudents.map(
+                student => student._id.toString()
+            )
+        );
+
         const attendanceRecords = attendance
             .filter((record: any) =>
+                filteredStudentIds.has(
+                    record.studentId._id.toString()
+                ) &&
                 !leaveStudentIds.has(
                     record.studentId._id.toString()
                 )
@@ -2937,13 +3125,18 @@ export const getAttendance = async (
                             leave.studentId!.toString()
                     );
 
+                if (!student) {
+                    return null;
+                }
+
                 return {
                     _id: `${leave._id}-${date}`,
                     studentId: student,
                     date: selectedDate,
                     status: "Leave"
                 };
-            });
+            })
+            .filter(Boolean);
 
         const result = [
             ...attendanceRecords,
@@ -2973,6 +3166,12 @@ export const getAttendance = async (
 
         res.status(200).json({
             attendance: paginatedResult,
+            summary: {
+                class: studentClass,
+                present,
+                absent,
+                percentage
+            },
             totalRecords,
             totalPages,
             currentPage: page,

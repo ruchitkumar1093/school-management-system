@@ -21,8 +21,6 @@ import PrincipalViewAttendance from "../pages/principalPages/viewAttendance";
 import Holidays from "../pages/principalPages/holidays";
 import LeaveApplications from "../pages/principalPages/leaves";
 import NotFound from "../pages/notFound";
-import DeletedStudents from "../pages/principalPages/deletedStudents";
-import DeletedTeachers from "../pages/principalPages/deletedTeachers";
 
 function PrincipalRoutes() {
     return (
@@ -38,8 +36,6 @@ function PrincipalRoutes() {
             <Route path="/viewClass" element={<PrincipalViewClass />} />
             <Route path="/viewHolidays" element={<Holidays />} />
             <Route path="/viewLeaves" element={<LeaveApplications />} />
-            <Route path="/viewStudents/deletedStudents" element={<DeletedStudents />} />
-            <Route path="/viewTeachers/deletedTeachers" element={<DeletedTeachers />} />
             <Route path="/profile" element={<PrincipalProfile />} />
             <Route path="/changePassword" element={<PrincipalChangePassword />} />
 
