@@ -5,7 +5,7 @@ import {
     getSubjects, getStudents, getTeachers, createTeacher, getMarks, 
     updateTeacher, getTeacherById, deleteTeacher, updateStudent, deleteStudent, 
     getStudentById, getSubjectById, createSubject, updateSubject, deleteSubject, getMarkById,
-    createMark, updateMark, deleteMark, getExamResults, getAttendanceSummary, getStudentsForAttendance,
+    createMark, updateMark, deleteMark, getExamResults, getAttendanceSummary,
     getStudentAttendance, getAttendance, getClassOverview, getPrincipalHome, getLeaveApplications,
     approveLeave, rejectLeave, assignClassTeacher, getMarkTeachers, getDeletedStudents,
     restoreStudent, getDeletedTeachers, restoreTeacher, deactivateStudent, activateStudent,
@@ -55,7 +55,6 @@ router.delete("/deleteHolidays/:id", deleteHoliday);
 
 //Attendance:
 router.get("/attendance/summary", getAttendanceSummary);
-router.get("/attendance/students", getStudentsForAttendance);
 router.get("/attendance/student", getStudentAttendance);
 router.get("/attendance", getAttendance);
 

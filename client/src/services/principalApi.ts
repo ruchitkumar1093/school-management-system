@@ -293,14 +293,6 @@ export const getStudentAttendance = (
     });
 };
 
-export const getStudentsForAttendance = (studentClass: string) => {
-    return api.get("principal/attendance/students", {
-        params: {
-            class: studentClass
-        }
-    });
-};
-
 //Exams:
 export const getExamResults = (
     studentClass: string,

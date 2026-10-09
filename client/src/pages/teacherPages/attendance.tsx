@@ -23,6 +23,7 @@ type Student = {
         uid: string;
     };
     onLeave: boolean;
+    attendanceStatus: "Present" | "Absent" | null;
 };
 
 type Attendance = {
@@ -41,6 +42,8 @@ function TeacherAttendance() {
     const [search, setSearch] = useState("");
     const [debouncedSearch, setDebouncedSearch] =
         useState("");
+
+    const [attendanceMarked, setAttendanceMarked] = useState(false);
 
     const [studentsData, setStudentsData] =
         useState<Student[]>([]);
@@ -66,16 +69,6 @@ function TeacherAttendance() {
 
     const [limit, setLimit] = useState(10);
 
-    /*
-     * Stores only individual attendance decisions.
-     *
-     * Example:
-     *
-     * {
-     *     "studentId1": "Absent",
-     *     "studentId2": "Present"
-     * }
-     */
     const [attendance, setAttendance] =
         useState<Attendance>(() => {
             const savedAttendance =
@@ -88,13 +81,6 @@ function TeacherAttendance() {
                 : {};
         });
 
-    /*
-     * Global attendance action.
-     *
-     * null      = no "mark all" action
-     * Present   = mark everyone present
-     * Absent    = mark everyone absent
-     */
     const [markAllStatus, setMarkAllStatus] =
         useState<"Present" | "Absent" | null>(
             () => {
@@ -176,6 +162,8 @@ function TeacherAttendance() {
             setTotalPages(
                 response.data.totalPages
             );
+
+            setAttendanceMarked(response.data.attendanceMarked);
         }
         catch (error) {
             console.log(error);
@@ -184,6 +172,7 @@ function TeacherAttendance() {
             setClassName("");
             setTotalStudents(0);
             setTotalPages(1);
+            setAttendanceMarked(false);
         }
     };
 
@@ -218,9 +207,6 @@ function TeacherAttendance() {
         date
     ]);
 
-    /*
-     * Load attendance whenever the date changes.
-     */
     useEffect(() => {
         const savedAttendance =
             localStorage.getItem(
@@ -254,9 +240,6 @@ function TeacherAttendance() {
         }
     }, [date]);
 
-    /*
-     * Save individual attendance decisions.
-     */
     useEffect(() => {
         localStorage.setItem(
             `attendance-${date}`,
@@ -264,9 +247,6 @@ function TeacherAttendance() {
         );
     }, [attendance, date]);
 
-    /*
-     * Save the global "mark all" state.
-     */
     useEffect(() => {
         if (markAllStatus) {
             localStorage.setItem(
@@ -420,17 +400,6 @@ function TeacherAttendance() {
 
                 return;
             }
-
-            /*
-             * The backend now performs the complete
-             * attendance validation.
-             *
-             * We only send:
-             *
-             * 1. date
-             * 2. markAllStatus
-             * 3. individual attendance changes
-             */
             try {
                 const attendanceData = {
                     date,
@@ -463,6 +432,8 @@ function TeacherAttendance() {
 
                 setAttendance({});
                 setMarkAllStatus(null);
+                setAttendanceMarked(true);
+                await fetchStudents();
 
                 setModalTitle("Success");
 
@@ -520,19 +491,6 @@ function TeacherAttendance() {
         setModalOpen(true);
     };
 
-    /*
-     * If markAllStatus is set, all students who
-     * are required to have attendance are already
-     * considered marked.
-     *
-     * Otherwise count the individual attendance
-     * decisions stored in the frontend.
-     *
-     * NOTE:
-     * totalStudents currently includes students
-     * on approved leave. See the backend note below
-     * for making this count exact.
-     */
     const markedCount =
         markAllStatus
             ? totalStudents
@@ -569,13 +527,6 @@ function TeacherAttendance() {
 
             return;
         }
-
-        /*
-         * We no longer need allStudentIds.
-         *
-         * The backend knows all students in the
-         * teacher's assigned class.
-         */
         setMarkAllStatus("Present");
     };
 
@@ -616,13 +567,6 @@ function TeacherAttendance() {
         );
 
         setModalConfirm(() => () => {
-            /*
-             * Again, we don't modify hundreds of
-             * student IDs in the frontend.
-             *
-             * We simply tell the backend that
-             * everyone should be Absent.
-             */
             setMarkAllStatus("Absent");
 
             setModalConfirm(undefined);
@@ -745,20 +689,18 @@ function TeacherAttendance() {
 
                                 <button
                                     type="button"
-                                    onClick={
-                                        handleMarkAllPresent
-                                    }
-                                    className="rounded-lg bg-purple-300 px-6 py-3 font-medium text-purple-950 shadow-[0_2px_3px] transition-colors hover:bg-violet-300 cursor-pointer"
+                                    onClick={handleMarkAllPresent}
+                                    disabled={attendanceMarked}
+                                    className="ml-5 rounded-lg bg-purple-300 px-6 py-3 font-medium text-purple-950 shadow-[0_2px_3px] transition-colors hover:bg-violet-300 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
                                     Mark all present
                                 </button>
 
                                 <button
                                     type="button"
-                                    onClick={
-                                        handleMarkAllAbsent
-                                    }
-                                    className="rounded-lg bg-gray-200 px-6 py-3 font-medium text-purple-950 shadow-[0_2px_3px] transition-colors hover:bg-red-200 cursor-pointer"
+                                    onClick={handleMarkAllAbsent}
+                                    disabled={attendanceMarked}
+                                    className="rounded-lg bg-gray-200 px-6 py-3 font-medium text-purple-950 shadow-[0_2px_3px] transition-colors hover:bg-red-200 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
                                     Mark all absent
                                 </button>
@@ -820,10 +762,9 @@ function TeacherAttendance() {
 
                             <button
                                 type="button"
-                                onClick={
-                                    handleSubmitAttendance
-                                }
-                                className="rounded-lg bg-purple-300 px-6 py-3 font-medium text-purple-950 shadow-[0_2px_3px] transition-colors hover:bg-violet-300 cursor-pointer"
+                                onClick={handleSubmitAttendance}
+                                disabled={attendanceMarked}
+                                className="rounded-lg bg-purple-300 px-6 py-3 font-medium text-purple-950 shadow-[0_2px_3px] transition-colors hover:bg-violet-300 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                                 Submit Attendance
                             </button>

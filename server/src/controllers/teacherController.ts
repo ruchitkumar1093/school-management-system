@@ -1717,6 +1717,16 @@ export const getStudentsForAttendance = async (
             });
         }
 
+
+        const classStudentIds = await Student.find({
+            class: teacher.classAssigned
+        }).distinct("_id");
+
+        const attendanceMarked = await Attendance.exists({
+            studentId: { $in: classStudentIds },
+            date: selectedDate
+        });
+
         const studentFilter: any = {
             class: teacher.classAssigned
         };
@@ -1813,19 +1823,29 @@ export const getStudentsForAttendance = async (
                 )
         );
 
-        const paginatedStudents = students.map(
-            student => ({
-                _id: student._id,
-                userId: student.userId,
-                onLeave: studentsOnLeave.has(
-                    student._id.toString()
-                )
-            })
+        const existingAttendance = await Attendance.find({
+            date: selectedDate,
+            studentId: { $in: studentIds }
+        }).select("studentId status");
+
+        const attendanceMap = new Map(
+            existingAttendance.map(record => [
+                record.studentId.toString(),
+                record.status
+            ])
         );
+
+        const paginatedStudents = students.map(student => ({
+            _id: student._id,
+            userId: student.userId,
+            onLeave: studentsOnLeave.has(student._id.toString()),
+            attendanceStatus: attendanceMap.get(student._id.toString()) ?? null
+        }));
 
         return res.status(200).json({
             class: teacher.classAssigned,
             students: paginatedStudents,
+            attendanceMarked: Boolean(attendanceMarked),
             totalStudents,
             totalPages,
             currentPage: validPage,
@@ -2114,235 +2134,6 @@ export const createAttendance = async (
     }
 };
 
-
-// export const getStudentsForAttendance = async (
-//     req: Request,
-//     res: Response,
-//     next: NextFunction
-// ) => {
-//     try {
-//         const date = req.query.date?.toString() || "";
-//         const search = req.query.search?.toString().trim() || "";
-
-//         const currentPage = Math.max(
-//             Number(req.query.page) || 1,
-//             1
-//         );
-
-//         const pageLimit = Math.max(
-//             Number(req.query.limit) || 10,
-//             1
-//         );
-
-//         if (!date) {
-//             return res.status(400).json({
-//                 message: "Date is required"
-//             });
-//         }
-
-//         const selectedDate = new Date(date);
-
-//         if (isNaN(selectedDate.getTime())) {
-//             return res.status(400).json({
-//                 message: "Invalid date"
-//             });
-//         }
-
-//         const teacher = await Teacher.findOne({
-//             userId: req.user?.userId
-//         });
-
-//         if (!teacher) {
-//             return res.status(404).json({
-//                 message: "Teacher not found"
-//             });
-//         }
-
-//         const students = await Student.find({
-//             class: teacher.classAssigned
-//         })
-//             .populate({
-//                 path: "userId",
-//                 select: "name uid"
-//             })
-//             .sort({
-//                 rollNumber: 1
-//             });
-
-//         const filteredStudents = search
-//             ? students.filter((student: any) => {
-//                 const name =
-//                     student.userId.name.toLowerCase();
-
-//                 const uid =
-//                     student.userId.uid.toLowerCase();
-
-//                 const searchValue =
-//                     search.toLowerCase();
-
-//                 return (
-//                     name.includes(searchValue) ||
-//                     uid.includes(searchValue)
-//                 );
-//             })
-//             : students;
-
-//         const approvedLeaves = await Leave.find({
-//             status: "Approved",
-//             startDate: { $lte: selectedDate },
-//             endDate: { $gte: selectedDate },
-//             studentId: {
-//                 $in: students.map(
-//                     student => student._id
-//                 )
-//             }
-//         }).select("studentId");
-
-//         const studentsOnLeave = new Set(
-//             approvedLeaves
-//                 .filter(leave => leave.studentId)
-//                 .map(leave => leave.studentId!.toString())
-//         );
-
-//         const studentsWithLeaveStatus =
-//             filteredStudents.map(student => ({
-//                 ...student.toObject(),
-//                 onLeave: studentsOnLeave.has(
-//                     student._id.toString()
-//                 )
-//             }));
-
-//         const allStudentIds = students.map(
-//             student => student._id.toString()
-//         );
-
-//         const leaveStudentIds = approvedLeaves
-//             .filter(leave => leave.studentId)
-//             .map(leave => leave.studentId!.toString());
-
-//         const totalStudents =
-//             studentsWithLeaveStatus.length;
-
-//         const totalPages =
-//             Math.ceil(
-//                 totalStudents / pageLimit
-//             );
-
-//         const skip =
-//             (currentPage - 1) * pageLimit;
-
-//         const paginatedStudents =
-//             studentsWithLeaveStatus.slice(
-//                 skip,
-//                 skip + pageLimit
-//             );
-
-//         return res.status(200).json({
-//             students: paginatedStudents,
-//             allStudentIds,
-//             leaveStudentIds,
-//             totalStudents,
-//             totalPages,
-//             currentPage,
-//             limit: pageLimit
-//         });
-//     }
-//     catch (error) {
-//         console.log(error);
-//         next(error);
-//     }
-// };
-
-// export const createAttendance = async (
-//     req: Request,
-//     res: Response,
-//     next: NextFunction
-// ) => {
-//     try {
-//         const { date, attendance } = req.body;
-
-//         const selectedDate = new Date(date);
-
-//         if (selectedDate.getDay() === 0) {
-//             return res.status(400).json({
-//                 message: "Attendance cannot be marked on Sunday"
-//             });
-//         }
-
-//         const holiday = await Holiday.findOne({
-//             date: selectedDate
-//         });
-
-//         if (holiday) {
-//             return res.status(400).json({
-//                 message: `Attendance cannot be marked because ${holiday.name} is a holiday`
-//             });
-//         }
-
-//         const teacher = await Teacher.findOne({
-//             userId: req.user?.userId
-//         });
-
-//         if (!teacher) {
-//             return res.status(404).json({
-//                 message: "Teacher not found"
-//             });
-//         }
-
-//         const students = await Student.find({
-//             class: teacher.classAssigned
-//         }).select("_id");
-
-//         const studentIds = students.map(student =>
-//             student._id.toString()
-//         );
-
-//         const invalidStudent = attendance.some(
-//             (record: { studentId: string; status: string }) =>
-//                 !studentIds.includes(record.studentId)
-//         );
-
-//         if (invalidStudent) {
-//             return res.status(403).json({
-//                 message: "You can only mark attendance for students in your assigned class"
-//             });
-//         }
-
-//         const existingAttendance = await Attendance.findOne({
-//             studentId: { $in: studentIds },
-//             date: selectedDate
-//         });
-
-//         if (existingAttendance) {
-//             return res.status(400).json({
-//                 message: "Attendance has already been marked for this date"
-//             });
-//         }
-
-//         const attendanceRecords = attendance.map(
-//             (record: {
-//                 studentId: string;
-//                 status: "Present" | "Absent";
-//             }) => ({
-//                 studentId: record.studentId,
-//                 teacherId: teacher._id,
-//                 date: selectedDate,
-//                 status: record.status
-//             })
-//         );
-
-//         await Attendance.insertMany(attendanceRecords);
-
-//         res.status(201).json({
-//             message: "Attendance marked successfully"
-//         });
-
-//     } catch (error) {
-//         console.log(error);
-//         next(error);
-//     }
-// };
-
 export const getAttendance = async (
     req: Request,
     res: Response,
@@ -2389,21 +2180,10 @@ export const getAttendance = async (
             });
         }
 
-        /*
-         * Build student filter using the teacher's
-         * assigned class.
-         */
         const studentFilter: any = {
             class: teacher.classAssigned
         };
 
-        /*
-         * Search by student name or UID.
-         *
-         * name and uid are stored in User, so first
-         * find matching users and then use their IDs
-         * to filter students.
-         */
         if (search) {
             const searchRegex = {
                 $regex: search,
@@ -2426,10 +2206,6 @@ export const getAttendance = async (
             };
         }
 
-        /*
-         * Get only the students that can appear
-         * in the result.
-         */
         const students = await Student.find(
             studentFilter
         )
@@ -2447,50 +2223,37 @@ export const getAttendance = async (
             student => student._id
         );
 
-        /*
-         * Get attendance for the selected date
-         * only for the filtered students.
-         */
-        const attendance =
-            await Attendance.find({
-                studentId: {
-                    $in: studentIds
-                },
-                date: selectedDate
-            })
-                .populate({
-                    path: "studentId",
-                    select: "class rollNumber userId",
-                    populate: {
-                        path: "userId",
-                        select: "name uid"
-                    }
-                })
-                .lean();
-
-        /*
-         * Get approved leaves for the selected date
-         * only for the filtered students.
-         */
-        const approvedLeaves =
-            await Leave.find({
-                studentId: {
-                    $in: studentIds
-                },
-                status: "Approved",
-                startDate: {
-                    $lte: selectedDate
-                },
-                endDate: {
-                    $gte: selectedDate
+        const attendance = await Attendance.find({
+            studentId: {
+                $in: studentIds
+            },
+            date: selectedDate
+        })
+            .populate({
+                path: "studentId",
+                select: "class rollNumber userId",
+                populate: {
+                    path: "userId",
+                    select: "name uid"
                 }
             })
-                .select("_id studentId")
-                .lean();
+            .lean();
 
-        /*
-         * Students with approved leave.
-         */
+        const approvedLeaves = await Leave.find({
+            studentId: {
+                $in: studentIds
+            },
+            status: "Approved",
+            startDate: {
+                $lte: selectedDate
+            },
+            endDate: {
+                $gte: selectedDate
+            }
+        })
+            .select("_id studentId")
+            .lean();
+
         const leaveStudentIds = new Set(
             approvedLeaves
                 .filter(leave => leave.studentId)
@@ -2499,133 +2262,100 @@ export const getAttendance = async (
                 )
         );
 
-        /*
-         * Remove attendance records for students
-         * who are on approved leave.
-         */
-        const attendanceWithoutLeave =
-            attendance
-                .filter(record =>
-                    !leaveStudentIds.has(
-                        record.studentId._id.toString()
-                    )
-                )
-                .map(record => ({
-                    _id: record._id,
-                    studentId: record.studentId,
-                    date: record.date,
-                    status: record.status
-                }));
-
-        /*
-         * Create Leave records.
-         *
-         * Use a Map instead of .find() for every leave
-         * so student lookup is O(1).
-         */
-        const studentsMap = new Map(
-            students.map(student => [
-                student._id.toString(),
-                student
+        const attendanceMap = new Map(
+            attendance.map(record => [
+                record.studentId._id.toString(),
+                record
             ])
         );
 
-        const leaveRecords =
+        const leaveMap = new Map(
             approvedLeaves
                 .filter(leave => leave.studentId)
-                .map(leave => {
-                    const student =
-                        studentsMap.get(
-                            leave.studentId!.toString()
-                        );
-
-                    if (!student) {
-                        return null;
-                    }
-
-                    return {
-                        _id: `${leave._id}-${date}`,
-                        studentId: student,
-                        date: selectedDate,
-                        status: "Leave"
-                    };
-                })
-                .filter(
-                    record => record !== null
-                );
-
-        /*
-         * Combine attendance and leave records.
-         */
-        const result = [
-            ...attendanceWithoutLeave,
-            ...leaveRecords
-        ];
-
-        /*
-         * Keep the existing roll-number ordering.
-         */
-        result.sort(
-            (a: any, b: any) =>
-                Number(
-                    a.studentId.rollNumber
-                ) -
-                Number(
-                    b.studentId.rollNumber
-                )
+                .map(leave => [
+                    leave.studentId!.toString(),
+                    leave
+                ])
         );
 
-        /*
-         * Counts are calculated from the complete
-         * result before pagination.
-         */
-        const totalRecords =
-            result.length;
+        const result = students.map(student => {
+            const studentId = student._id.toString();
 
-        const totalPages =
-            Math.ceil(
-                totalRecords / pageLimit
-            );
+            if (leaveStudentIds.has(studentId)) {
+                const leave = leaveMap.get(studentId);
 
-        /*
-         * Prevent requesting a page beyond
-         * the available pages.
-         */
+                return {
+                    _id: `${leave?._id}-${date}`,
+                    studentId: student,
+                    date: selectedDate,
+                    status: "Leave"
+                };
+            }
+
+            const attendanceRecord =
+                attendanceMap.get(studentId);
+
+            if (attendanceRecord) {
+                return {
+                    _id: attendanceRecord._id,
+                    studentId: attendanceRecord.studentId,
+                    date: attendanceRecord.date,
+                    status: attendanceRecord.status
+                };
+            }
+
+            return {
+                _id: `unmarked-${studentId}-${date}`,
+                studentId: student,
+                date: selectedDate,
+                status: "Not Marked"
+            };
+        });
+
+        result.sort(
+            (a: any, b: any) =>
+                Number(a.studentId.rollNumber) -
+                Number(b.studentId.rollNumber)
+        );
+
+        const totalRecords = result.length;
+
+        const totalPages = Math.ceil(
+            totalRecords / pageLimit
+        );
+
         const validPage =
             totalPages > 0
-                ? Math.min(
-                    currentPage,
-                    totalPages
-                )
+                ? Math.min(currentPage, totalPages)
                 : 1;
 
-        const skip =
-            (validPage - 1) *
-            pageLimit;
+        const skip = (validPage - 1) * pageLimit;
 
-        const paginatedResult =
-            result.slice(
-                skip,
-                skip + pageLimit
-            );
+        const paginatedResult = result.slice(
+            skip,
+            skip + pageLimit
+        );
 
-        const presentCount =
-            result.filter(
-                (record: any) =>
-                    record.status === "Present"
-            ).length;
+        const presentCount = result.filter(
+            (record: any) =>
+                record.status === "Present" &&
+                !leaveStudentIds.has(
+                    record.studentId._id.toString()
+                )
+        ).length;
 
-        const absentCount =
-            result.filter(
-                (record: any) =>
-                    record.status === "Absent"
-            ).length;
+        const absentCount = result.filter(
+            (record: any) =>
+                record.status === "Absent" &&
+                !leaveStudentIds.has(
+                    record.studentId._id.toString()
+                )
+        ).length;
 
-        const leaveCount =
-            result.filter(
-                (record: any) =>
-                    record.status === "Leave"
-            ).length;
+        const leaveCount = result.filter(
+            (record: any) =>
+                record.status === "Leave"
+        ).length;
 
         return res.status(200).json({
             attendance: paginatedResult,
@@ -2637,12 +2367,12 @@ export const getAttendance = async (
             absentCount,
             leaveCount
         });
-    }
-    catch (error) {
+    } catch (error) {
         console.log(error);
         next(error);
     }
 };
+
 
 export const getStudentAttendance = async (
     req: Request,
@@ -2866,6 +2596,13 @@ export const getStudentAttendance = async (
             );
 
         return res.status(200).json({
+            student: {
+                _id: student._id,
+                name: (student.userId as any).name,
+                uid: (student.userId as any).uid,
+                class: student.class,
+                rollNumber: student.rollNumber
+            },
             attendance: paginatedResult,
             totalRecords,
             totalPages,
@@ -2877,43 +2614,6 @@ export const getStudentAttendance = async (
             totalDays,
             percentage
         });
-    }
-    catch (error) {
-        console.log(error);
-        next(error);
-    }
-};
-
-export const getAttendanceStudents = async (
-    req: Request,
-    res: Response,
-    next: NextFunction
-) => {
-    try {
-        const teacher = await Teacher.findOne({
-            userId: req.user?.userId
-        }).lean();
-
-        if (!teacher) {
-            return res.status(404).json({
-                message: "Teacher not found"
-            });
-        }
-
-        const students = await Student.find({
-            class: teacher.classAssigned
-        })
-            .select("_id class userId")
-            .populate({
-                path: "userId",
-                select: "name uid"
-            })
-            .sort({
-                rollNumber: 1
-            })
-            .lean();
-
-        return res.status(200).json(students);
     }
     catch (error) {
         console.log(error);

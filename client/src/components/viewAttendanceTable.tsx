@@ -1,3 +1,4 @@
+
 type Attendance = {
     _id: string;
     studentId: {
@@ -8,7 +9,7 @@ type Attendance = {
         };
     };
     date: string;
-    status: "Present" | "Absent" | "Leave";
+    status: "Present" | "Absent" | "Leave" | "Not Marked";
 };
 
 type Props = {
@@ -47,7 +48,7 @@ function TeacherViewAttendanceTable({
                                 colSpan={4}
                                 className="p-4 text-center text-gray-500"
                             >
-                                No attendance records found
+                                No students found
                             </td>
                         </tr>
                     ) : (
@@ -72,9 +73,11 @@ function TeacherViewAttendanceTable({
                                     className={`p-3 text-center font-medium ${
                                         record.status === "Present"
                                             ? "text-emerald-600"
+                                            : record.status === "Absent"
+                                            ? "text-red-600"
                                             : record.status === "Leave"
                                             ? "text-amber-600"
-                                            : "text-red-600"
+                                            : "text-gray-500"
                                     }`}
                                 >
                                     {record.status}

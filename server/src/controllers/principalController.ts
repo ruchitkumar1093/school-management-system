@@ -2910,49 +2910,6 @@ export const getAttendanceSummary = async (
     }
 };
 
-export const getStudentsForAttendance = async (
-    req: Request,
-    res: Response,
-    next: NextFunction
-) => {
-    try {
-        const studentClass = req.query.class as
-            | "1st"
-            | "2nd"
-            | "3rd"
-            | "4th"
-            | "5th"
-            | "6th"
-            | "7th"
-            | "8th"
-            | "9th"
-            | "10th"
-            | "11th"
-            | "12th";
-
-        if (!studentClass) {
-            return res.status(400).json({
-                message: "Class is required"
-            });
-        }
-
-        const students = await Student.find({
-            class: studentClass
-        })
-            .populate({
-                path: "userId",
-                select: "name uid"
-            })
-            .sort({
-                rollNumber: 1
-            });
-
-        res.status(200).json(students);
-    } catch (error) {
-        console.log(error);
-        next(error);
-    }
-};
 
 export const getAttendance = async (
     req: Request,
@@ -3007,16 +2964,15 @@ export const getAttendance = async (
                 rollNumber: 1
             });
 
+        const searchValue = search.toLowerCase();
+
         const filteredStudents = search
             ? students.filter((student: any) => {
                 const name =
-                    student.userId.name.toLowerCase();
+                    student.userId?.name?.toLowerCase() || "";
 
                 const uid =
-                    student.userId.uid.toLowerCase();
-
-                const searchValue =
-                    search.toLowerCase();
+                    student.userId?.uid?.toLowerCase() || "";
 
                 return (
                     name.includes(searchValue) ||
@@ -3028,23 +2984,20 @@ export const getAttendance = async (
         const studentIds = students.map(
             student => student._id
         );
-        console.log('studentIds', studentIds);
 
         const attendance = await Attendance.find({
             studentId: {
                 $in: studentIds
             },
             date: selectedDate
-        })
-            .populate({
-                path: "studentId",
-                select: "class rollNumber userId",
-                populate: {
-                    path: "userId",
-                    select: "name uid"
-                }
-            });
-        console.log('attendance', attendance);
+        }).populate({
+            path: "studentId",
+            select: "class rollNumber userId",
+            populate: {
+                path: "userId",
+                select: "name uid"
+            }
+        });
 
         const approvedLeaves = await Leave.find({
             studentId: {
@@ -3062,29 +3015,31 @@ export const getAttendance = async (
         const leaveStudentIds = new Set(
             approvedLeaves
                 .filter(leave => leave.studentId)
-                .map(leave =>
-                    leave.studentId!.toString()
-                )
+                .map(leave => leave.studentId!.toString())
         );
 
-        const classAttendance = attendance.filter(
+        const attendanceByStudent = new Map(
+            attendance.map((record: any) => [
+                record.studentId._id.toString(),
+                record
+            ])
+        );
+
+        const present = attendance.filter(
             (record: any) =>
+                record.status === "Present" &&
                 !leaveStudentIds.has(
                     record.studentId._id.toString()
                 )
-        );
+        ).length;
 
-        const present =
-            classAttendance.filter(
-                (record: any) =>
-                    record.status === "Present"
-            ).length;
-
-        const absent =
-            classAttendance.filter(
-                (record: any) =>
-                    record.status === "Absent"
-            ).length;
+        const absent = attendance.filter(
+            (record: any) =>
+                record.status === "Absent" &&
+                !leaveStudentIds.has(
+                    record.studentId._id.toString()
+                )
+        ).length;
 
         const total = present + absent;
 
@@ -3093,62 +3048,50 @@ export const getAttendance = async (
                 ? (present / total) * 100
                 : 0;
 
-        const filteredStudentIds = new Set(
-            filteredStudents.map(
-                student => student._id.toString()
-            )
+        const leaveByStudent = new Map(
+            approvedLeaves
+                .filter(leave => leave.studentId)
+                .map(leave => [
+                    leave.studentId!.toString(),
+                    leave
+                ])
         );
 
-        const attendanceRecords = attendance
-            .filter((record: any) =>
-                filteredStudentIds.has(
-                    record.studentId._id.toString()
-                ) &&
-                !leaveStudentIds.has(
-                    record.studentId._id.toString()
-                )
-            )
-            .map((record: any) => ({
-                _id: record._id,
-                studentId: record.studentId,
-                date: record.date,
-                status: record.status
-            }));
+        const result = filteredStudents.map(
+            (student: any) => {
+                const studentId = student._id.toString();
 
-        const leaveRecords = approvedLeaves
-            .filter(leave => leave.studentId)
-            .map(leave => {
-                const student =
-                    filteredStudents.find(
-                        student =>
-                            student._id.toString() ===
-                            leave.studentId!.toString()
-                    );
+                const attendanceRecord =
+                    attendanceByStudent.get(studentId);
 
-                if (!student) {
-                    return null;
+                if (leaveStudentIds.has(studentId)) {
+                    const leave = leaveByStudent.get(studentId);
+
+                    return {
+                        _id: `${leave?._id}-${date}`,
+                        studentId: student,
+                        date: selectedDate,
+                        status: "Leave"
+                    };
+                }
+
+                if (attendanceRecord) {
+                    return {
+                        _id: attendanceRecord._id,
+                        studentId: attendanceRecord.studentId,
+                        date: attendanceRecord.date,
+                        status: attendanceRecord.status
+                    };
                 }
 
                 return {
-                    _id: `${leave._id}-${date}`,
+                    _id: `unmarked-${studentId}-${date}`,
                     studentId: student,
                     date: selectedDate,
-                    status: "Leave"
+                    status: "Not Marked"
                 };
-            })
-            .filter(Boolean);
-
-        const result = [
-            ...attendanceRecords,
-            ...leaveRecords
-        ];
-
-        result.sort((a: any, b: any) => {
-            return (
-                Number(a.studentId.rollNumber) -
-                Number(b.studentId.rollNumber)
-            );
-        });
+            }
+        );
 
         const totalRecords = result.length;
 
@@ -3156,8 +3099,7 @@ export const getAttendance = async (
             totalRecords / limit
         );
 
-        const startIndex =
-            (page - 1) * limit;
+        const startIndex = (page - 1) * limit;
 
         const paginatedResult = result.slice(
             startIndex,
@@ -3177,12 +3119,12 @@ export const getAttendance = async (
             currentPage: page,
             limit
         });
-    }
-    catch (error) {
+    } catch (error) {
         console.log(error);
         next(error);
     }
 };
+
 
 export const getStudentAttendance = async (
     req: Request,

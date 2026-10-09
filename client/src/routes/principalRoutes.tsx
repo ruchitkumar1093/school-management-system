@@ -20,6 +20,7 @@ import PrincipalAttendance from "../pages/principalPages/attendance";
 import PrincipalViewAttendance from "../pages/principalPages/viewAttendance";
 import Holidays from "../pages/principalPages/holidays";
 import LeaveApplications from "../pages/principalPages/leaves";
+import PrincipalAttendanceCalendarPage from "../pages/principalPages/attendanceCalendar";
 import NotFound from "../pages/notFound";
 
 function PrincipalRoutes() {
@@ -40,6 +41,7 @@ function PrincipalRoutes() {
             <Route path="/changePassword" element={<PrincipalChangePassword />} />
 
             <Route path="/attendance/viewAttendance" element={<PrincipalViewAttendance />} />
+            <Route path="/attendance/attendanceCalendar" element={<PrincipalAttendanceCalendarPage />} />
             <Route path="admissionRequests/viewRequest" element={<ViewAdmissionRequest />} />
             <Route path="viewTeachers/teacherForm" element={<TeacherForm />} />
             <Route path="viewTeachers/teacherProfile" element={<TeacherProfile />} />

@@ -185,10 +185,6 @@ export const getStudentAttendance = (
     });
 };
 
-export const getAttendanceStudents = () => {
-    return api.get("teacher/attendance/students");
-};
-
 //Holidays:
 export const getHolidays = () => {
     return api.get("teacher/holidays");
