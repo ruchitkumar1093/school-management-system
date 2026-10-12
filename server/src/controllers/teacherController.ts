@@ -785,6 +785,7 @@ export const getMarks = async (
             (mark: any) => ({
                 _id: mark._id,
                 studentId: {
+                    _id: mark.studentId._id.toString(),
                     class: mark.studentId.class,
                     userId: {
                         name: mark.studentUser.name,
@@ -2617,6 +2618,172 @@ export const getStudentAttendance = async (
     }
     catch (error) {
         console.log(error);
+        next(error);
+    }
+};
+
+
+export const getStudentMonthlyAttendance = async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+) => {
+    try {
+        const studentId =
+            req.query.studentId?.toString() || "";
+
+        const year = Number(req.query.year);
+        const month = Number(req.query.month);
+
+        if (!studentId) {
+            return res.status(400).json({
+                message: "Student ID is required"
+            });
+        }
+
+        if (
+            !Number.isInteger(year) ||
+            year < 1000 ||
+            year > 9999 ||
+            !Number.isInteger(month) ||
+            month < 1 ||
+            month > 12
+        ) {
+            return res.status(400).json({
+                message: "A valid year and month are required"
+            });
+        }
+
+        const teacher = await Teacher.findOne({
+            userId: req.user?.userId
+        }).lean();
+
+        if (!teacher) {
+            return res.status(404).json({
+                message: "Teacher not found"
+            });
+        }
+
+        // Ensure the student belongs to the teacher's assigned class
+        const student = await Student.findOne({
+            _id: studentId,
+            class: teacher.classAssigned
+        })
+            .select("_id class rollNumber userId")
+            .populate({
+                path: "userId",
+                select: "name uid"
+            })
+            .lean();
+
+        if (!student) {
+            return res.status(404).json({
+                message: "Student not found"
+            });
+        }
+
+        const monthStart = new Date(
+            Date.UTC(year, month - 1, 1)
+        );
+
+        const nextMonthStart = new Date(
+            Date.UTC(year, month, 1)
+        );
+
+        // Fetch attendance only within the selected month
+        const attendanceRecords = await Attendance.find({
+            studentId: student._id,
+            date: {
+                $gte: monthStart,
+                $lt: nextMonthStart
+            }
+        })
+            .select("date status")
+            .sort({ date: 1 })
+            .lean();
+
+        // Fetch approved leaves overlapping the selected month
+        const approvedLeaves = await Leave.find({
+            studentId: student._id,
+            status: "Approved",
+            startDate: { $lt: nextMonthStart },
+            endDate: { $gte: monthStart }
+        })
+            .select("startDate endDate")
+            .sort({ startDate: 1 })
+            .lean();
+
+        // Actual attendance takes priority over leave
+        const attendanceByDate = new Map<
+            string,
+            { date: string; status: string }
+        >();
+
+        for (const record of attendanceRecords) {
+            const date = new Date(record.date)
+                .toISOString()
+                .slice(0, 10);
+
+            attendanceByDate.set(date, {
+                date,
+                status: record.status
+            });
+        }
+
+        // Expand approved leave dates within the selected month
+        for (const leave of approvedLeaves) {
+            const leaveStart = new Date(leave.startDate)
+                .toISOString()
+                .slice(0, 10);
+
+            const leaveEnd = new Date(leave.endDate)
+                .toISOString()
+                .slice(0, 10);
+
+            const start = new Date(
+                Math.max(
+                    new Date(leaveStart).getTime(),
+                    monthStart.getTime()
+                )
+            );
+
+            const end = new Date(
+                Math.min(
+                    new Date(leaveEnd).getTime(),
+                    nextMonthStart.getTime() - 24 * 60 * 60 * 1000
+                )
+            );
+
+            for (
+                const currentDate = new Date(start);
+                currentDate <= end;
+                currentDate.setUTCDate(
+                    currentDate.getUTCDate() + 1
+                )
+            ) {
+                const date = currentDate
+                    .toISOString()
+                    .slice(0, 10);
+
+                if (!attendanceByDate.has(date)) {
+                    attendanceByDate.set(date, {
+                        date,
+                        status: "Leave"
+                    });
+                }
+            }
+        }
+
+        const attendance = Array.from(
+            attendanceByDate.values()
+        ).sort((a, b) =>
+            a.date.localeCompare(b.date)
+        );
+
+        return res.status(200).json({
+            attendance
+        });
+    } catch (error) {
         next(error);
     }
 };

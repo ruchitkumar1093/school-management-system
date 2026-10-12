@@ -4,7 +4,8 @@ import { getHolidays } from "../controllers/holidayController";
 import { getStudents, getSubjects, getMarks, createStudent, getStudentById,
     updateStudent, deleteStudent, getMarkById, createMark, updateMark, deleteMark, getExamResults,
     getStudentsForAttendance, createAttendance, getAttendance, getStudentAttendance, getTeacherHome,
-    getTeacher, getLeaveApplications, approveLeave, rejectLeave, applyLeave, getMyLeaves
+    getTeacher, getLeaveApplications, approveLeave, rejectLeave, applyLeave, getMyLeaves,
+    getStudentMonthlyAttendance
  } 
 from "../controllers/teacherController";
 
@@ -30,6 +31,7 @@ router.get("/getStudentsForAttendance", getStudentsForAttendance);
 router.post("/createAttendance", createAttendance);
 router.get("/attendance", getAttendance);
 router.get("/attendance/student", getStudentAttendance);
+router.get("/attendance/student/month", getStudentMonthlyAttendance);
 
 //CRUD student
 router.get("/student/:id", getStudentById);

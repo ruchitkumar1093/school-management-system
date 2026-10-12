@@ -3,7 +3,7 @@ const router = express.Router();
 import { getHolidays } from "../controllers/holidayController";
 import {
     getSubjects, getStudents, getMarks, getAttendance, getStudentHome,
-    applyLeave, getMyLeaves
+    applyLeave, getMyLeaves, getMonthlyAttendance
 } from "../controllers/studentController";
 
 router.post("/applyLeave", applyLeave);
@@ -18,6 +18,7 @@ router.get("/marks", getMarks);
 router.get("/student", getStudents);
 
 router.get("/attendance", getAttendance);
+router.get("/attendance/month", getMonthlyAttendance);
 
 router.get("/home", getStudentHome);
 

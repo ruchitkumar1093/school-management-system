@@ -108,26 +108,24 @@ function TeacherAttendance() {
     const [modalConfirm, setModalConfirm] =
         useState<(() => void) | undefined>();
 
-    const fetchHolidays = async () => {
+    const fetchHolidays = async (year: number) => {
         try {
-            const response = await getHolidays();
+            const response = await getHolidays(year);
 
-            const formattedHolidays =
-                response.data.map(
-                    (holiday: {
-                        _id: string;
-                        date: string;
-                        name: string;
-                    }) => ({
-                        id: holiday._id,
-                        date: holiday.date.split("T")[0],
-                        name: holiday.name
-                    })
-                );
+            const formattedHolidays = response.data.map(
+                (holiday: {
+                    _id: string;
+                    date: string;
+                    name: string;
+                }) => ({
+                    id: holiday._id,
+                    date: holiday.date.split("T")[0],
+                    name: holiday.name
+                })
+            );
 
             setHolidays(formattedHolidays);
-        }
-        catch (error) {
+        } catch (error) {
             console.error(
                 "Failed to fetch holidays:",
                 error
@@ -186,9 +184,44 @@ function TeacherAttendance() {
         };
     }, [search]);
 
+    const [holidaysYear, setHolidaysYear] =
+        useState<number | null>(null);
+
     useEffect(() => {
-        fetchHolidays();
-    }, []);
+        const year = Number(date.split("-")[0]);
+
+        if (holidaysYear === year) {
+            return;
+        }
+
+        const fetchYearHolidays = async () => {
+            try {
+                const response = await getHolidays(year);
+
+                const formattedHolidays = response.data.map(
+                    (holiday: {
+                        _id: string;
+                        date: string;
+                        name: string;
+                    }) => ({
+                        id: holiday._id,
+                        date: holiday.date.split("T")[0],
+                        name: holiday.name
+                    })
+                );
+
+                setHolidays(formattedHolidays);
+                setHolidaysYear(year);
+            } catch (error) {
+                console.error(
+                    "Failed to fetch holidays:",
+                    error
+                );
+            }
+        };
+
+        void fetchYearHolidays();
+    }, [date, holidaysYear]);
 
     useEffect(() => {
         fetchStudents();

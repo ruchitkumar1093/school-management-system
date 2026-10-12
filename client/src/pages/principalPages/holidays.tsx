@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import NavBar from "../../components/navBar";
 import SideBar from "../../components/sideBar";
@@ -18,49 +18,82 @@ type Holiday = {
     name: string;
 };
 
+type HolidayResponse = {
+    _id?: string;
+    id?: string;
+    date: string;
+    name: string;
+};
+
 function Holidays() {
+    const today = new Date();
+
     const [holidays, setHolidays] = useState<Holiday[]>([]);
     const [loading, setLoading] = useState(true);
 
-    useEffect(() => {
-        const fetchData = async () => {
-            try {
-                const holidaysResponse = await getHolidays();
+    const [currentMonth, setCurrentMonth] = useState(() => ({
+        year: today.getFullYear(),
+        month: today.getMonth() + 1
+    }));
 
-                const formattedHolidays = holidaysResponse.data.map(
-                    (holiday: {
-                        _id: string;
-                        date: string;
-                        name: string;
-                    }) => ({
-                        id: holiday._id,
+    const holidaysCache = useRef<Record<number, Holiday[]>>({});
+
+    useEffect(() => {
+        let cancelled = false;
+
+        const fetchYearHolidays = async () => {
+            setLoading(true);
+
+            try {
+                const { year } = currentMonth;
+                let yearHolidays = holidaysCache.current[year];
+
+                if (!yearHolidays) {
+                    const response = await getHolidays(year);
+
+                    const data: HolidayResponse[] = Array.isArray(response.data)
+                        ? response.data
+                        : response.data.holidays ?? [];
+
+                    yearHolidays = data.map((holiday) => ({
+                        id: holiday._id ?? holiday.id ?? holiday.date,
                         date: holiday.date.split("T")[0],
                         name: holiday.name
-                    })
-                );
+                    }));
 
-                setHolidays(formattedHolidays);
-            }
-            catch (error) {
+                    holidaysCache.current[year] = yearHolidays;
+                }
+
+                if (!cancelled) {
+                    setHolidays(yearHolidays);
+                }
+            } catch (error) {
                 console.error("Failed to fetch holiday data:", error);
-            }
-            finally {
-                setLoading(false);
+
+                if (!cancelled) {
+                    setHolidays([]);
+                }
+            } finally {
+                if (!cancelled) {
+                    setLoading(false);
+                }
             }
         };
 
-        fetchData();
-    }, []);
+        void fetchYearHolidays();
 
-    const handleAddHoliday = async (
-        date: string,
-        name: string
-    ) => {
+        return () => {
+            cancelled = true;
+        };
+    }, [currentMonth.year]);
+
+    const handleMonthChange = (year: number, month: number) => {
+        setCurrentMonth({ year, month });
+    };
+
+    const handleAddHoliday = async (date: string, name: string) => {
         try {
-            const response = await addHoliday({
-                date,
-                name
-            });
+            const response = await addHoliday({ date, name });
 
             const newHoliday: Holiday = {
                 id: response.data._id,
@@ -68,17 +101,16 @@ function Holidays() {
                 name: response.data.name
             };
 
-            setHolidays((previous) => [
-                ...previous,
-                newHoliday
-            ]);
-        }
-        catch (error: any) {
+            setHolidays((previous) => {
+                const updated = [...previous, newHoliday];
+                holidaysCache.current[currentMonth.year] = updated;
+                return updated;
+            });
+        } catch (error: any) {
             console.error("Failed to add holiday:", error);
 
             throw new Error(
-                error.response?.data?.message ||
-                "Failed to add holiday"
+                error.response?.data?.message || "Failed to add holiday"
             );
         }
     };
@@ -89,10 +121,7 @@ function Holidays() {
         name: string
     ) => {
         try {
-            const response = await updateHoliday(id, {
-                date,
-                name
-            });
+            const response = await updateHoliday(id, { date, name });
 
             const updatedHoliday: Holiday = {
                 id: response.data._id,
@@ -100,20 +129,19 @@ function Holidays() {
                 name: response.data.name
             };
 
-            setHolidays((previous) =>
-                previous.map((holiday) =>
-                    holiday.id === id
-                        ? updatedHoliday
-                        : holiday
-                )
-            );
-        }
-        catch (error: any) {
+            setHolidays((previous) => {
+                const updated = previous.map((holiday) =>
+                    holiday.id === id ? updatedHoliday : holiday
+                );
+
+                holidaysCache.current[currentMonth.year] = updated;
+                return updated;
+            });
+        } catch (error: any) {
             console.error("Failed to update holiday:", error);
 
             throw new Error(
-                error.response?.data?.message ||
-                "Failed to update holiday"
+                error.response?.data?.message || "Failed to update holiday"
             );
         }
     };
@@ -122,18 +150,19 @@ function Holidays() {
         try {
             await deleteHoliday(id);
 
-            setHolidays((previous) =>
-                previous.filter(
+            setHolidays((previous) => {
+                const updated = previous.filter(
                     (holiday) => holiday.id !== id
-                )
-            );
-        }
-        catch (error: any) {
+                );
+
+                holidaysCache.current[currentMonth.year] = updated;
+                return updated;
+            });
+        } catch (error: any) {
             console.error("Failed to delete holiday:", error);
 
             throw new Error(
-                error.response?.data?.message ||
-                "Failed to delete holiday"
+                error.response?.data?.message || "Failed to delete holiday"
             );
         }
     };
@@ -167,6 +196,12 @@ function Holidays() {
                             <HolidayCalendar
                                 holidays={holidays}
                                 editable={true}
+                                currentMonth={new Date(
+                                    currentMonth.year,
+                                    currentMonth.month - 1,
+                                    1
+                                )}
+                                onMonthChange={handleMonthChange}
                                 onAddHoliday={handleAddHoliday}
                                 onUpdateHoliday={handleUpdateHoliday}
                                 onDeleteHoliday={handleDeleteHoliday}

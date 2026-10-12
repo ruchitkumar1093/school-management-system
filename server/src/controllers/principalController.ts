@@ -1510,6 +1510,7 @@ export const getMarks = async (
             _id: mark._id,
             studentId: mark.student
                 ? {
+                    _id: mark.student._id.toString(),
                     class: mark.student.class,
                     userId: mark.studentUser
                         ? {
@@ -3301,6 +3302,162 @@ export const getStudentAttendance = async (
             leaveCount,
             totalDays
         });
+    } catch (error) {
+        console.log(error);
+        next(error);
+    }
+};
+
+export const getStudentMonthlyAttendance = async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+) => {
+    try {
+        const { studentId } = req.query;
+        const year = Number(req.query.year);
+        const month = Number(req.query.month);
+
+        if (!studentId || typeof studentId !== "string") {
+            return res.status(400).json({
+                message: "Student ID is required"
+            });
+        }
+
+        if (
+            !Number.isInteger(year) ||
+            year < 1000 ||
+            year > 9999 ||
+            !Number.isInteger(month) ||
+            month < 1 ||
+            month > 12
+        ) {
+            return res.status(400).json({
+                message: "Valid year and month are required"
+            });
+        }
+
+        const student = await Student.findById(studentId).select("_id");
+
+        if (!student) {
+            return res.status(404).json({
+                message: "Student not found"
+            });
+        }
+
+        const startDate = new Date(Date.UTC(year, month - 1, 1));
+        const endDate = new Date(Date.UTC(year, month, 1));
+
+        const [attendanceRecords, approvedLeaves] = await Promise.all([
+            Attendance.find({
+                studentId: student._id,
+                date: {
+                    $gte: startDate,
+                    $lt: endDate
+                }
+            })
+                .select("date status")
+                .sort({ date: 1 })
+                .lean(),
+
+            Leave.find({
+                studentId: student._id,
+                status: "Approved",
+                startDate: { $lt: endDate },
+                endDate: { $gte: startDate }
+            })
+                .select("startDate endDate")
+                .lean()
+        ]);
+
+        // Actual attendance takes priority over an approved leave.
+        const attendanceDates = new Set(
+            attendanceRecords.map(record =>
+                new Date(record.date).toISOString().split("T")[0]
+            )
+        );
+
+        const leaveRecords: {
+            _id: string;
+            date: Date;
+            status: "Leave";
+        }[] = [];
+
+        for (const leave of approvedLeaves) {
+            const leaveStart = new Date(leave.startDate);
+            const leaveEnd = new Date(leave.endDate);
+
+            const currentDate = new Date(
+                Math.max(leaveStart.getTime(), startDate.getTime())
+            );
+
+            const lastDate = new Date(
+                Math.min(leaveEnd.getTime(), endDate.getTime() - 1)
+            );
+
+            currentDate.setUTCHours(0, 0, 0, 0);
+            lastDate.setUTCHours(0, 0, 0, 0);
+
+            while (currentDate <= lastDate) {
+                const dateString = currentDate.toISOString().split("T")[0];
+
+                if (!attendanceDates.has(dateString)) {
+                    leaveRecords.push({
+                        _id: `${leave._id}-${dateString}`,
+                        date: new Date(currentDate),
+                        status: "Leave"
+                    });
+                }
+
+                currentDate.setUTCDate(currentDate.getUTCDate() + 1);
+            }
+        }
+
+        const attendance = [
+            ...attendanceRecords,
+            ...leaveRecords
+        ].sort(
+            (a, b) =>
+                new Date(a.date).getTime() -
+                new Date(b.date).getTime()
+        );
+
+        return res.status(200).json({ attendance });
+    } catch (error) {
+        console.log(error);
+        next(error);
+    }
+};
+
+export const getStudentAttendanceDetails = async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+) => {
+    try {
+        const { studentId } = req.query;
+
+        if (!studentId || typeof studentId !== "string") {
+            return res.status(400).json({
+                message: "Student ID is required"
+            });
+        }
+
+        const student = await Student.findById(studentId)
+            .select("class rollNumber userId")
+            .populate({
+                path: "userId",
+                select: "name uid"
+            })
+            .lean();
+
+        if (!student) {
+            return res.status(404).json({
+                message: "Student not found"
+            });
+        }
+
+        return res.status(200).json({ student });
     } catch (error) {
         console.log(error);
         next(error);

@@ -643,3 +643,133 @@ export const getAttendance = async (
         next(error);
     }
 };
+
+
+
+export const getMonthlyAttendance = async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+) => {
+    try {
+        const year = Number(req.query.year);
+        const month = Number(req.query.month);
+
+        // Validate year and month
+        if (
+            !Number.isInteger(year) ||
+            year < 1000 ||
+            year > 9999 ||
+            !Number.isInteger(month) ||
+            month < 1 ||
+            month > 12
+        ) {
+            return res.status(400).json({
+                message: "A valid year and month are required",
+            });
+        }
+
+        // Get the logged-in student's record
+        const student = await Student.findOne({
+            userId: req.user?.userId,
+        }).select("_id");
+
+        if (!student) {
+            return res.status(404).json({
+                message: "Student not found",
+            });
+        }
+
+        // Calculate the selected month's UTC boundaries
+        const monthStart = new Date(Date.UTC(year, month - 1, 1));
+        const nextMonthStart = new Date(Date.UTC(year, month, 1));
+
+        // Fetch only attendance records for the selected month
+        const attendanceRecords = await Attendance.find({
+            studentId: student._id,
+            date: {
+                $gte: monthStart,
+                $lt: nextMonthStart,
+            },
+        })
+            .select("date status")
+            .sort({ date: 1 })
+            .lean();
+
+        // Fetch approved leaves that overlap the selected month
+        const approvedLeaves = await Leave.find({
+            studentId: student._id,
+            status: "Approved",
+            startDate: { $lt: nextMonthStart },
+            endDate: { $gte: monthStart },
+        })
+            .select("startDate endDate")
+            .lean();
+
+        // Store actual attendance by date
+        const attendanceByDate = new Map<
+            string,
+            { date: string; status: string }
+        >();
+
+        for (const record of attendanceRecords) {
+            const date = new Date(record.date)
+                .toISOString()
+                .slice(0, 10);
+
+            attendanceByDate.set(date, {
+                date,
+                status: record.status,
+            });
+        }
+
+        // Add approved leave dates only when actual attendance is absent
+        for (const leave of approvedLeaves) {
+            const leaveStart = new Date(leave.startDate)
+                .toISOString()
+                .slice(0, 10);
+
+            const leaveEnd = new Date(leave.endDate)
+                .toISOString()
+                .slice(0, 10);
+
+            const start = new Date(
+                Math.max(
+                    new Date(leaveStart).getTime(),
+                    monthStart.getTime()
+                )
+            );
+
+            const end = new Date(
+                Math.min(
+                    new Date(leaveEnd).getTime(),
+                    nextMonthStart.getTime() - 24 * 60 * 60 * 1000
+                )
+            );
+
+            for (
+                const currentDate = new Date(start);
+                currentDate <= end;
+                currentDate.setUTCDate(currentDate.getUTCDate() + 1)
+            ) {
+                const date = currentDate.toISOString().slice(0, 10);
+
+                if (!attendanceByDate.has(date)) {
+                    attendanceByDate.set(date, {
+                        date,
+                        status: "Leave",
+                    });
+                }
+            }
+        }
+
+        // Return compact, date-wise data for the calendar
+        const attendance = Array.from(attendanceByDate.values()).sort(
+            (a, b) => a.date.localeCompare(b.date)
+        );
+
+        return res.status(200).json({ attendance });
+    } catch (error) {
+        next(error);
+    }
+};

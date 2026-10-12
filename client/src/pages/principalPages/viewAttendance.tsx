@@ -186,7 +186,11 @@ function PrincipalAttendance() {
                                             <td className="p-2 text-center">
                                                 <button
                                                     type="button"
-                                                    onClick={() => navigate("/principal/attendance/attendanceCalendar", { state: { studentId: record.studentId._id } })}
+                                                    onClick={() =>
+                                                        navigate(
+                                                            `/principal/attendance/viewAttendance/attendanceCalendar/${record.studentId._id}`
+                                                        )
+                                                    }
                                                     title="View attendance calendar"
                                                     aria-label={`View attendance calendar for ${record.studentId.userId.name}`}
                                                     className="inline-flex cursor-pointer items-center justify-center rounded-md p-2 text-purple-800 transition-colors hover:bg-purple-300 hover:text-purple-950"

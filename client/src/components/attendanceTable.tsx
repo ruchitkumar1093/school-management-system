@@ -154,9 +154,7 @@ function TeacherAttendanceTable({
                     <button
                       type="button"
                       onClick={() =>
-                        navigate("../attendanceCalendar", {
-                          state: { studentId: student._id }
-                        })
+                        navigate(`../attendance/attendanceCalendar/${student._id}`)
                       }
                       title="View attendance calendar"
                       aria-label={`View attendance calendar for ${student.userId.name}`}

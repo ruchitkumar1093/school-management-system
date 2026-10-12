@@ -26,21 +26,26 @@ function PrincipalViewMarks() {
 
     type Mark = {
         _id: string;
+
         studentId: {
+            _id: string;
             class: string;
             userId: {
                 name: string;
                 uid: string;
-            };
+            } | null;
         } | null;
+
         teacherId: {
             userId: {
                 name: string;
-            };
+            } | null;
         } | null;
+
         subjectId: {
             name: string;
         } | null;
+
         exam: string;
         marksObtained: number;
         totalMarks: number;

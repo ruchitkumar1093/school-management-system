@@ -1,20 +1,22 @@
-import { FiEdit, FiTrash } from "react-icons/fi";
+import { FiEdit, FiTrash, FiCalendar } from "react-icons/fi";
+import { useNavigate } from "react-router-dom";
 
 type Mark = {
     _id: string;
 
     studentId: {
+        _id: string;
         class: string;
         userId: {
             name: string;
             uid: string;
-        };
+        } | null;
     } | null;
 
     teacherId: {
         userId: {
             name: string;
-        };
+        } | null;
     } | null;
 
     subjectId: {
@@ -39,6 +41,14 @@ function PrincipalMarksTable({
     handleDeleteMarks,
     startIndex
 }: Props) {
+    const navigate = useNavigate();
+
+    const handleViewAttendance = (studentId: string) => {
+        navigate(
+            `/principal/attendance/viewAttendance/attendanceCalendar/${studentId}`
+        );
+    };
+
     return (
         <div className="overflow-x-auto rounded-lg shadow-md">
             <table className="w-full border-collapse bg-purple-200 text-left text-gray-900">
@@ -74,8 +84,8 @@ function PrincipalMarksTable({
                         <th className="border-r border-purple-300 p-3 font-semibold text-purple-950">
                             Result:
                         </th>
-                        <th className="p-3 font-semibold text-purple-950">
-                            Actions:
+                        <th className="p-3 text-center font-semibold text-purple-950">
+                            Manage:
                         </th>
                     </tr>
                 </thead>
@@ -84,7 +94,7 @@ function PrincipalMarksTable({
                     {marksData.length === 0 ? (
                         <tr>
                             <td
-                                colSpan={11}
+                                colSpan={12}
                                 className="p-4 text-center text-gray-500"
                             >
                                 No records found
@@ -137,26 +147,49 @@ function PrincipalMarksTable({
                                 </td>
 
                                 <td
-                                    className={`border-r border-purple-300 p-3 font-medium ${
-                                        (mark.marksObtained /
-                                            mark.totalMarks) *
-                                            100 >=
+                                    className={`border-r border-purple-300 p-3 font-medium ${(mark.marksObtained /
+                                        mark.totalMarks) *
+                                        100 >=
                                         33
-                                            ? "bg-green-200 text-green-800"
-                                            : "bg-red-200 text-red-800"
-                                    }`}
+                                        ? "bg-green-200 text-green-800"
+                                        : "bg-red-200 text-red-800"
+                                        }`}
                                 >
                                     {(mark.marksObtained /
                                         mark.totalMarks) *
                                         100 >=
-                                    33
+                                        33
                                         ? "Pass"
                                         : "Fail"}
                                 </td>
 
                                 <td className="p-3">
                                     <div className="flex items-center gap-1">
+                                        {mark.studentId?._id ? (
+                                            <button
+                                                type="button"
+                                                title="View student attendance calendar"
+                                                aria-label={`View attendance calendar for ${mark.studentId.userId?.name ?? "student"
+                                                    }`}
+                                                onClick={() =>
+                                                    handleViewAttendance(
+                                                        mark.studentId!._id
+                                                    )
+                                                }
+                                                className="cursor-pointer p-1.5 text-purple-900 transition-colors hover:text-purple-600"
+                                            >
+                                                <FiCalendar className="h-4 w-4" />
+                                            </button>
+                                        ) : (
+                                            <span
+                                                className="text-gray-400"
+                                                title="Student record unavailable"
+                                            >
+                                                —
+                                            </span>
+                                        )}
                                         <button
+                                            type="button"
                                             title="Edit"
                                             onClick={() =>
                                                 handleEditMarks(mark._id)
@@ -167,6 +200,7 @@ function PrincipalMarksTable({
                                         </button>
 
                                         <button
+                                            type="button"
                                             title="Delete"
                                             onClick={() =>
                                                 handleDeleteMarks(mark._id)

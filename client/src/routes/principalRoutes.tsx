@@ -41,7 +41,7 @@ function PrincipalRoutes() {
             <Route path="/changePassword" element={<PrincipalChangePassword />} />
 
             <Route path="/attendance/viewAttendance" element={<PrincipalViewAttendance />} />
-            <Route path="/attendance/attendanceCalendar" element={<PrincipalAttendanceCalendarPage />} />
+            <Route path="/attendance/viewAttendance/attendanceCalendar/:studentId" element={<PrincipalAttendanceCalendarPage />} />
             <Route path="admissionRequests/viewRequest" element={<ViewAdmissionRequest />} />
             <Route path="viewTeachers/teacherForm" element={<TeacherForm />} />
             <Route path="viewTeachers/teacherProfile" element={<TeacherProfile />} />

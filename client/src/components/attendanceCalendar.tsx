@@ -1,4 +1,4 @@
-import { useState } from "react";
+
 import {
     FiChevronLeft,
     FiChevronRight
@@ -10,7 +10,6 @@ type AttendanceDay = {
 };
 
 type Holiday = {
-    id: string;
     date: string;
     name: string;
 };
@@ -18,22 +17,17 @@ type Holiday = {
 type AttendanceCalendarProps = {
     attendance: AttendanceDay[];
     holidays: Holiday[];
+    currentMonth: Date;
+    onMonthChange: (year: number, month: number) => void;
 };
 
 function AttendanceCalendar({
     attendance,
-    holidays
+    holidays,
+    currentMonth,
+    onMonthChange
 }: AttendanceCalendarProps) {
     const today = new Date();
-console.log(attendance);
-
-    const [currentMonth, setCurrentMonth] = useState(
-        new Date(
-            today.getFullYear(),
-            today.getMonth(),
-            1
-        )
-    );
 
     const year = currentMonth.getFullYear();
 
@@ -74,6 +68,14 @@ console.log(attendance);
         ).padStart(2, "0");
 
         return `${year}-${month}-${day}`;
+    }
+
+    // Update the selected month through the parent component
+    function changeMonth(newMonth: Date) {
+        onMonthChange(
+            newMonth.getFullYear(),
+            newMonth.getMonth() + 1
+        );
     }
 
     function getCalendarDays() {
@@ -144,7 +146,7 @@ console.log(attendance);
     }
 
     function previousMonth() {
-        setCurrentMonth(
+        changeMonth(
             new Date(
                 year,
                 currentMonth.getMonth() - 1,
@@ -154,7 +156,7 @@ console.log(attendance);
     }
 
     function nextMonth() {
-        setCurrentMonth(
+        changeMonth(
             new Date(
                 year,
                 currentMonth.getMonth() + 1,
@@ -224,9 +226,9 @@ console.log(attendance);
                         <select
                             value={currentMonth.getMonth()}
                             onChange={(e) => {
-                                setCurrentMonth(
+                                changeMonth(
                                     new Date(
-                                        currentMonth.getFullYear(),
+                                        year,
                                         Number(e.target.value),
                                         1
                                     )
@@ -247,11 +249,9 @@ console.log(attendance);
                         </select>
 
                         <select
-                            value={
-                                currentMonth.getFullYear()
-                            }
+                            value={year}
                             onChange={(e) => {
-                                setCurrentMonth(
+                                changeMonth(
                                     new Date(
                                         Number(e.target.value),
                                         currentMonth.getMonth(),
@@ -307,13 +307,7 @@ console.log(attendance);
 
             <div className="grid grid-cols-7 border-l border-white">
                 {calendarDays.map(
-                    (
-                        {
-                            date,
-                            currentMonth
-                        },
-                        index
-                    ) => {
+                    ({ date, currentMonth: isCurrentMonth }, index) => {
                         const attendanceRecord =
                             getAttendance(date);
 
@@ -330,7 +324,7 @@ console.log(attendance);
                             <div
                                 key={index}
                                 className={`relative min-h-24 border-b border-r border-white p-2 text-left ${
-                                    currentMonth
+                                    isCurrentMonth
                                         ? "text-gray-900"
                                         : "text-gray-400"
                                 }`}
@@ -347,11 +341,11 @@ console.log(attendance);
                                     </span>
                                 </div>
 
-                                {currentMonth && sunday ? (
+                                {isCurrentMonth && sunday ? (
                                     <div className="mt-3 rounded-md bg-gray-200 px-2 py-1 text-center text-xs font-medium text-gray-600">
                                         Sunday
                                     </div>
-                                ) : currentMonth && holiday ? (
+                                ) : isCurrentMonth && holiday ? (
                                     <div
                                         className="mt-3 rounded-md bg-purple-300 px-2 py-1 text-center text-xs font-medium text-purple-900"
                                         title={holiday.name}
@@ -361,7 +355,7 @@ console.log(attendance);
                                             {holiday.name}
                                         </div>
                                     </div>
-                                ) : currentMonth && attendanceRecord ? (
+                                ) : isCurrentMonth && attendanceRecord ? (
                                     <div
                                         className={`mt-3 rounded-md px-2 py-1 text-center text-xs font-medium ${getStatusClass(
                                             attendanceRecord.status

@@ -143,7 +143,7 @@ function StudentAttendance() {
                                 </p>
                             </div>
                             <button
-                                onClick={() => navigate("calender")}
+                                onClick={() => navigate("calender", { state: { student } })}
                                 type="button"
                                 className="rounded-lg bg-purple-300 px-6 py-3 font-medium text-purple-950 shadow-[0_2px_3px] transition-colors hover:bg-violet-300 cursor-pointer"
                             >

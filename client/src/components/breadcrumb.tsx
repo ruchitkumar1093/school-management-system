@@ -26,6 +26,8 @@ function Breadcrumb() {
         teacherProfile: "Profile",
         studentProfile: "Profile",
         viewLeaves: "Leaves",
+        attendanceCalendar: "Attendance Calendar",
+        calender: "Attendance Calendar",
 
         // Principal pages
         admissionRequests: "Admission Requests",
@@ -36,7 +38,8 @@ function Breadcrumb() {
 
     const paths = location.pathname
         .split("/")
-        .filter(Boolean);
+        .filter(Boolean)
+        .filter((path) => !/^[a-f\d]{24}$/i.test(path));
 
     return (
         <div>

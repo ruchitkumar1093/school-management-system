@@ -85,6 +85,20 @@ export const getMyLeaves = (
     });
 };
 
+export const getStudentMonthlyAttendance = (
+    studentId: string,
+    year: number,
+    month: number
+) => {
+    return api.get("teacher/attendance/student/month", {
+        params: {
+            studentId,
+            year,
+            month
+        }
+    });
+};
+
 //STUDENT CRUD:
 export const deleteStudent = (id: string) => {
     return api.delete(`/teacher/deleteStudent/${id}`);
@@ -186,8 +200,10 @@ export const getStudentAttendance = (
 };
 
 //Holidays:
-export const getHolidays = () => {
-    return api.get("teacher/holidays");
+export const getHolidays = (year: number) => {
+    return api.get("teacher/holidays", {
+        params: { year }
+    });
 };
 
 //Leaves:

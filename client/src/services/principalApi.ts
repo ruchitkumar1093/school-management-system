@@ -321,8 +321,10 @@ export const getClassOverview = (className: string) => {
 };
 
 //Holidays:
-export const getHolidays = () => {
-    return api.get("/principal/getHolidays");
+export const getHolidays = (year: number) => {
+    return api.get("principal/holidays", {
+        params: { year }
+    });
 };
 
 export const addHoliday = (data: { date: string; name: string }) => {
@@ -356,6 +358,20 @@ export const getLeaveApplications = (
         }
     });
 };
+
+export const getStudentAttendanceDetails = (studentId: string) =>
+    api.get("principal/attendance/student/details", {
+        params: { studentId }
+    });
+
+export const getStudentMonthlyAttendance = (
+    studentId: string,
+    year: number,
+    month: number
+) =>
+    api.get("principal/attendance/student/month", {
+        params: { studentId, year, month }
+    });
 
 export const approveLeave = (id: string) => {
     return api.patch(`/principal/leaves/${id}/approve`);

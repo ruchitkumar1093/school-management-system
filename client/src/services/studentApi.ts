@@ -52,14 +52,25 @@ export const getAttendance = (
     });
 };
 
+
+export const getMonthlyAttendance = (year: number, month: number) => {
+    return api.get("student/attendance/month", {
+        params: { year, month },
+    });
+};
+
+
 export const viewHome = () => {
     return api.get("student/home");
 };
 
 //Holidays:
-export const getHolidays = () => {
-    return api.get("student/holidays");
+export const getHolidays = (year: number) => {
+    return api.get("student/holidays", {
+        params: { year },
+    });
 };
+
 
 //Leaves:
 export const applyLeave = (data: {

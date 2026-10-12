@@ -3,24 +3,53 @@ import Holiday from "../models/Holiday";
 import Attendance from "../models/Attendance";
 
 // Get all holidays
+
 export const getHolidays = async (
     req: Request,
     res: Response
 ) => {
     try {
-        const holidays = await Holiday.find()
-            .sort({ date: 1 });
+        const year = Number(req.query.year);
+
+        // Require a valid year
+        if (
+            !Number.isInteger(year) ||
+            year < 1000 ||
+            year > 9999
+        ) {
+            return res.status(400).json({
+                message: "A valid year is required",
+            });
+        }
+
+        const startDate = new Date(
+            Date.UTC(year, 0, 1)
+        );
+
+        const endDate = new Date(
+            Date.UTC(year + 1, 0, 1)
+        );
+
+        const holidays = await Holiday.find({
+            date: {
+                $gte: startDate,
+                $lt: endDate,
+            },
+        })
+            .select("date name -_id")
+            .sort({ date: 1 })
+            .lean();
 
         return res.status(200).json(holidays);
-    }
-    catch (error) {
+    } catch (error) {
         console.error("Get holidays error:", error);
 
         return res.status(500).json({
-            message: "Failed to get holidays"
+            message: "Failed to get holidays",
         });
     }
 };
+
 
 
 // Add a new holiday

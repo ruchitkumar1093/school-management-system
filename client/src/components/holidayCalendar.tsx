@@ -14,6 +14,8 @@ type Holiday = {
 
 type HolidayCalendarProps = {
     holidays: Holiday[];
+    currentMonth?: Date;
+    onMonthChange?: (year: number, month: number) => void;
     attendanceDates?: string[];
     editable?: boolean;
     onAddHoliday?: (date: string, name: string) => Promise<void>;
@@ -27,6 +29,8 @@ type HolidayCalendarProps = {
 
 function HolidayCalendar({
     holidays,
+    currentMonth: controlledMonth,
+    onMonthChange,
     attendanceDates = [],
     editable = true,
     onAddHoliday,
@@ -36,9 +40,21 @@ function HolidayCalendar({
 
     const today = new Date();
 
-    const [currentMonth, setCurrentMonth] = useState(
+    const [internalCurrentMonth, setInternalCurrentMonth] = useState(
         new Date(today.getFullYear(), today.getMonth(), 1)
     );
+
+    // Supports both controlled calendars (parent fetches data by year) and
+    // existing pages that still manage the month internally.
+    const currentMonth = controlledMonth ?? internalCurrentMonth;
+
+    function setCalendarMonth(date: Date) {
+        if (onMonthChange) {
+            onMonthChange(date.getFullYear(), date.getMonth() + 1);
+        } else {
+            setInternalCurrentMonth(date);
+        }
+    }
 
     const [selectedDate, setSelectedDate] = useState<string | null>(null);
     const [holidayName, setHolidayName] = useState("");
@@ -134,7 +150,7 @@ function HolidayCalendar({
     }
 
     function previousMonth() {
-        setCurrentMonth(
+        setCalendarMonth(
             new Date(
                 year,
                 currentMonth.getMonth() - 1,
@@ -144,7 +160,7 @@ function HolidayCalendar({
     }
 
     function nextMonth() {
-        setCurrentMonth(
+        setCalendarMonth(
             new Date(
                 year,
                 currentMonth.getMonth() + 1,
@@ -356,7 +372,7 @@ function HolidayCalendar({
                             <select
                                 value={currentMonth.getMonth()}
                                 onChange={(e) => {
-                                    setCurrentMonth(
+                                    setCalendarMonth(
                                         new Date(
                                             currentMonth.getFullYear(),
                                             Number(e.target.value),
@@ -394,7 +410,7 @@ function HolidayCalendar({
                                     currentMonth.getFullYear()
                                 }
                                 onChange={(e) => {
-                                    setCurrentMonth(
+                                    setCalendarMonth(
                                         new Date(
                                             Number(e.target.value),
                                             currentMonth.getMonth(),

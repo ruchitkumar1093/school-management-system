@@ -1,4 +1,6 @@
-import { useEffect, useState } from "react";
+
+import { useEffect, useRef, useState } from "react";
+import { useLocation } from "react-router-dom";
 
 import NavBar from "../../components/navBar";
 import SideBar from "../../components/sideBar";
@@ -6,18 +8,16 @@ import Breadcrumb from "../../components/breadcrumb";
 import AttendanceCalendar from "../../components/attendanceCalendar";
 
 import {
-    getAttendance,
+    getMonthlyAttendance,
     getHolidays
 } from "../../services/studentApi";
 
 type Attendance = {
-    _id: string;
     date: string;
     status: "Present" | "Absent" | "Leave";
 };
 
 type Holiday = {
-    id: string;
     date: string;
     name: string;
 };
@@ -29,7 +29,13 @@ type StudentInfo = {
     rollNumber: string;
 };
 
+type AttendanceResponse = {
+    attendance: Attendance[];
+};
+
 function AttendanceCalendarPage() {
+    const location = useLocation();
+
     const [attendance, setAttendance] =
         useState<Attendance[]>([]);
 
@@ -37,67 +43,199 @@ function AttendanceCalendarPage() {
         useState<Holiday[]>([]);
 
     const [student, setStudent] =
-        useState<StudentInfo | null>(null);
+        useState<StudentInfo | null>(
+            location.state?.student ?? null
+        );
 
     const [loading, setLoading] =
         useState(true);
 
+    const [holidayLoading, setHolidayLoading] =
+        useState(true);
+
+    const [currentMonth, setCurrentMonth] = useState(() => {
+        const today = new Date();
+
+        return {
+            year: today.getFullYear(),
+            month: today.getMonth() + 1
+        };
+    });
+
+    const attendanceCache = useRef<
+        Record<string, Attendance[]>
+    >({});
+
+    const holidaysCache = useRef<
+        Record<number, Holiday[]>
+    >({});
+
+    const attendanceRequestId = useRef(0);
+
+    // Fetch attendance for the selected month only
     useEffect(() => {
-        const fetchData = async () => {
+        let cancelled = false;
+        const requestId = ++attendanceRequestId.current;
+
+        const fetchAttendance = async () => {
+            setLoading(true);
+
+            const { year, month } = currentMonth;
+            const cacheKey =
+                `${year}-${String(month).padStart(2, "0")}`;
+
             try {
-                const [
-                    attendanceResponse,
-                    holidaysResponse
-                ] = await Promise.all([
-                    getAttendance(1, 1000),
-                    getHolidays()
-                ]);
+                let monthAttendance =
+                    attendanceCache.current[cacheKey];
 
-                const formattedAttendance =
-                    attendanceResponse.data.attendance.map(
-                        (record: Attendance) => ({
+                if (!monthAttendance) {
+                    const response = await getMonthlyAttendance(
+                        year,
+                        month
+                    );
+
+                    const data =
+                        response.data as AttendanceResponse;
+
+                    monthAttendance = data.attendance.map(
+                        (record) => ({
                             ...record,
-                            date: record.date.split("T")[0]
+                            date: record.date.slice(0, 10)
                         })
                     );
 
-                const formattedHolidays =
-                    holidaysResponse.data.map(
-                        (holiday: Holiday) => ({
-                            ...holiday,
-                            date: holiday.date.split("T")[0]
-                        })
-                    );
+                    attendanceCache.current[cacheKey] =
+                        monthAttendance;
+                }
 
-                setAttendance(
-                    formattedAttendance
-                );
-
-                setHolidays(
-                    formattedHolidays
-                );
-
-                setStudent(
-                    attendanceResponse.data.student
-                );
-            }
-            catch (error) {
+                if (
+                    !cancelled &&
+                    requestId === attendanceRequestId.current
+                ) {
+                    setAttendance(monthAttendance);
+                }
+            } catch (error) {
                 console.error(
-                    "Failed to fetch attendance or holidays:",
+                    "Failed to fetch monthly attendance:",
                     error
                 );
 
-                setAttendance([]);
-                setHolidays([]);
-                setStudent(null);
-            }
-            finally {
-                setLoading(false);
+                if (
+                    !cancelled &&
+                    requestId === attendanceRequestId.current
+                ) {
+                    setAttendance([]);
+                }
+            } finally {
+                if (
+                    !cancelled &&
+                    requestId === attendanceRequestId.current
+                ) {
+                    setLoading(false);
+                }
             }
         };
 
-        fetchData();
-    }, []);
+        void fetchAttendance();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [currentMonth]);
+
+    // Fetch holidays once for each year
+    useEffect(() => {
+        let cancelled = false;
+
+        const fetchHolidays = async () => {
+            setHolidayLoading(true);
+
+            try {
+                const year = currentMonth.year;
+                let yearHolidays = holidaysCache.current[year];
+
+                if (!yearHolidays) {
+                    const response = await getHolidays(year);
+
+                    yearHolidays = response.data.map(
+                        (holiday: Holiday) => ({
+                            ...holiday,
+                            date: holiday.date.slice(0, 10)
+                        })
+                    );
+
+                    holidaysCache.current[year] =
+                        yearHolidays;
+                }
+
+                if (!cancelled) {
+                    setHolidays(yearHolidays);
+                }
+            } catch (error) {
+                console.error(
+                    "Failed to fetch holidays:",
+                    error
+                );
+
+                if (!cancelled) {
+                    setHolidays([]);
+                }
+            } finally {
+                if (!cancelled) {
+                    setHolidayLoading(false);
+                }
+            }
+        };
+
+        void fetchHolidays();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [currentMonth.year]);
+
+    // Called whenever the calendar's displayed month changes
+    const handleMonthChange = (
+        year: number,
+        month: number
+    ) => {
+        setCurrentMonth({ year, month });
+    };
+
+    // Fetch student details only if navigation state wasn't provided
+    useEffect(() => {
+        if (student) return;
+
+        // Student details are normally passed through navigation state.
+        // If the page is opened directly or refreshed, they can be
+        // recovered from the existing attendance endpoint.
+        let cancelled = false;
+
+        const fetchStudent = async () => {
+            try {
+                const response = await import(
+                    "../../services/studentApi"
+                ).then(({ getAttendance }) =>
+                    getAttendance(1, 1)
+                );
+
+                if (!cancelled) {
+                    setStudent(response.data.student);
+                }
+            } catch (error) {
+                console.error(
+                    "Failed to fetch student details:",
+                    error
+                );
+            }
+        };
+
+        void fetchStudent();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [student]);
 
     return (
         <div className="flex min-h-screen flex-col font-fredoka">
@@ -120,49 +258,59 @@ function AttendanceCalendarPage() {
                             </p>
                         </div>
 
+                        {student && (
+                            <div className="mb-6 flex flex-wrap gap-8">
+                                <div>
+                                    Student:
+                                    <span className="ml-1 font-medium">
+                                        {student.name}
+                                    </span>
+                                </div>
+
+                                <div>
+                                    UID:
+                                    <span className="ml-1 font-medium">
+                                        {student.uid.toUpperCase()}
+                                    </span>
+                                </div>
+
+                                <div>
+                                    Class:
+                                    <span className="ml-1 font-medium">
+                                        {student.class}
+                                    </span>
+                                </div>
+
+                                <div>
+                                    Roll Number:
+                                    <span className="ml-1 font-medium">
+                                        {student.rollNumber}
+                                    </span>
+                                </div>
+                            </div>
+                        )}
+
+                        {(loading || holidayLoading) && (
+                            <p className="mb-3 text-gray-600">
+                                Loading calendar...
+                            </p>
+                        )}
+
                         {loading ? (
                             <p className="text-gray-600">
                                 Loading attendance...
                             </p>
                         ) : (
-                            <>
-                                {student && (
-                                    <div className="mb-6 flex flex-wrap gap-8">
-                                        <div>
-                                            Student:
-                                            <span className="ml-1 font-medium">
-                                                {student.name}
-                                            </span>
-                                        </div>
-
-                                        <div>
-                                            UID:
-                                            <span className="ml-1 font-medium">
-                                                {student.uid.toUpperCase()}
-                                            </span>
-                                        </div>
-
-                                        <div>
-                                            Class:
-                                            <span className="ml-1 font-medium">
-                                                {student.class}
-                                            </span>
-                                        </div>
-
-                                        <div>
-                                            Roll Number:
-                                            <span className="ml-1 font-medium">
-                                                {student.rollNumber}
-                                            </span>
-                                        </div>
-                                    </div>
+                            <AttendanceCalendar
+                                attendance={attendance}
+                                holidays={holidays}
+                                currentMonth={new Date(
+                                    currentMonth.year,
+                                    currentMonth.month - 1,
+                                    1
                                 )}
-
-                                <AttendanceCalendar
-                                    attendance={attendance}
-                                    holidays={holidays}
-                                />
-                            </>
+                                onMonthChange={handleMonthChange}
+                            />
                         )}
                     </div>
                 </div>

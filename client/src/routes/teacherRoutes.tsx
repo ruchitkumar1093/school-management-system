@@ -32,7 +32,7 @@ function TeacherRoutes() {
             <Route path="/myLeaves" element={<TeacherLeaveApplications />} />   
             <Route path="/viewLeaves" element={<LeaveApplications />} />
             <Route path="/changePassword" element= {<TeacherChangePassword />} />
-            <Route path="/attendanceCalendar" element={<TeacherAttendanceCalendarPage />} />
+            <Route path="/attendance/attendanceCalendar/:studentId" element={<TeacherAttendanceCalendarPage />} />
 
             <Route path="/attendance/viewAttendance" element= {<TeacherViewAttendance />} />
             <Route path="viewStudents/studentForm" element={<StudentForm />} />
