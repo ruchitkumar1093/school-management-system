@@ -17,10 +17,13 @@ import MarksForm from "../pages/principalPages/marksForm";
 import AdmissionRequest from "../pages/principalPages/admissionRequest";
 import ViewAdmissionRequest from "../pages/principalPages/viewAdmissionRequest";
 import PrincipalAttendance from "../pages/principalPages/attendance";
+import MarkTeacherAttendance from "../pages/principalPages/markTeacherAttendance";
+import ViewTeacherAttendance from "../pages/principalPages/viewTeacherAttendance";
 import PrincipalViewAttendance from "../pages/principalPages/viewAttendance";
 import Holidays from "../pages/principalPages/holidays";
 import LeaveApplications from "../pages/principalPages/leaves";
 import PrincipalAttendanceCalendarPage from "../pages/principalPages/attendanceCalendar";
+import PrincipalTeacherAttendanceCalendarPage from "../pages/principalPages/attendanceCalendarPage";
 import NotFound from "../pages/notFound";
 
 function PrincipalRoutes() {
@@ -42,6 +45,10 @@ function PrincipalRoutes() {
 
             <Route path="/attendance/viewAttendance" element={<PrincipalViewAttendance />} />
             <Route path="/attendance/viewAttendance/attendanceCalendar/:studentId" element={<PrincipalAttendanceCalendarPage />} />
+            <Route path="/teacherAttendance" element={<MarkTeacherAttendance />} />
+            <Route path="/teacherAttendance/viewTeacherAttendance" element={<ViewTeacherAttendance />} />
+            <Route path="/teacherAttendance/attendanceCalendar/:teacherId" element={<PrincipalTeacherAttendanceCalendarPage />} />
+
             <Route path="admissionRequests/viewRequest" element={<ViewAdmissionRequest />} />
             <Route path="viewTeachers/teacherForm" element={<TeacherForm />} />
             <Route path="viewTeachers/teacherProfile" element={<TeacherProfile />} />

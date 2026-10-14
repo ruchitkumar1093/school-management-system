@@ -83,6 +83,8 @@ function PrincipalViewMarks() {
     const [modalTitle, setModalTitle] = useState("");
     const [modalMessage, setModalMessage] = useState("");
     const [noTeacherMarks, setNoTeacherMarks] = useState(false);
+    const [modalConfirm, setModalConfirm] = useState(false);
+    const [modalAction, setModalAction] = useState<(() => void) | null>(null);
 
     const fetchMarks = async () => {
         try {
@@ -179,20 +181,36 @@ function PrincipalViewMarks() {
         navigate(`marksForm?mode=edit&id=${id}`);
     }
 
-    async function handleDeleteMarks(id: string) {
+    function handleDeleteMarks(id: string) {
+        setModalTitle("Delete Mark");
+        setModalMessage("Are you sure you want to delete this mark?");
+        setModalConfirm(true);
+        setModalAction(() => () => confirmDeleteMarks(id));
+        setModalOpen(true);
+    }
+
+    async function confirmDeleteMarks(id: string) {
         try {
             await deleteMark(id);
-            await fetchMarks();
-            setModalTitle("Success");
-            setModalMessage("Mark deleted");
-            setModalOpen(true);
-        }
-        catch (error: any) {
+
+            setModalOpen(false);
+            setModalConfirm(false);
+            setModalAction(null);
+
+            if (marksData.length === 1 && currentPage > 1) {
+                setCurrentPage(currentPage - 1);
+            } else {
+                await fetchMarks();
+            }
+        } catch (error: any) {
             console.log(error);
+
             setModalTitle("Error");
             setModalMessage(
-                error.response?.data?.message || "Failed"
+                error.response?.data?.message || "Failed to delete mark."
             );
+            setModalConfirm(false);
+            setModalAction(null);
             setModalOpen(true);
         }
     }
@@ -345,7 +363,21 @@ function PrincipalViewMarks() {
                 isOpen={modalOpen}
                 title={modalTitle}
                 message={modalMessage}
-                onClose={() => setModalOpen(false)}
+                onClose={() => {
+                    setModalOpen(false);
+                    setModalConfirm(false);
+                    setModalAction(null);
+                }}
+                onConfirm={
+                    modalConfirm && modalAction
+                        ? modalAction
+                        : undefined
+                }
+                confirmText={
+                    modalTitle === "Delete Mark"
+                        ? "Delete"
+                        : "Confirm"
+                }
             />
 
         </div>

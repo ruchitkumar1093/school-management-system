@@ -242,7 +242,7 @@ function PrincipalViewClass() {
                                                     UID
                                                 </p>
 
-                                                <p className="mt-1 text-base font-medium text-gray-900">
+                                                <p className="mt-1 text-base font-medium text-gray-900 uppercase">
                                                     {classOverview.classTeacher.uid}
                                                 </p>
                                             </div>

@@ -9,6 +9,7 @@ import mongoose from "mongoose";
 import Leave from "../models/Leave";
 import AdmissionRequest from "../models/AdmissionRequest";
 import Holiday from "../models/Holiday";
+import TeacherAttendance from "../models/TeacherAttendance";
 
 export const applyLeave = async (
     req: Request,
@@ -826,7 +827,7 @@ export const getStudents = async (
 
         if (!teacher) {
             return res.status(404).json({
-                message: "teacher not found"
+                message: "Teacher not found"
             });
         }
 
@@ -839,6 +840,9 @@ export const getStudents = async (
         const order =
             req.query.order?.toString() || "asc";
 
+        const showDeleted =
+            req.query.showDeleted?.toString() === "true";
+
         const currentPage = Math.max(
             Number(req.query.page) || 1,
             1
@@ -849,12 +853,17 @@ export const getStudents = async (
             1
         );
 
-        const skip =
-            (currentPage - 1) * pageLimit;
+        const skip = (currentPage - 1) * pageLimit;
 
         const match: any = {
             class: teacher.classAssigned
         };
+
+        // Default: show active students only.
+        // When enabled: show both active and deleted students.
+        if (!showDeleted) {
+            match.isDeleted = { $ne: true };
+        }
 
         const pipeline: any[] = [
             {
@@ -890,8 +899,7 @@ export const getStudents = async (
                     "userId.name": order === "desc" ? -1 : 1
                 }
             });
-        }
-        else if (sortBy === "Class") {
+        } else if (sortBy === "Class") {
             pipeline.push({
                 $addFields: {
                     classNumber: {
@@ -916,15 +924,13 @@ export const getStudents = async (
                     "userId.name": 1
                 }
             });
-        }
-        else if (sortBy === "Roll no") {
+        } else if (sortBy === "Roll no") {
             pipeline.push({
                 $sort: {
                     rollNumber: order === "desc" ? -1 : 1
                 }
             });
-        }
-        else {
+        } else {
             pipeline.push({
                 $sort: {
                     rollNumber: 1
@@ -935,32 +941,20 @@ export const getStudents = async (
         pipeline.push({
             $facet: {
                 students: [
-                    {
-                        $skip: skip
-                    },
-                    {
-                        $limit: pageLimit
-                    }
+                    { $skip: skip },
+                    { $limit: pageLimit }
                 ],
                 total: [
-                    {
-                        $count: "count"
-                    }
+                    { $count: "count" }
                 ]
             }
         });
 
-        const result =
-            await Student.aggregate(pipeline);
+        const result = await Student.aggregate(pipeline);
 
-        const students =
-            result[0]?.students || [];
-
-        const totalStudents =
-            result[0]?.total[0]?.count || 0;
-
-        const totalPages =
-            Math.ceil(totalStudents / pageLimit);
+        const students = result[0]?.students || [];
+        const totalStudents = result[0]?.total[0]?.count || 0;
+        const totalPages = Math.ceil(totalStudents / pageLimit);
 
         res.status(200).json({
             students,
@@ -969,11 +963,147 @@ export const getStudents = async (
             currentPage,
             limit: pageLimit
         });
-    }
-    catch (error) {
+    } catch (error) {
         next(error);
     }
-}
+};
+
+export const deleteStudents = async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+) => {
+    try {
+        const teacher = await Teacher.findOne({
+            userId: req.user?.userId
+        });
+
+        if (!teacher) {
+            return res.status(404).json({
+                message: "Teacher not found"
+            });
+        }
+
+        const { ids } = req.body;
+
+        if (
+            !Array.isArray(ids) ||
+            ids.length === 0 ||
+            !ids.every((id) => typeof id === "string")
+        ) {
+            return res.status(400).json({
+                message: "A non-empty array of student IDs is required"
+            });
+        }
+
+        const result = await Student.updateMany(
+            {
+                _id: { $in: ids },
+                class: teacher.classAssigned,
+                isDeleted: { $ne: true }
+            },
+            {
+                $set: {
+                    isDeleted: true,
+                    deletedAt: new Date()
+                }
+            }
+        );
+
+        if (result.matchedCount === 0) {
+            return res.status(404).json({
+                message: "No active students found in your assigned class"
+            });
+        }
+
+        res.status(200).json({
+            message: "Students soft-deleted successfully",
+            deletedCount: result.modifiedCount
+        });
+    } catch (error) {
+        next(error);
+    }
+};
+
+export const restoreStudent = async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+) => {
+    try {
+        const teacher = await Teacher.findOne({
+            userId: req.user?.userId
+        });
+
+        if (!teacher) {
+            return res.status(404).json({
+                message: "Teacher not found"
+            });
+        }
+
+        const student = await Student.findOne({
+            _id: req.params.id,
+            class: teacher.classAssigned,
+            isDeleted: true
+        });
+
+        if (!student) {
+            return res.status(404).json({
+                message: "Deleted student not found in your assigned class"
+            });
+        }
+
+        student.isDeleted = false;
+        student.deletedAt = null;
+
+        await student.save();
+
+        res.status(200).json({
+            message: "Student restored successfully"
+        });
+    } catch (error) {
+        next(error);
+    }
+};
+
+export const permanentlyDeleteStudent = async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+) => {
+    try {
+        const teacher = await Teacher.findOne({
+            userId: req.user?.userId
+        });
+
+        if (!teacher) {
+            return res.status(404).json({
+                message: "Teacher not found"
+            });
+        }
+
+        const student = await Student.findOne({
+            _id: req.params.id,
+            class: teacher.classAssigned,
+            isDeleted: true
+        });
+
+        if (!student) {
+            return res.status(404).json({
+                message: "Deleted student not found in your assigned class"
+            });
+        }
+
+        await User.findByIdAndDelete(student.userId);
+        await Student.findByIdAndDelete(student._id);
+
+        res.status(200).json({
+            message: "Student permanently deleted"
+        });
+    } catch (error) {
+        next(error);
+    }
+};
 
 
 //Student CRUD
@@ -1069,27 +1199,46 @@ export const createStudent = async (req: Request, res: Response, next: NextFunct
     }
 }
 
-export const deleteStudent = async (req: Request, res: Response, next: NextFunction) => {
+export const deleteStudent = async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+) => {
     try {
-        const student = await Student.findById(req.params.id);
+        const teacher = await Teacher.findOne({
+            userId: req.user?.userId
+        });
 
-        if (!student) {
+        if (!teacher) {
             return res.status(404).json({
-                message: "Student not found"
+                message: "Teacher not found"
             });
         }
 
-        await User.findByIdAndDelete(student.userId);
-        await Student.findByIdAndDelete(req.params.id);
+        const student = await Student.findOne({
+            _id: req.params.id,
+            class: teacher.classAssigned,
+            isDeleted: { $ne: true }
+        });
+
+        if (!student) {
+            return res.status(404).json({
+                message: "Active student not found in your assigned class"
+            });
+        }
+
+        student.isDeleted = true;
+        student.deletedAt = new Date();
+
+        await student.save();
 
         res.status(200).json({
-            message: "student Deleted"
+            message: "Student soft-deleted successfully"
         });
-    }
-    catch (error) {
+    } catch (error) {
         next(error);
     }
-}
+};
 
 export const getStudentById = async (req: Request, res: Response, next: NextFunction) => {
     try {
@@ -2782,6 +2931,339 @@ export const getStudentMonthlyAttendance = async (
 
         return res.status(200).json({
             attendance
+        });
+    } catch (error) {
+        next(error);
+    }
+};
+
+export const getMyAttendance = async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+) => {
+    try {
+        const currentPage = Math.max(
+            Number(req.query.page) || 1,
+            1
+        );
+
+        const pageLimit = Math.max(
+            Number(req.query.limit) || 10,
+            1
+        );
+
+        const teacher = await Teacher.findOne({
+            userId: req.user?.userId,
+            isDeleted: { $ne: true }
+        })
+            .populate({
+                path: "userId",
+                select: "name uid"
+            })
+            .lean();
+
+        if (!teacher) {
+            return res.status(404).json({
+                message: "Teacher not found"
+            });
+        }
+
+        const teacherId = teacher._id;
+
+        const [attendance, approvedLeaves] =
+            await Promise.all([
+                TeacherAttendance.find({
+                    teacherId
+                })
+                    .select("_id date status")
+                    .lean(),
+
+                Leave.find({
+                    teacherId,
+                    status: "Approved"
+                })
+                    .select("_id startDate endDate")
+                    .sort({ startDate: 1 })
+                    .lean()
+            ]);
+
+        const attendanceDates = new Set(
+            attendance.map(record =>
+                new Date(record.date)
+                    .toISOString()
+                    .slice(0, 10)
+            )
+        );
+
+        const leaveRecords: {
+            _id: string;
+            date: Date;
+            status: "Leave";
+        }[] = [];
+
+        for (const leave of approvedLeaves) {
+            const currentDate = new Date(
+                leave.startDate
+            );
+
+            const endDate = new Date(
+                leave.endDate
+            );
+
+            currentDate.setUTCHours(0, 0, 0, 0);
+            endDate.setUTCHours(0, 0, 0, 0);
+
+            while (currentDate <= endDate) {
+                const dateString = currentDate
+                    .toISOString()
+                    .slice(0, 10);
+
+                if (!attendanceDates.has(dateString)) {
+                    leaveRecords.push({
+                        _id: `${leave._id}-${dateString}`,
+                        date: new Date(currentDate),
+                        status: "Leave"
+                    });
+                }
+
+                currentDate.setUTCDate(
+                    currentDate.getUTCDate() + 1
+                );
+            }
+        }
+
+        const result = [
+            ...attendance.map(record => ({
+                _id: record._id.toString(),
+                date: record.date,
+                status: record.status as
+                    | "Present"
+                    | "Absent"
+                    | "Leave"
+            })),
+            ...leaveRecords
+        ];
+
+        result.sort(
+            (a, b) =>
+                new Date(a.date).getTime() -
+                new Date(b.date).getTime()
+        );
+
+        const presentCount = result.filter(
+            record => record.status === "Present"
+        ).length;
+
+        const absentCount = result.filter(
+            record => record.status === "Absent"
+        ).length;
+
+        const leaveCount = result.filter(
+            record => record.status === "Leave"
+        ).length;
+
+        const totalDays =
+            presentCount + absentCount;
+
+        const percentage = totalDays > 0
+            ? Number(
+                (
+                    (presentCount / totalDays) * 100
+                ).toFixed(2)
+            )
+            : 0;
+
+        const totalRecords = result.length;
+
+        const totalPages = Math.ceil(
+            totalRecords / pageLimit
+        );
+
+        const validPage = totalPages > 0
+            ? Math.min(currentPage, totalPages)
+            : 1;
+
+        const skip = (validPage - 1) * pageLimit;
+
+        const paginatedAttendance = result.slice(
+            skip,
+            skip + pageLimit
+        );
+
+        const user = teacher.userId as any;
+
+        return res.status(200).json({
+            teacher: {
+                name: user?.name ?? "",
+                uid: user?.uid ?? "",
+                employeeID: teacher.employeeID,
+                department: teacher.department
+            },
+            attendance: paginatedAttendance,
+            totalRecords,
+            totalPages,
+            currentPage: validPage,
+            limit: pageLimit,
+            presentCount,
+            absentCount,
+            leaveCount,
+            totalDays,
+            percentage
+        });
+    } catch (error) {
+        next(error);
+    }
+};
+
+
+export const getMyMonthlyAttendance = async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+) => {
+    try {
+        const year = Number(req.query.year);
+        const month = Number(req.query.month);
+
+        if (
+            !Number.isInteger(year) ||
+            year < 1000 ||
+            year > 9999 ||
+            !Number.isInteger(month) ||
+            month < 1 ||
+            month > 12
+        ) {
+            return res.status(400).json({
+                message: "A valid year and month are required"
+            });
+        }
+
+        const teacher = await Teacher.findOne({
+            userId: req.user?.userId,
+            isDeleted: { $ne: true }
+        })
+            .select("_id employeeID department userId")
+            .populate({
+                path: "userId",
+                select: "name uid"
+            })
+            .lean();
+
+        if (!teacher) {
+            return res.status(404).json({
+                message: "Teacher not found"
+            });
+        }
+
+        const monthStart = new Date(
+            Date.UTC(year, month - 1, 1)
+        );
+
+        const nextMonthStart = new Date(
+            Date.UTC(year, month, 1)
+        );
+
+        const [attendanceRecords, approvedLeaves] =
+            await Promise.all([
+                TeacherAttendance.find({
+                    teacherId: teacher._id,
+                    date: {
+                        $gte: monthStart,
+                        $lt: nextMonthStart
+                    }
+                })
+                    .select("date status")
+                    .sort({ date: 1 })
+                    .lean(),
+
+                Leave.find({
+                    teacherId: teacher._id,
+                    status: "Approved",
+                    startDate: { $lt: nextMonthStart },
+                    endDate: { $gte: monthStart }
+                })
+                    .select("startDate endDate")
+                    .lean()
+            ]);
+
+        const attendanceByDate = new Map<
+            string,
+            { date: string; status: "Present" | "Absent" | "Leave" }
+        >();
+
+        for (const record of attendanceRecords) {
+            const date = new Date(record.date)
+                .toISOString()
+                .slice(0, 10);
+
+            attendanceByDate.set(date, {
+                date,
+                status: record.status
+            });
+        }
+
+        for (const leave of approvedLeaves) {
+            const leaveStart = new Date(
+                leave.startDate
+            );
+
+            const leaveEnd = new Date(
+                leave.endDate
+            );
+
+            leaveStart.setUTCHours(0, 0, 0, 0);
+            leaveEnd.setUTCHours(0, 0, 0, 0);
+
+            const start = new Date(
+                Math.max(
+                    leaveStart.getTime(),
+                    monthStart.getTime()
+                )
+            );
+
+            const end = new Date(
+                Math.min(
+                    leaveEnd.getTime(),
+                    nextMonthStart.getTime() - 86400000
+                )
+            );
+
+            for (
+                const currentDate = new Date(start);
+                currentDate <= end;
+                currentDate.setUTCDate(
+                    currentDate.getUTCDate() + 1
+                )
+            ) {
+                const date = currentDate
+                    .toISOString()
+                    .slice(0, 10);
+
+                // Actual attendance takes priority over leave.
+                if (!attendanceByDate.has(date)) {
+                    attendanceByDate.set(date, {
+                        date,
+                        status: "Leave"
+                    });
+                }
+            }
+        }
+
+        const user = teacher.userId as any;
+
+        return res.status(200).json({
+            teacher: {
+                name: user?.name ?? "",
+                uid: user?.uid ?? "",
+                employeeID: teacher.employeeID,
+                department: teacher.department
+            },
+            attendance: Array.from(
+                attendanceByDate.values()
+            ).sort((a, b) =>
+                a.date.localeCompare(b.date)
+            )
         });
     } catch (error) {
         next(error);

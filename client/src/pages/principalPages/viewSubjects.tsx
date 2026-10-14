@@ -41,6 +41,8 @@ function PrincipalViewSubjects() {
     const [modalOpen, setModalOpen] = useState(false);
     const [modalTitle, setModalTitle] = useState("");
     const [modalMessage, setModalMessage] = useState("");
+    const [modalConfirm, setModalConfirm] = useState(false);
+    const [modalAction, setModalAction] = useState<(() => void) | null>(null);
 
     const fetchSubjects = async () => {
         try {
@@ -104,22 +106,36 @@ function PrincipalViewSubjects() {
         navigate(`subjectForm?mode=edit&id=${id}`);
     }
 
-    async function handleDeleteSubject(id: string) {
+    function handleDeleteSubject(id: string) {
+        setModalTitle("Delete Subject");
+        setModalMessage("Are you sure you want to delete this subject?");
+        setModalConfirm(true);
+        setModalAction(() => () => confirmDeleteSubject(id));
+        setModalOpen(true);
+    }
+
+    async function confirmDeleteSubject(id: string) {
         try {
             await deleteSubject(id);
-            await fetchSubjects();
 
-            setModalTitle("Success");
-            setModalMessage("Subject deleted");
-            setModalOpen(true);
-        }
-        catch (error: any) {
+            setModalOpen(false);
+            setModalConfirm(false);
+            setModalAction(null);
+
+            if (subjectsData.length === 1 && currentPage > 1) {
+                setCurrentPage(currentPage - 1);
+            } else {
+                await fetchSubjects();
+            }
+        } catch (error: any) {
             console.log(error);
 
             setModalTitle("Error");
             setModalMessage(
-                error.response?.data?.message || "Failed"
+                error.response?.data?.message || "Failed to delete subject."
             );
+            setModalConfirm(false);
+            setModalAction(null);
             setModalOpen(true);
         }
     }
@@ -222,7 +238,21 @@ function PrincipalViewSubjects() {
                 isOpen={modalOpen}
                 title={modalTitle}
                 message={modalMessage}
-                onClose={() => setModalOpen(false)}
+                onClose={() => {
+                    setModalOpen(false);
+                    setModalConfirm(false);
+                    setModalAction(null);
+                }}
+                onConfirm={
+                    modalConfirm && modalAction
+                        ? modalAction
+                        : undefined
+                }
+                confirmText={
+                    modalTitle === "Delete Subject"
+                        ? "Delete"
+                        : "Confirm"
+                }
             />
         </div>
     );

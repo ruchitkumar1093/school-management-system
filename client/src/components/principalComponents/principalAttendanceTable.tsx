@@ -82,7 +82,13 @@ function PrincipalAttendanceTable({ summaryData }: Props) {
                                 </td>
 
                                 <td className="p-3 text-center">
-                                    {row.percentage.toFixed(2)}%
+                                    {row.present === 0 && row.absent === 0 ? (
+                                        <span className="text-gray-500 font-medium">
+                                            Not Marked
+                                        </span>
+                                    ) : (
+                                        `${row.percentage.toFixed(2)}%`
+                                    )}
                                 </td>
                             </tr>
                         ))

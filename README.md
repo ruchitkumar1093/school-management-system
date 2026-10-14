@@ -91,9 +91,9 @@ school-management-system/
 │   │   └── ...
 │   │
 │   ├── migrations/
-│   │   ├── migrate.ts
-│   │   ├── 001_seedDemoData.ts
-│   │   └── 002_seedClasses.ts
+│   │
+│   │
+│   │
 │   │
 │   ├── .env
 │   └── ...
@@ -108,7 +108,7 @@ school-management-system/
 ### 1. Clone the Repository
 
 ```bash
-git clone <GITHUB_REPOSITORY_URL>
+git clone https://github.com/ruchitkumar1093/school-management-system.git
 ```
 
 Move into the project directory:
@@ -171,31 +171,6 @@ Make sure your local MongoDB instance is configured with a replica set named `rs
 
 The project includes a migration system that can populate a fresh database with realistic demo data.
 
-The demo seed creates:
-
-- 1 Principal
-- 60 Teachers
-- 60 Students
-- 60 Subjects
-- Marks for students
-- 12 Classes
-- Attendance records
-- 5 Admission Requests
-- Hashed passwords for all demo users
-
-The successful demo migration currently produces approximately:
-
-```text
-Principal: 1
-Teachers: 60
-Students: 60
-Subjects: 60
-Classes: 12
-Marks: 892
-Attendance: 600
-Admission Requests: 5
-```
-
 All seeded users use the same demo password:
 
 ```text
@@ -217,12 +192,6 @@ Run:
 ```bash
 npm run migrate
 ```
-
-### Important:
-
-The project previously used a migration system that did not track executed migrations. The current migration system stores executed migrations in the MongoDB `migrations` collection.
-
-If you have an existing database created using an older version of this project then before running the new migration delete old database otherwise the new migration system can cause duplicate-key errors and the migration may fail.
 
 ## Feature Testing Guide
 
@@ -258,6 +227,10 @@ Open the teacher management section.
 Verify:
 
 - Teacher list
+- Soft Delete, Permanent Delete, Restore deleted teachers
+- Activate or deactivate teacher account
+- view and edit teacher profile
+- navigate to exams checked by the selected teacher
 - Employee IDs
 - Department
 - Assigned class
@@ -282,33 +255,45 @@ Open the student management section.
 Verify:
 
 - Student list
+- Activate or deactivate student account
+- view and edit student profile
+- Soft Delete, Permanent Delete, Restore deleted teachers
 - Class
 - Roll number
 - Filter by class, Sort, Order, Search, Pagination
 - Edit, delete
 
-### 4. View Attendance
+### 4. Student Attendance
 
 Verify:
 
 - Attendance Summary
 - View Attendance Student Wise
-- View Attendance Date Wise
+- View Attendance Date Wise, Class Wise
+- View attendance in Calendar of each student
 - Migration provides attendance data from 01-09-2026 to 12-09-2026
 
-### 5. Admission Requests
+### 5. Teacher Attendance
+
+Verify:
+
+- Mark attendance
+- Mark all presnt or absent
+- View attendance in Calendar of each Teacher
+- View Attendance Date Wise, Class Wise
+
+### 6. Admission Requests
 
 Open an admission request and test:
 
 - Pending request
-- Approve request
-- Reject request
+- Approve or reject request
 - View request  
 - Filter by class and Status, Sort, Order, Search, Pagination
 
 After accepting the request the default password for every student is the DOB they entered during filling the form, students can later change the password. When an admission is approved, the system creates the corresponding user and student records.
 
-### 6. View Subjects
+### 7. View Subjects
 
 Verify that subjects exist for different classes.
 
@@ -317,22 +302,31 @@ Verify that subjects exist for different classes.
 - Add, Edit, delete
 - Filter by class, Sort, Order, Search, Pagination
 
-### 7. View Marks
+### 8. View Marks
 
 Open the marks section.
 
 Verify:
 
+- Filter by teacher who checked the exam
+- Filter by Subject
 - Student
-- Subject
 - Exam Type
 - Marks obtained
-- Total marks
 - Result
 - Add, Edit, delete
 - Filter by class, filter by exam type, Sort, Order, Search, Pagination
 
-### 8. Class Overview
+### 9. Exams
+
+Open the exam section.
+
+Verify:
+
+- class wise marks of students
+- Filter by Exam
+
+### 10. Class Overview
 
 Open the Class Overview section.
 
@@ -340,14 +334,26 @@ Use the class tabs to switch between classes from 1st to 12th.
 
 Verify:
 
+- Assign or change class teacher
 - Class Info
 - Class information updates when switching between classes
 
-### 9. View Exams / Results
+### 11. Holidays
 
-Verify that class wise examination information and result calculations are displayed correctly according to the application's implemented rules.
+Verify:
 
-### 10. Password Change
+- View Holidays in Calenedar
+- Add, update and delete holidays
+
+### 12. Leaves
+
+Verify:
+
+- View Student and teacher leaves
+- Accept or reject leaves
+- Filter by class
+
+### 13. Password Change
 
 Open the Change Password page.
 
@@ -372,12 +378,13 @@ Open the student management section.
 Verify:
 
 - Student list
+- Soft Delete, Permanent Delete, Restore deleted teachers
 - Class
 - Roll number
 - Sort, Order, Search, Pagination
 - Edit, delete
 
-### 2. View Attendance
+### 2. Student Attendance
 
 Verify:
 
@@ -385,9 +392,19 @@ Verify:
 - Mark All Absent or Present
 - View Attendance Student Wise
 - View Attendance Date Wise
+- View student attendance in calendar
 - Migration provides attendance data from 01-09-2026 to 12-09-2026
 
-### 3. View Assigned Subjects
+### 3. My Attendance
+
+Verify:
+
+- Teacher Info
+- Total attendane in percentage
+- Present days and absent days
+- Attendance calendar
+
+### 4. View Assigned Subjects
 
 Verify that subjects exist for different classes.
 
@@ -395,7 +412,7 @@ Verify that subjects exist for different classes.
 - Check class matches with the teacher class
 - Order, Search, Pagination
 
-### 4. View Marks
+### 5. View Marks
 
 Open the marks section.
 
@@ -410,9 +427,29 @@ Verify:
 - Add, Edit, delete
 - Filter by Exam type, Sort, Order, Search, Pagination
 
-### 5. View Exams / Results
+### 6. View Exams / Results
 
 Verify that class examination information and result calculations are displayed correctly and display only logged in teacher class result.
+
+### 7. Holidays
+
+Verify:
+
+- View Holidays in Calenedar
+
+### 8. View Student Leaves
+
+Verify:
+
+- View Student leaves
+- Accept or reject leaves
+
+### 9. Apply Leaves
+
+Verify:
+
+- Teacher can apply for leaves
+- Track leave approval or rejection status
 
 ---
 
@@ -425,6 +462,7 @@ Verify:
 - Student Info
 - Total attendane in percentage
 - Present days and absent days
+- View attendance in Calendar
 - Migration provides attendance data from 01-09-2026 to 12-09-2026
 
 ### 2. View Subjects
@@ -450,6 +488,20 @@ Verify:
 - Total marks
 - Result
 - Filter by Exam type, Sort, Order, Search, Pagination
+
+### 4. Holidays
+
+Verify:
+
+- View Holidays in Calenedar
+
+### 5. Apply Leaves
+
+Verify:
+
+- Student can apply for leaves
+- Track leave approval or rejection status
+
 
 ## Authentication and Authorization
 
@@ -480,97 +532,6 @@ Role-based authorization middleware ensures that users cannot access functionali
 
 The frontend also uses protected routes for role-specific pages.
 
-## Database Design
-
-The main MongoDB collections/models are:
-
-### User
-
-Stores authentication and role information.
-
-Important fields include:
-
-- `name`
-- `uid`
-- `password`
-- `role`
-
-### Teacher
-
-Stores teacher-specific information.
-
-Important fields:
-
-- `userId`
-- `employeeID`
-- `department`
-- `classAssigned`
-
-### Student
-
-Stores student-specific information.
-
-Important fields:
-
-- `userId`
-- `class`
-- `section`
-- `rollNumber`
-
-### Subject
-
-Stores school subjects.
-
-Important fields:
-
-- `name`
-- `subjectCode`
-- `class`
-
-### Mark
-
-Stores examination marks.
-
-Important fields:
-
-- `studentId`
-- `teacherId`
-- `subjectId`
-- `exam`
-- `marksObtained`
-- `totalMarks`
-
-### Attendance
-
-Stores student attendance.
-
-Important fields:
-
-- `studentId`
-- `teacherId`
-- `date`
-- `status`
-
-### AdmissionRequest
-
-Stores admission applications.
-
-Important fields include:
-
-- Other information
-- `status`
-- `userId`
-- `studentId`
-- timestamps
-
-### Class
-
-Stores class-level information and the teacher assigned as the class teacher.
-
-Important fields:
-
-- `class`
-- `teacherId`
 
 ## Quick Reference
 

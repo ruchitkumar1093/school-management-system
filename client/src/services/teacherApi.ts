@@ -10,7 +10,8 @@ export const viewStudents = (
     sortBy: string,
     orderBy: string,
     currentPage: number,
-    limit: number
+    limit: number,
+    showDeleted: boolean = false
 ) => {
     return api.get("teacher/students", {
         params: {
@@ -18,10 +19,11 @@ export const viewStudents = (
             sortBy,
             order: orderBy,
             page: currentPage,
-            limit
+            limit,
+            showDeleted
         }
     });
-}
+};
 
 export const viewTeacher = () => {
     return api.get("teacher/teacher");
@@ -101,7 +103,7 @@ export const getStudentMonthlyAttendance = (
 
 //STUDENT CRUD:
 export const deleteStudent = (id: string) => {
-    return api.delete(`/teacher/deleteStudent/${id}`);
+    return api.patch(`/teacher/deleteStudent/${id}`);
 };
 export const addStudent = (data: any) => {
     return api.post("teacher/students/addStudent", data);
@@ -111,6 +113,18 @@ export const updateStudent = async (id: string, data: any) => {
 };
 export const getStudentById = (id: string) => {
     return api.get(`/teacher/student/${id}`);
+};
+
+export const deleteStudents = (ids: string[]) => {
+    return api.patch("/teacher/deleteStudents", { ids });
+};
+
+export const restoreStudent = (id: string) => {
+    return api.patch(`/teacher/restoreStudent/${id}`);
+};
+
+export const permanentlyDeleteStudent = (id: string) => {
+    return api.delete(`/teacher/permanentlyDeleteStudent/${id}`);
 };
 
 //MARKS CRUD:
@@ -185,6 +199,18 @@ export const getAttendance = (
     });
 };
 
+export const getMyAttendance = (
+    currentPage: number,
+    limit: number
+) => {
+    return api.get("teacher/my-attendance", {
+        params: {
+            page: currentPage,
+            limit
+        }
+    });
+};
+
 export const getStudentAttendance = (
     studentId: string,
     currentPage: number,
@@ -233,4 +259,16 @@ export const rejectLeave = (id: string) => {
     return api.patch(
         `/teacher/leaves/${id}/reject`
     );
+};
+
+export const getMyMonthlyAttendance = (
+    year: number,
+    month: number
+) => {
+    return api.get("teacher/attendance/my/month", {
+        params: {
+            year,
+            month
+        }
+    });
 };

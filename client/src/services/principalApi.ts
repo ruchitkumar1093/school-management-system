@@ -390,3 +390,84 @@ export const assignClassTeacher = (
         { teacherId }
     );
 };
+
+export const getTeachersForAttendance = async (params: {
+    date: string;
+    search?: string;
+    page?: number;
+    limit?: number;
+    classFilter?: string;
+}) => {
+    const response = await api.get(
+        "/principal/teachersForAttendance",
+        { params }
+    );
+
+    return response.data;
+};
+
+export const createTeacherAttendance = async (data: {
+    date: string;
+    classFilter: string;
+    attendance: {
+        teacherId: string;
+        status: "Present" | "Absent";
+    }[];
+}) => {
+    const response = await api.post(
+        "/principal/createTeacherAttendance",
+        data
+    );
+
+    return response.data;
+};
+
+export const getTeacherAttendance = async (params: {
+    date: string;
+    search?: string;
+    page?: number;
+    limit?: number;
+    classFilter: string;
+}) => {
+    const response = await api.get(
+        "/principal/teacherAttendance",
+        { params }
+    );
+
+    return response.data;
+};
+
+
+export const getTeacherAttendanceDetails = (teacherId: string) => {
+    return api.get("/principal/teacher-attendance/details", {
+        params: { teacherId }
+    });
+};
+
+export const getTeacherMonthlyAttendance = (
+    teacherId: string,
+    year: number,
+    month: number
+) => {
+    return api.get("/principal/teacher-attendance/month", {
+        params: {
+            teacherId,
+            year,
+            month
+        }
+    });
+};
+
+export const updateStudentProfile = (
+    id: string,
+    data: Record<string, string | number>
+) => {
+    return api.patch(`/principal/students/${id}`, data);
+};
+
+export const updateTeacherProfile = (
+    id: string,
+    data: Record<string, string>
+) => {
+    return api.patch(`/principal/teachers/${id}`, data);
+};

@@ -210,29 +210,34 @@ function PrincipalViewTeachers() {
         navigate(`teacherForm?mode=edit&id=${id}`);
     }
 
-    async function handleDeleteTeacher(id: string) {
+
+    function handleDeleteTeacher(id: string) {
+        setModalTitle("Delete Teacher");
+        setModalMessage(
+            "Are you sure you want to delete this teacher?"
+        );
+        setModalConfirm(true);
+        setModalAction(() => () => confirmDeleteTeacher(id));
+        setModalOpen(true);
+    }
+
+    async function confirmDeleteTeacher(id: string) {
         try {
             await deleteTeacher(id);
 
-            if (teachersData.length === 1 && currentPage > 1) {
-                setCurrentPage(currentPage - 1);
-            }
-            else {
-                await fetchTeachers();
-            }
-
-            setModalTitle("Success");
-            setModalMessage("Teacher deleted");
+            setModalOpen(false);
             setModalConfirm(false);
             setModalAction(null);
-            setModalOpen(true);
-        }
-        catch (error: any) {
-            console.log(error);
 
+            if (teachersData.length === 1 && currentPage > 1) {
+                setCurrentPage(currentPage - 1);
+            } else {
+                await fetchTeachers();
+            }
+        } catch (error: any) {
             setModalTitle("Error");
             setModalMessage(
-                error.response?.data?.message || "Failed"
+                error.response?.data?.message || "Failed to delete teacher."
             );
             setModalConfirm(false);
             setModalAction(null);
@@ -240,36 +245,18 @@ function PrincipalViewTeachers() {
         }
     }
 
-    function handleRestoreTeacher(id: string) {
-        setModalTitle("Restore Teacher");
-        setModalMessage(
-            "Are you sure you want to restore this teacher?"
-        );
-        setModalConfirm(true);
-        setModalAction(() => () => confirmRestoreTeacher(id));
-        setModalOpen(true);
-    }
 
-    async function confirmRestoreTeacher(id: string) {
+
+    async function handleRestoreTeacher(id: string) {
         try {
             await restoreTeacher(id);
 
             if (teachersData.length === 1 && currentPage > 1) {
                 setCurrentPage(currentPage - 1);
-            }
-            else {
+            } else {
                 await fetchTeachers();
             }
-
-            setModalTitle("Success");
-            setModalMessage("Teacher restored successfully.");
-            setModalConfirm(false);
-            setModalAction(null);
-            setModalOpen(true);
-        }
-        catch (error: any) {
-            console.log(error);
-
+        } catch (error: any) {
             setModalTitle("Error");
             setModalMessage(
                 error.response?.data?.message || "Failed to restore teacher."
@@ -484,7 +471,9 @@ function PrincipalViewTeachers() {
                         ? "Delete Permanently"
                         : modalTitle === "Delete Teachers"
                             ? "Yes"
-                            : "Restore"
+                            : modalTitle === "Delete Teacher"
+                                ? "Delete"
+                                : "Confirm"
                 }
             />
         </div>

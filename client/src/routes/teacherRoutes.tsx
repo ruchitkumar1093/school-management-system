@@ -1,4 +1,4 @@
-import {Routes, Route} from "react-router-dom";
+import { Routes, Route } from "react-router-dom";
 import TeacherHome from "../pages/teacherPages/home";
 import TeacherProfile from "../pages/teacherPages/profile";
 import StudentProfile from "../pages/teacherPages/studentProfile";
@@ -16,25 +16,29 @@ import LeaveApplications from "../pages/teacherPages/leaves";
 import NotFound from "../pages/notFound";
 import TeacherLeaveApplications from "../pages/teacherPages/leaveApplications";
 import TeacherAttendanceCalendarPage from "../pages/teacherPages/teacherAttendanceCalendarPage";
+import MyAttendance from "../pages/teacherPages/myAttendance";
+import TeacherAttendanceCalendar from "../pages/teacherPages/teacherAttendanceCalendar";
 
 
 function TeacherRoutes() {
-    return(
+    return (
         <Routes>
-            <Route path="/" element= {<TeacherHome />} />
-            <Route path="/profile" element= {<TeacherProfile />} />
-            <Route path="/viewStudents" element= {<TeacherViewStudents />} />
-            <Route path="/attendance" element= {<TeacherAttendance />} />
-            <Route path="/viewSubjects" element= {<TeacherViewSubjects />} />
-            <Route path="/viewMarks" element= {<TeacherViewMarks />} />
+            <Route path="/" element={<TeacherHome />} />
+            <Route path="/profile" element={<TeacherProfile />} />
+            <Route path="/viewStudents" element={<TeacherViewStudents />} />
+            <Route path="/attendance" element={<TeacherAttendance />} />
+            <Route path="/myAttendance" element={<MyAttendance />} />
+            <Route path="/viewSubjects" element={<TeacherViewSubjects />} />
+            <Route path="/viewMarks" element={<TeacherViewMarks />} />
             <Route path="/viewExams" element={<TeacherViewExams />} />
             <Route path="/viewHolidays" element={<Holidays />} />
-            <Route path="/myLeaves" element={<TeacherLeaveApplications />} />   
+            <Route path="/myLeaves" element={<TeacherLeaveApplications />} />
             <Route path="/viewLeaves" element={<LeaveApplications />} />
-            <Route path="/changePassword" element= {<TeacherChangePassword />} />
+            <Route path="/changePassword" element={<TeacherChangePassword />} />
             <Route path="/attendance/attendanceCalendar/:studentId" element={<TeacherAttendanceCalendarPage />} />
+            <Route path="/myAttendance/attendanceCalendar" element={<TeacherAttendanceCalendar />} />
 
-            <Route path="/attendance/viewAttendance" element= {<TeacherViewAttendance />} />
+            <Route path="/attendance/viewAttendance" element={<TeacherViewAttendance />} />
             <Route path="viewStudents/studentForm" element={<StudentForm />} />
             <Route path="viewStudents/studentProfile" element={<StudentProfile />} />
             <Route path="viewMarks/marksForm" element={<StudentMarks />} />

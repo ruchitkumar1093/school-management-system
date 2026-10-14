@@ -10,6 +10,8 @@ import mongoose from "mongoose";
 import bcrypt from "bcrypt";
 import Leave from "../models/Leave";
 import AdmissionRequest from "../models/AdmissionRequest";
+import TeacherAttendance from "../models/TeacherAttendance";
+import Holiday from "../models/Holiday";
 
 export const deactivateStudent = async (req: Request, res: Response, next: NextFunction) => {
     try {
@@ -3566,6 +3568,1106 @@ export const getClassOverview = async (req: Request, res: Response) => {
 
         return res.status(500).json({
             message: "Failed to get class overview"
+        });
+    }
+};
+
+
+const normalizeTeacherAttendanceDate = (date: string): Date | null => {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+        return null;
+    }
+
+    const selectedDate = new Date(`${date}T00:00:00.000Z`);
+
+    if (
+        Number.isNaN(selectedDate.getTime()) ||
+        selectedDate.toISOString().slice(0, 10) !== date
+    ) {
+        return null;
+    }
+
+    return selectedDate;
+};
+
+
+export const getTeachersForAttendance = async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+) => {
+    try {
+        const date = req.query.date?.toString() || "";
+        const search = req.query.search?.toString().trim() || "";
+        const classFilter = req.query.classFilter?.toString() || "All";
+
+        const currentPage = Math.max(
+            Number(req.query.page) || 1,
+            1
+        );
+
+        const pageLimit = Math.max(
+            Number(req.query.limit) || 10,
+            1
+        );
+
+        const selectedDate = normalizeTeacherAttendanceDate(date);
+
+        if (!selectedDate) {
+            return res.status(400).json({
+                message: "A valid date in YYYY-MM-DD format is required"
+            });
+        }
+
+        const holiday = await Holiday.findOne({
+            date: selectedDate
+        }).lean();
+
+        const teacherFilter: Record<string, any> = {
+            isDeleted: { $ne: true }
+        };
+        if (classFilter !== "All") {
+            teacherFilter.classAssigned = classFilter;
+        }
+        if (search) {
+            const searchRegex = {
+                $regex: search,
+                $options: "i"
+            };
+
+            const matchingUsers = await User.find({
+                name: searchRegex
+            })
+                .select("_id")
+                .lean();
+
+            teacherFilter.$or = [
+                { employeeID: searchRegex },
+                { department: searchRegex },
+                {
+                    userId: {
+                        $in: matchingUsers.map(user => user._id)
+                    }
+                }
+            ];
+        }
+
+        const totalTeachers = await Teacher.countDocuments(
+            teacherFilter
+        );
+
+        const totalPages = Math.ceil(
+            totalTeachers / pageLimit
+        );
+
+        const validPage = totalPages > 0
+            ? Math.min(currentPage, totalPages)
+            : 1;
+
+        const teachers = await Teacher.find(teacherFilter)
+            .select("_id userId employeeID department")
+            .populate({
+                path: "userId",
+                select: "name uid"
+            })
+            .sort({ employeeID: 1 })
+            .skip((validPage - 1) * pageLimit)
+            .limit(pageLimit)
+            .lean();
+
+        const teacherIds = teachers.map(teacher => teacher._id);
+
+        const [existingAttendance, approvedLeaves] = await Promise.all([
+            TeacherAttendance.find({
+                teacherId: { $in: teacherIds },
+                date: selectedDate
+            })
+                .select("teacherId status")
+                .lean(),
+
+            Leave.find({
+                teacherId: { $in: teacherIds },
+                status: "Approved",
+                startDate: { $lte: selectedDate },
+                endDate: { $gte: selectedDate }
+            })
+                .select("teacherId")
+                .lean()
+        ]);
+
+        const attendanceMap = new Map(
+            existingAttendance.map(record => [
+                record.teacherId.toString(),
+                record.status
+            ])
+        );
+
+        const teachersOnLeave = new Set(
+            approvedLeaves
+                .filter(leave => leave.teacherId)
+                .map(leave => leave.teacherId!.toString())
+        );
+
+        const result = teachers.map(teacher => {
+            const teacherId = teacher._id.toString();
+            const user = teacher.userId as any;
+
+            return {
+                _id: teacherId,
+                employeeID: teacher.employeeID,
+                name: user?.name ?? "",
+                department: teacher.department,
+                onLeave: teachersOnLeave.has(teacherId),
+                attendanceStatus: attendanceMap.get(teacherId) ?? null
+            };
+        });
+
+        const attendanceMarked =
+            teacherIds.length > 0 &&
+            await TeacherAttendance.exists({
+                teacherId: {
+                    $in: teacherIds
+                },
+                date: selectedDate
+            });
+        return res.status(200).json({
+            teachers: result,
+            attendanceMarked: Boolean(attendanceMarked),
+            isHoliday: Boolean(holiday),
+            holidayName: holiday?.name ?? null,
+            totalTeachers,
+            totalPages,
+            currentPage: validPage,
+            limit: pageLimit
+        });
+    } catch (error) {
+        next(error);
+    }
+};
+
+
+
+export const createTeacherAttendance = async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+) => {
+    try {
+        const { date, attendance, classFilter } = req.body;
+
+        // 1. Validate date.
+        if (!date) {
+            return res.status(400).json({
+                message: "Date is required"
+            });
+        }
+
+        const selectedDate =
+            normalizeTeacherAttendanceDate(date);
+
+        if (!selectedDate) {
+            return res.status(400).json({
+                message: "Invalid date"
+            });
+        }
+
+        if (selectedDate.getUTCDay() === 0) {
+            return res.status(400).json({
+                message:
+                    "Teacher attendance cannot be marked on Sunday"
+            });
+        }
+
+        const holiday = await Holiday.findOne({
+            date: selectedDate
+        }).lean();
+
+        if (holiday) {
+            return res.status(400).json({
+                message:
+                    `Attendance cannot be marked because ${holiday.name} is a holiday`
+            });
+        }
+
+        // 2. Validate class filter.
+        if (
+            typeof classFilter !== "string" ||
+            !classFilter.trim()
+        ) {
+            return res.status(400).json({
+                message: "Class filter is required"
+            });
+        }
+
+        // "All" means all active teachers in the school.
+        // Any other value means teachers assigned to that class.
+        const teacherFilter: Record<string, unknown> = {
+            isDeleted: { $ne: true }
+        };
+
+        if (classFilter !== "All") {
+            teacherFilter.classAssigned = classFilter;
+        }
+
+        // 3. Authenticate the principal.
+        const principalId = req.user?.userId;
+
+        if (
+            !principalId ||
+            !mongoose.isValidObjectId(principalId)
+        ) {
+            return res.status(401).json({
+                message: "Authenticated principal not found"
+            });
+        }
+
+        const principal = await User.findOne({
+            _id: principalId,
+            role: "principal"
+        })
+            .select("_id")
+            .lean();
+
+        if (!principal) {
+            return res.status(403).json({
+                message:
+                    "Only the principal can mark teacher attendance"
+            });
+        }
+
+        // 4. Fetch the complete roster for the selected class.
+        const teachers = await Teacher.find(teacherFilter)
+            .select("_id")
+            .lean();
+
+        if (teachers.length === 0) {
+            return res.status(400).json({
+                message:
+                    "No active teachers found for the selected class"
+            });
+        }
+
+        const teacherIds = teachers.map(
+            teacher => teacher._id.toString()
+        );
+
+        const teacherIdSet = new Set(teacherIds);
+
+        // 5. Validate the submitted attendance array.
+        if (!Array.isArray(attendance)) {
+            return res.status(400).json({
+                message: "Attendance records are required"
+            });
+        }
+
+        const invalidRecord = attendance.some(
+            (record: {
+                teacherId?: string;
+                status?: string;
+            }) =>
+                !record.teacherId ||
+                !mongoose.isValidObjectId(record.teacherId) ||
+                !["Present", "Absent"].includes(
+                    record.status ?? ""
+                )
+        );
+
+        if (invalidRecord) {
+            return res.status(400).json({
+                message:
+                    "Invalid teacher ID or attendance status"
+            });
+        }
+
+        const submittedIds = attendance.map(
+            (record: { teacherId: string }) =>
+                record.teacherId
+        );
+
+        // Reject duplicate teacher IDs in the request.
+        if (
+            new Set(submittedIds).size !==
+            submittedIds.length
+        ) {
+            return res.status(400).json({
+                message:
+                    "Duplicate teacher IDs were submitted"
+            });
+        }
+
+        // Reject teachers outside the selected class.
+        const invalidTeacherIds = submittedIds.filter(
+            (id: string) => !teacherIdSet.has(id)
+        );
+
+        if (invalidTeacherIds.length > 0) {
+            return res.status(400).json({
+                message:
+                    "You can only mark attendance for teachers in the selected class"
+            });
+        }
+
+        // 6. Find approved leave for teachers in this roster.
+        const objectTeacherIds = teachers.map(
+            teacher => teacher._id
+        );
+
+        const approvedLeaves = await Leave.find({
+            teacherId: {
+                $in: objectTeacherIds
+            },
+            status: "Approved",
+            startDate: {
+                $lte: selectedDate
+            },
+            endDate: {
+                $gte: selectedDate
+            }
+        })
+            .select("teacherId")
+            .lean();
+
+        const teachersOnLeave = new Set(
+            approvedLeaves
+                .filter(leave => leave.teacherId)
+                .map(leave =>
+                    leave.teacherId!.toString()
+                )
+        );
+
+        // Do not accept attendance records for teachers on leave.
+        const teacherOnLeaveSubmitted = submittedIds.some(
+            (id: string) => teachersOnLeave.has(id)
+        );
+
+        if (teacherOnLeaveSubmitted) {
+            return res.status(400).json({
+                message:
+                    "Attendance cannot be marked for a teacher on approved leave"
+            });
+        }
+
+        // 7. Every teacher in the selected roster must be
+        // marked, except teachers on approved leave.
+        const submittedTeacherIds = new Set<string>(
+            submittedIds
+        );
+
+        const missingTeachers = teacherIds.filter(
+            id =>
+                !teachersOnLeave.has(id) &&
+                !submittedTeacherIds.has(id)
+        );
+
+        if (missingTeachers.length > 0) {
+            return res.status(400).json({
+                message:
+                    `Please mark attendance for all active teachers in ${classFilter === "All"
+                        ? "the school"
+                        : `class ${classFilter}`
+                    } who are not on approved leave. ${missingTeachers.length
+                    } teacher(s) still need attendance.`
+            });
+        }
+
+        // 8. Remove approved-leave teachers from the roster.
+        const eligibleTeacherIds = teacherIds.filter(
+            id => !teachersOnLeave.has(id)
+        );
+
+        if (eligibleTeacherIds.length === 0) {
+            return res.status(400).json({
+                message:
+                    "All teachers in the selected roster are on approved leave. No attendance records are required."
+            });
+        }
+
+        if (attendance.length === 0) {
+            return res.status(400).json({
+                message: "Attendance records are required"
+            });
+        }
+
+        // 9. Prevent duplicate attendance for any teacher
+        // in this roster on the selected date.
+        // Other classes can still be submitted independently.
+        const existingAttendance =
+            await TeacherAttendance.findOne({
+                teacherId: {
+                    $in: eligibleTeacherIds
+                },
+                date: selectedDate
+            })
+                .select("_id")
+                .lean();
+
+        if (existingAttendance) {
+            return res.status(409).json({
+                message:
+                    "Teacher attendance has already been submitted for one or more teachers in the selected roster on this date"
+            });
+        }
+
+        // 10. Create records only for the submitted,
+        // eligible teachers.
+        const attendanceRecords = attendance.map(
+            (record: {
+                teacherId: string;
+                status: "Present" | "Absent";
+            }) => ({
+                teacherId: record.teacherId,
+                date: selectedDate,
+                status: record.status,
+                markedBy: principal._id
+            })
+        );
+
+        await TeacherAttendance.insertMany(
+            attendanceRecords
+        );
+
+        return res.status(201).json({
+            message:
+                "Teacher attendance marked successfully",
+            totalRecords: attendanceRecords.length
+        });
+    } catch (error: any) {
+        if (error?.code === 11000) {
+            return res.status(409).json({
+                message:
+                    "Attendance already exists for one or more teachers on this date"
+            });
+        }
+
+        next(error);
+    }
+};
+
+
+export const getTeacherAttendance = async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+) => {
+    try {
+        const date = req.query.date?.toString() || "";
+        const search = req.query.search?.toString().trim() || "";
+        const classFilter = req.query.classFilter?.toString() || "All";
+
+        const currentPage = Math.max(
+            Number(req.query.page) || 1,
+            1
+        );
+
+        const pageLimit = Math.max(
+            Number(req.query.limit) || 10,
+            1
+        );
+
+        const selectedDate = normalizeTeacherAttendanceDate(date);
+
+        if (!selectedDate) {
+            return res.status(400).json({
+                message: "A valid date in YYYY-MM-DD format is required"
+            });
+        }
+
+        // Include teachers whose isDeleted field is false or missing.
+        const teacherFilter: Record<string, any> = {
+            isDeleted: { $ne: true }
+        };
+
+        // Apply the selected class filter.
+        if (classFilter !== "All") {
+            teacherFilter.classAssigned = classFilter;
+        }
+
+        // Apply search by name, employee ID, or department.
+        if (search) {
+            const searchRegex = {
+                $regex: search,
+                $options: "i"
+            };
+
+            const matchingUsers = await User.find({
+                name: searchRegex
+            })
+                .select("_id")
+                .lean();
+
+            teacherFilter.$or = [
+                { employeeID: searchRegex },
+                { department: searchRegex },
+                {
+                    userId: {
+                        $in: matchingUsers.map(user => user._id)
+                    }
+                }
+            ];
+        }
+
+        // Count teachers after applying class and search filters.
+        const totalRecords = await Teacher.countDocuments(
+            teacherFilter
+        );
+
+        const totalPages = Math.ceil(
+            totalRecords / pageLimit
+        );
+
+        const validPage = totalPages > 0
+            ? Math.min(currentPage, totalPages)
+            : 1;
+
+        // Fetch the requested page of teachers.
+        const teachers = await Teacher.find(teacherFilter)
+            .select("_id userId employeeID department classAssigned")
+            .populate({
+                path: "userId",
+                select: "name uid"
+            })
+            .sort({ employeeID: 1 })
+            .skip((validPage - 1) * pageLimit)
+            .limit(pageLimit)
+            .lean();
+
+        const teacherIds = teachers.map(
+            teacher => teacher._id
+        );
+
+        // Fetch attendance and approved leave for these teachers.
+        const [attendanceRecords, approvedLeaves] = await Promise.all([
+            TeacherAttendance.find({
+                teacherId: { $in: teacherIds },
+                date: selectedDate
+            }).lean(),
+
+            Leave.find({
+                teacherId: { $in: teacherIds },
+                status: "Approved",
+                startDate: { $lte: selectedDate },
+                endDate: { $gte: selectedDate }
+            })
+                .select("_id teacherId")
+                .lean()
+        ]);
+
+        const attendanceMap = new Map(
+            attendanceRecords.map(record => [
+                record.teacherId.toString(),
+                record
+            ])
+        );
+
+        const leaveMap = new Map(
+            approvedLeaves
+                .filter(leave => leave.teacherId)
+                .map(leave => [
+                    leave.teacherId!.toString(),
+                    leave
+                ])
+        );
+
+        // Include teachers even when they have no attendance record.
+        const result = teachers.map(teacher => {
+            const teacherId = teacher._id.toString();
+            const user = teacher.userId as any;
+
+            const leave = leaveMap.get(teacherId);
+            const record = attendanceMap.get(teacherId);
+
+            const status = leave
+                ? "Leave"
+                : record?.status ?? "Not Marked";
+
+            return {
+                _id: record?._id?.toString()
+                    ?? `${leave?._id ?? "unmarked"}-${teacherId}-${date}`,
+
+                teacherId: {
+                    _id: teacherId,
+                    name: user?.name ?? "",
+                    employeeID: teacher.employeeID,
+                    department: teacher.department
+                },
+
+                date: selectedDate,
+                status
+            };
+        });
+
+        // Counts are based on the filtered and searched teacher roster.
+        const presentCount = result.filter(
+            record => record.status === "Present"
+        ).length;
+
+        const absentCount = result.filter(
+            record => record.status === "Absent"
+        ).length;
+
+        const leaveCount = result.filter(
+            record => record.status === "Leave"
+        ).length;
+
+        const notMarkedCount = result.filter(
+            record => record.status === "Not Marked"
+        ).length;
+
+        return res.status(200).json({
+            attendance: result,
+            totalRecords,
+            totalPages,
+            currentPage: validPage,
+            limit: pageLimit,
+            presentCount,
+            absentCount,
+            leaveCount,
+            notMarkedCount
+        });
+    } catch (error) {
+        next(error);
+    }
+};
+
+
+
+export const getTeacherAttendanceDetails = async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+) => {
+    try {
+        const { teacherId } = req.query;
+
+        if (!teacherId || typeof teacherId !== "string") {
+            return res.status(400).json({
+                message: "Teacher ID is required"
+            });
+        }
+
+        const teacher = await Teacher.findById(teacherId)
+            .select("employeeID department userId")
+            .populate({
+                path: "userId",
+                select: "name uid"
+            })
+            .lean();
+
+        if (!teacher) {
+            return res.status(404).json({
+                message: "Teacher not found"
+            });
+        }
+
+        return res.status(200).json({ teacher });
+    } catch (error) {
+        console.error("Get teacher attendance details error:", error);
+        next(error);
+    }
+};
+
+
+export const getTeacherMonthlyAttendance = async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+) => {
+    try {
+        const { teacherId } = req.query;
+        const year = Number(req.query.year);
+        const month = Number(req.query.month);
+
+        if (!teacherId || typeof teacherId !== "string") {
+            return res.status(400).json({
+                message: "Teacher ID is required"
+            });
+        }
+
+        if (
+            !Number.isInteger(year) ||
+            year < 1000 ||
+            year > 9999 ||
+            !Number.isInteger(month) ||
+            month < 1 ||
+            month > 12
+        ) {
+            return res.status(400).json({
+                message: "Valid year and month are required"
+            });
+        }
+
+        const teacher = await Teacher.findById(teacherId).select("_id");
+
+        if (!teacher) {
+            return res.status(404).json({
+                message: "Teacher not found"
+            });
+        }
+
+        const startDate = new Date(Date.UTC(year, month - 1, 1));
+        const endDate = new Date(Date.UTC(year, month, 1));
+
+        const [attendanceRecords, approvedLeaves] = await Promise.all([
+            TeacherAttendance.find({
+                teacherId: teacher._id,
+                date: {
+                    $gte: startDate,
+                    $lt: endDate
+                }
+            })
+                .select("date status")
+                .sort({ date: 1 })
+                .lean(),
+
+            Leave.find({
+                teacherId: teacher._id,
+                status: "Approved",
+                startDate: { $lt: endDate },
+                endDate: { $gte: startDate }
+            })
+                .select("startDate endDate")
+                .lean()
+        ]);
+
+        // Actual attendance takes priority over approved leave.
+        const attendanceDates = new Set(
+            attendanceRecords.map(record =>
+                new Date(record.date).toISOString().slice(0, 10)
+            )
+        );
+
+        const leaveRecords: {
+            _id: string;
+            date: Date;
+            status: "Leave";
+        }[] = [];
+
+        for (const leave of approvedLeaves) {
+            const leaveStart = new Date(leave.startDate);
+            const leaveEnd = new Date(leave.endDate);
+
+            const currentDate = new Date(
+                Math.max(leaveStart.getTime(), startDate.getTime())
+            );
+
+            const lastDate = new Date(
+                Math.min(leaveEnd.getTime(), endDate.getTime() - 1)
+            );
+
+            currentDate.setUTCHours(0, 0, 0, 0);
+            lastDate.setUTCHours(0, 0, 0, 0);
+
+            while (currentDate <= lastDate) {
+                const dateString = currentDate.toISOString().slice(0, 10);
+
+                if (!attendanceDates.has(dateString)) {
+                    leaveRecords.push({
+                        _id: `${leave._id}-${dateString}`,
+                        date: new Date(currentDate),
+                        status: "Leave"
+                    });
+                }
+
+                currentDate.setUTCDate(currentDate.getUTCDate() + 1);
+            }
+        }
+
+        const attendance = [
+            ...attendanceRecords,
+            ...leaveRecords
+        ].sort(
+            (a, b) =>
+                new Date(a.date).getTime() -
+                new Date(b.date).getTime()
+        );
+
+        return res.status(200).json({ attendance });
+    } catch (error) {
+        console.error("Get teacher monthly attendance error:", error);
+        next(error);
+    }
+};
+
+const admissionFields = [
+    "dateOfBirth",
+    "gender",
+    "classApplyingFor",
+    "previousClass",
+    "fatherName",
+    "motherName",
+    "phone",
+    "email",
+    "address",
+    "city",
+    "state",
+    "pinCode",
+    "bloodGroup",
+    "aadhaarNumber",
+    "academicYear"
+] as const;
+
+export async function updateStudentProfile(
+    req: Request,
+    res: Response,
+    next: NextFunction
+) {
+    try {
+        const { id } = req.params;
+        const body = req.body;
+
+        // Find the Student document.
+        const student = await Student.findById(id);
+
+        if (!student || student.isDeleted) {
+            return res.status(404).json({
+                message: "Student not found."
+            });
+        }
+
+        // Find the associated User document.
+        const user = await User.findById(student.userId);
+
+        if (!user) {
+            return res.status(404).json({
+                message: "Student user account not found."
+            });
+        }
+
+        // Find the admission record linked to this student.
+        const admission = await AdmissionRequest.findOne({
+            $or: [
+                { studentId: student._id },
+                { userId: user._id }
+            ]
+        });
+
+        if (!admission) {
+            return res.status(404).json({
+                message: "Admission record not found for this student."
+            });
+        }
+
+        const allowedFields = [
+            "name",
+            "uid",
+            "class",
+            "rollNumber",
+            ...admissionFields
+        ];
+
+        const suppliedFields = Object.keys(body);
+
+        if (
+            suppliedFields.length === 0 ||
+            suppliedFields.some(field => !allowedFields.includes(field as any))
+        ) {
+            return res.status(400).json({
+                message: "Invalid or empty profile update."
+            });
+        }
+
+        // Validate fields before modifying documents.
+        if (
+            body.name !== undefined &&
+            (typeof body.name !== "string" || !body.name.trim())
+        ) {
+            return res.status(400).json({
+                message: "Student name cannot be empty."
+            });
+        }
+
+        if (
+            body.uid !== undefined &&
+            (typeof body.uid !== "string" || !body.uid.trim())
+        ) {
+            return res.status(400).json({
+                message: "UID cannot be empty."
+            });
+        }
+
+        if (body.rollNumber !== undefined) {
+            const rollNumber = Number(body.rollNumber);
+
+            if (
+                !Number.isInteger(rollNumber) ||
+                rollNumber < 1
+            ) {
+                return res.status(400).json({
+                    message: "Roll number must be a positive integer."
+                });
+            }
+
+            student.rollNumber = rollNumber;
+        }
+
+        // Update User.
+        if (body.name !== undefined) {
+            user.name = body.name.trim();
+            admission.studentName = body.name.trim();
+        }
+
+        if (body.uid !== undefined) {
+            user.uid = body.uid.trim().toLowerCase();
+        }
+
+        // Update Student.
+        if (body.class !== undefined) {
+            student.class = body.class;
+        }
+
+        // Update AdmissionRequest.
+        for (const field of admissionFields) {
+            if (body[field] !== undefined) {
+                (admission as any)[field] = body[field];
+            }
+        }
+
+        // Run Mongoose schema validation when saving.
+        await user.validate();
+        await student.validate();
+        await admission.validate();
+
+        // Persist all three documents.
+        await user.save();
+        await student.save();
+        await admission.save();
+
+        return res.status(200).json({
+            message: "Student profile updated successfully.",
+            student: {
+                _id: student._id,
+                class: student.class,
+                rollNumber: student.rollNumber
+            },
+            user: {
+                _id: user._id,
+                name: user.name,
+                uid: user.uid,
+                role: user.role,
+                isActive: user.isActive
+            },
+            admissionRequest: admission
+        });
+    } catch (error: any) {
+        if (error.code === 11000) {
+            return res.status(409).json({
+                message: "This UID is already assigned to another user."
+            });
+        }
+
+        if (error.name === "ValidationError" || error.name === "CastError") {
+            return res.status(400).json({
+                message: error.message
+            });
+        }
+
+        console.log(error);
+        next(error);
+    }
+}
+
+// Update Teacher Profile
+export const updateTeacherProfile = async (
+    req: Request,
+    res: Response
+): Promise<void> => {
+    try {
+        const { id } = req.params;
+        const {
+            name,
+            uid,
+            employeeID,
+            department,
+            classAssigned
+        } = req.body;
+
+        // Find teacher
+        const teacher = await Teacher.findById(id);
+
+        if (!teacher || teacher.isDeleted) {
+            res.status(404).json({
+                message: "Teacher not found"
+            });
+            return;
+        }
+
+        // Find associated user
+        const user = await User.findById(teacher.userId);
+
+        if (!user) {
+            res.status(404).json({
+                message: "Associated user not found"
+            });
+            return;
+        }
+
+        // Update User fields
+        if (name !== undefined) {
+            user.name = name.trim();
+        }
+
+        if (uid !== undefined) {
+            user.uid = uid.trim().toLowerCase();
+        }
+
+        // Update Teacher fields
+        if (employeeID !== undefined) {
+            teacher.employeeID = employeeID.trim();
+        }
+
+        if (department !== undefined) {
+            teacher.department = department;
+        }
+
+        if (classAssigned !== undefined) {
+            teacher.classAssigned = classAssigned;
+        }
+
+        // Save teacher first to catch duplicate employeeID
+        // and duplicate department/classAssigned combinations.
+        await teacher.save();
+
+        // Save associated user details
+        await user.save();
+
+        res.status(200).json({
+            message: "Teacher profile updated successfully",
+            teacher: {
+                _id: teacher._id,
+                employeeID: teacher.employeeID,
+                department: teacher.department,
+                classAssigned: teacher.classAssigned,
+                userId: {
+                    _id: user._id,
+                    name: user.name,
+                    uid: user.uid,
+                    role: user.role,
+                    isActive: user.isActive
+                }
+            }
+        });
+    } catch (error: any) {
+        console.error("Update teacher profile error:", error);
+
+        // Duplicate-key errors, such as an existing UID,
+        // employeeID, or department/classAssigned combination.
+        if (error.code === 11000) {
+            res.status(409).json({
+                message:
+                    "A teacher with this UID, employee ID, or department and class assignment already exists."
+            });
+            return;
+        }
+
+        if (error.name === "ValidationError") {
+            res.status(400).json({
+                message: error.message
+            });
+            return;
+        }
+
+        res.status(500).json({
+            message: "Failed to update teacher profile"
         });
     }
 };

@@ -4,12 +4,9 @@ function Breadcrumb() {
     const location = useLocation();
 
     const labels: Record<string, string> = {
-        // Portals
         principal: "Principal",
         teacher: "Teacher",
         student: "Student",
-
-        // Common pages
         viewTeachers: "Teachers",
         teacherForm: "Form",
         viewStudents: "Students",
@@ -28,12 +25,14 @@ function Breadcrumb() {
         viewLeaves: "Leaves",
         attendanceCalendar: "Attendance Calendar",
         calender: "Attendance Calendar",
-
-        // Principal pages
+        myAttendance: "My Attendance",
+        teacherAttendance: "Attendance",
         admissionRequests: "Admission Requests",
         viewRequest: "View",
         viewClass: "Class Overview",
-        viewHolidays: "Holidays"
+        viewHolidays: "Holidays",
+        viewTeacherAttendance: "View",
+        myLeaves: "My Leaves"
     };
 
     const paths = location.pathname

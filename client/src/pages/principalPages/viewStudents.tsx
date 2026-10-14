@@ -208,29 +208,36 @@ function PrincipalViewStudents() {
         navigate(`studentForm?mode=edit&id=${id}`);
     }
 
-    async function handleDeleteStudent(id: string) {
+
+    function handleDeleteStudent(id: string) {
+        setModalTitle("Delete Student");
+        setModalMessage(
+            "Are you sure you want to delete this student?"
+        );
+        setModalConfirm(true);
+        setModalAction(() => () => confirmDeleteStudent(id));
+        setModalOpen(true);
+    }
+
+    async function confirmDeleteStudent(id: string) {
         try {
             await deleteStudent(id);
 
-            if (studentsData.length === 1 && currentPage > 1) {
-                setCurrentPage(currentPage - 1);
-            }
-            else {
-                await fetchStudents();
-            }
-
-            setModalTitle("Success");
-            setModalMessage("Student deleted");
+            setModalOpen(false);
             setModalConfirm(false);
             setModalAction(null);
-            setModalOpen(true);
-        }
-        catch (error: any) {
+
+            if (studentsData.length === 1 && currentPage > 1) {
+                setCurrentPage(currentPage - 1);
+            } else {
+                await fetchStudents();
+            }
+        } catch (error: any) {
             console.log(error);
 
             setModalTitle("Error");
             setModalMessage(
-                error.response?.data?.message || "Failed"
+                error.response?.data?.message || "Failed to delete student."
             );
             setModalConfirm(false);
             setModalAction(null);
@@ -238,34 +245,18 @@ function PrincipalViewStudents() {
         }
     }
 
-    function handleRestoreStudent(id: string) {
-        setModalTitle("Restore Student");
-        setModalMessage(
-            "Are you sure you want to restore this student?"
-        );
-        setModalConfirm(true);
-        setModalAction(() => () => confirmRestoreStudent(id));
-        setModalOpen(true);
-    }
 
-    async function confirmRestoreStudent(id: string) {
+
+    async function handleRestoreStudent(id: string) {
         try {
             await restoreStudent(id);
 
             if (studentsData.length === 1 && currentPage > 1) {
                 setCurrentPage(currentPage - 1);
-            }
-            else {
+            } else {
                 await fetchStudents();
             }
-
-            setModalTitle("Success");
-            setModalMessage("Student restored successfully.");
-            setModalConfirm(false);
-            setModalAction(null);
-            setModalOpen(true);
-        }
-        catch (error: any) {
+        } catch (error: any) {
             console.log(error);
 
             setModalTitle("Error");
@@ -277,6 +268,7 @@ function PrincipalViewStudents() {
             setModalOpen(true);
         }
     }
+
 
     function handlePermanentlyDeleteStudent(id: string) {
         setModalTitle("Permanently Delete Student");
@@ -470,13 +462,17 @@ function PrincipalViewStudents() {
                         ? modalAction
                         : undefined
                 }
+
                 confirmText={
                     modalTitle === "Permanently Delete Student"
                         ? "Delete Permanently"
                         : modalTitle === "Delete Students"
                             ? "Yes"
-                            : "Restore"
+                            : modalTitle === "Delete Student"
+                                ? "Delete"
+                                : "Confirm"
                 }
+
             />
         </div>
     );

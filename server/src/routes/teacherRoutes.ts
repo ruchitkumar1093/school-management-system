@@ -1,23 +1,23 @@
 import express from "express";
 const router = express.Router();
 import { getHolidays } from "../controllers/holidayController";
-import { getStudents, getSubjects, getMarks, createStudent, getStudentById,
+import {
+    getStudents, getSubjects, getMarks, createStudent, getStudentById,
     updateStudent, deleteStudent, getMarkById, createMark, updateMark, deleteMark, getExamResults,
     getStudentsForAttendance, createAttendance, getAttendance, getStudentAttendance, getTeacherHome,
     getTeacher, getLeaveApplications, approveLeave, rejectLeave, applyLeave, getMyLeaves,
-    getStudentMonthlyAttendance
- } 
-from "../controllers/teacherController";
+    getStudentMonthlyAttendance, getMyAttendance, getMyMonthlyAttendance,
+    deleteStudents, restoreStudent, permanentlyDeleteStudent
+}
+    from "../controllers/teacherController";
 
+//Home
 router.get("/home", getTeacherHome);
-router.get("/holidays", getHolidays);
-router.get("/students", getStudents);
-router.get("/subjects", getSubjects);
-router.get("/marks", getMarks);
-router.get("/teacher", getTeacher);
-router.get("/examResults", getExamResults);
 
-//Leaves:
+//Teacher
+router.get("/teacher", getTeacher);
+
+//Student Leaves:
 router.get("/leaves", getLeaveApplications);
 router.patch("/leaves/:id/approve", approveLeave);
 router.patch("/leaves/:id/reject", rejectLeave);
@@ -32,17 +32,33 @@ router.post("/createAttendance", createAttendance);
 router.get("/attendance", getAttendance);
 router.get("/attendance/student", getStudentAttendance);
 router.get("/attendance/student/month", getStudentMonthlyAttendance);
+router.get("/my-attendance", getMyAttendance);
+router.get("/attendance/my/month", getMyMonthlyAttendance);
 
-//CRUD student
+//Student
 router.get("/student/:id", getStudentById);
 router.post("/students/addStudent", createStudent);
 router.put("/updateStudent/:id", updateStudent);
-router.delete("/deleteStudent/:id", deleteStudent);
+router.patch("/deleteStudent/:id", deleteStudent);
+router.patch("/deleteStudents", deleteStudents);
+router.patch("/restoreStudent/:id", restoreStudent);
+router.delete("/permanentlyDeleteStudent/:id", permanentlyDeleteStudent);
+router.get("/students", getStudents);
 
-//CRUD marks
+//Marks
+router.get("/marks", getMarks);
 router.get("/mark/:id", getMarkById);
 router.post("/marks/addMark", createMark);
 router.put("/updateMark/:id", updateMark);
 router.delete("/deleteMark/:id", deleteMark);
+
+//Subjects
+router.get("/subjects", getSubjects);
+
+//Exam
+router.get("/examResults", getExamResults);
+
+//Holidays
+router.get("/holidays", getHolidays);
 
 export default router;
