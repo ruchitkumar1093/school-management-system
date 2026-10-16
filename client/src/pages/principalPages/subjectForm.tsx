@@ -21,6 +21,29 @@ function SubjectForm() {
 
     const isAdding = mode === "add";
 
+    const subjectPrefixes: Record<string, string> = {
+        Science: "SCI",
+        Hindi: "HND",
+        "Social Science": "SSC",
+        English: "ENG",
+        Mathematics: "MTH"
+    };
+
+    const classCodes: Record<string, string> = {
+        "1st": "01",
+        "2nd": "02",
+        "3rd": "03",
+        "4th": "04",
+        "5th": "05",
+        "6th": "06",
+        "7th": "07",
+        "8th": "08",
+        "9th": "09",
+        "10th": "10",
+        "11th": "11",
+        "12th": "12"
+    };
+
     const navigate = useNavigate();
 
     const [formData, setFormData] = useState<FormData>({
@@ -93,6 +116,17 @@ function SubjectForm() {
         }
     };
 
+    const generateSubjectCode = (name: string, className: string) => {
+        const prefix = subjectPrefixes[name];
+        const classCode = classCodes[className];
+
+        if (!prefix || !classCode) {
+            return "";
+        }
+
+        return `${prefix}${classCode}`;
+    };
+
     return (
         <div className="flex flex-col min-h-screen font-fredoka">
             <NavBar />
@@ -106,10 +140,19 @@ function SubjectForm() {
                     <form onSubmit={handleSubmit} className="flex flex-col gap-7 p-15">
                         <div className="flex flex-col gap-2">
                             <label htmlFor="name">Subject Name:</label>
-                            <select required value={formData.name} onChange={(e) => setFormData({
-                                ...formData,
-                                name: e.target.value
-                            })} className="w-sm border-2 border-gray-500 rounded-sm p-2
+                            <select required value={formData.name}
+                                onChange={(e) => {
+                                    const name = e.target.value;
+
+                                    setFormData(previous => ({
+                                        ...previous,
+                                        name,
+                                        subjectCode: generateSubjectCode(
+                                            name,
+                                            previous.class
+                                        )
+                                    }));
+                                }} className="w-sm border-2 border-gray-500 rounded-sm p-2
                     focus:outline-none focus:border-gray-900 transition-colors duration-300 ease-in-out"
                                 id="name" name="name">
                                 <option disabled>Select an option</option>
@@ -122,21 +165,20 @@ function SubjectForm() {
                         </div>
 
                         <div className="flex flex-col gap-2">
-                            <label htmlFor="code">Subject Code:</label>
-                            <input required value={formData.subjectCode} onChange={(e) => setFormData({
-                                ...formData,
-                                subjectCode: e.target.value
-                            })} className="w-sm border-2 border-gray-500 rounded-sm p-2
-                    focus:outline-none focus:border-gray-900 transition-colors duration-300 ease-in-out"
-                                type="text" id="code" placeholder="Enter Subject Code" name="code" />
-                        </div>
-
-                        <div className="flex flex-col gap-2">
                             <label htmlFor="class">Class:</label>
-                            <select required value={formData.class} onChange={(e) => setFormData({
-                                ...formData,
-                                class: e.target.value
-                            })} className="w-sm border-2 border-gray-500 rounded-sm p-2
+                            <select required value={formData.class}
+                                onChange={(e) => {
+                                    const className = e.target.value;
+
+                                    setFormData(previous => ({
+                                        ...previous,
+                                        class: className,
+                                        subjectCode: generateSubjectCode(
+                                            previous.name,
+                                            className
+                                        )
+                                    }));
+                                }} className="w-sm border-2 border-gray-500 rounded-sm p-2
                     focus:outline-none focus:border-gray-900 transition-colors duration-300 ease-in-out"
                                 id="class" name="class">
                                 <option disabled>Select an option</option>
@@ -153,6 +195,16 @@ function SubjectForm() {
                                 <option>11th</option>
                                 <option>12th</option>
                             </select>
+                        </div>
+
+                        <div className="flex flex-col gap-2">
+                            <label htmlFor="code">Subject Code:</label>
+                            <input required value={formData.subjectCode} onChange={(e) => setFormData({
+                                ...formData,
+                                subjectCode: e.target.value
+                            })} className="w-sm border-2 border-gray-500 rounded-sm p-2
+                    focus:outline-none focus:border-gray-900 transition-colors duration-300 ease-in-out"
+                                type="text" id="code" placeholder="Enter Subject Code" name="code" />
                         </div>
 
                         <div className="flex gap-5">

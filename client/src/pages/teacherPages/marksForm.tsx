@@ -1,12 +1,10 @@
 import NavBar from "../../components/navBar";
 import SideBar from "../../components/sideBar";
-import { useSearchParams } from "react-router-dom";
-import { useNavigate } from "react-router-dom";
+import { useSearchParams, useNavigate } from "react-router-dom";
 import {
     addMark,
     updateMark,
     getMarkById,
-    viewTeacher,
     viewStudents
 } from "../../services/teacherApi";
 import { useState, useEffect } from "react";
@@ -32,23 +30,20 @@ type FormData = {
 };
 
 function MarksForm() {
-
     const [searchParams] = useSearchParams();
     const mode = searchParams.get("mode");
     const id = searchParams.get("id");
-
     const isAdding = mode === "add";
 
     const navigate = useNavigate();
 
-    const [teacherClass, setTeacherClass] = useState("");
-
     const [students, setStudents] = useState<Student[]>([]);
+    const [loadingStudents, setLoadingStudents] = useState(false);
 
     const [formData, setFormData] = useState<FormData>({
         studentId: "",
-        subjectName: "Select an option",
-        exam: "Select an option",
+        subjectName: "",
+        exam: "",
         marksObtained: "",
         totalMarks: ""
     });
@@ -57,54 +52,80 @@ function MarksForm() {
     const [modalTitle, setModalTitle] = useState("");
     const [modalMessage, setModalMessage] = useState("");
 
+    // Fetch students only when adding marks.
+    // The API returns students from the teacher's assigned class.
     useEffect(() => {
-        const fetchData = async () => {
+        if (!isAdding) return;
+
+        let cancelled = false;
+
+        const fetchStudents = async () => {
+            setLoadingStudents(true);
+
             try {
-                const teacherResponse = await viewTeacher();
-
-                const classAssigned = teacherResponse.data.classAssigned;
-
-                setTeacherClass(classAssigned);
-
-                const studentsResponse = await viewStudents("", "", "asc", 1, 1000);
-
-                const classStudents = studentsResponse.data.students.filter(
-                    (student: Student) =>
-                        student.class === classAssigned
+                const response = await viewStudents(
+                    "",
+                    "",
+                    "asc",
+                    1,
+                    1000
                 );
 
-                setStudents(classStudents);
-            }
-            catch (error) {
-                console.log(error);
-            }
-        };
+                if (cancelled) return;
 
-        fetchData();
-    }, []);
-
-    useEffect(() => {
-        const fetchMark = async () => {
-            try {
-                if (!isAdding && id) {
-                    const response = await getMarkById(id);
-                    const mark = response.data;
-
-                    setFormData({
-                        studentId: mark.studentId?._id ?? "",
-                        subjectName: mark.subjectId?.name ?? "",
-                        exam: mark.exam ?? "",
-                        marksObtained: mark.marksObtained ?? "",
-                        totalMarks: mark.totalMarks ?? ""
-                    });
+                setStudents(response.data.students);
+            } catch (error) {
+                if (!cancelled) {
+                    console.error("Failed to fetch students:", error);
+                    setStudents([]);
+                }
+            } finally {
+                if (!cancelled) {
+                    setLoadingStudents(false);
                 }
             }
-            catch (error) {
-                console.log(error);
+        };
+
+        void fetchStudents();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [isAdding]);
+
+    // Fetch existing mark details only when editing.
+    useEffect(() => {
+        if (isAdding || !id) return;
+
+        let cancelled = false;
+
+        const fetchMark = async () => {
+            try {
+                const response = await getMarkById(id);
+
+                if (cancelled) return;
+
+                const mark = response.data;
+
+                setFormData({
+                    studentId: mark.studentId?._id ?? "",
+                    subjectName: mark.subjectId?.name ?? "",
+                    exam: mark.exam ?? "",
+                    marksObtained: String(mark.marksObtained ?? ""),
+                    totalMarks: String(mark.totalMarks ?? "")
+                });
+            } catch (error) {
+                if (!cancelled) {
+                    console.error("Failed to fetch mark:", error);
+                }
             }
         };
 
-        fetchMark();
+        void fetchMark();
+
+        return () => {
+            cancelled = true;
+        };
     }, [id, isAdding]);
 
     const handleSubmit = async (
@@ -114,26 +135,33 @@ function MarksForm() {
 
         try {
             if (isAdding) {
+                if (!formData.studentId) {
+                    setModalTitle("Validation Error");
+                    setModalMessage("Please select a student.");
+                    setModalOpen(true);
+                    return;
+                }
+
                 await addMark(formData);
+
                 setModalTitle("Success");
                 setModalMessage("Marks Added");
-            }
-            else {
+            } else {
                 if (!id) return;
 
                 await updateMark(id, formData);
+
                 setModalTitle("Success");
                 setModalMessage("Marks Updated");
             }
 
             setModalOpen(true);
-        }
-        catch (error: any) {
-            console.log(error);
+        } catch (error: any) {
+            console.error(error);
 
             setModalTitle("Error");
             setModalMessage(
-                error.response?.data?.message || "Failed"
+                error.response?.data?.message || "Failed to save marks."
             );
             setModalOpen(true);
         }
@@ -150,234 +178,179 @@ function MarksForm() {
         }
     };
 
-    return (
-        <div className="flex flex-col min-h-screen font-fredoka">
+    const inputClass =
+        "w-sm rounded-sm border-2 border-gray-500 p-2 focus:border-gray-900 focus:outline-none transition-colors duration-300 ease-in-out";
 
+    return (
+        <div className="flex min-h-screen flex-col font-fredoka">
             <NavBar />
 
             <div className="flex flex-1 bg-purple-100">
-
                 <SideBar />
 
                 <div>
-
                     <Breadcrumb />
 
                     <form
                         onSubmit={handleSubmit}
                         className="flex flex-col gap-7 p-15"
                     >
+                        {/* Student appears only when adding marks. */}
+                        {isAdding && (
+                            <div className="flex flex-col gap-2">
+                                <label htmlFor="student">Student:</label>
 
-                        <div className="flex flex-col gap-2">
-
-                            <label>
-                                Class:
-                            </label>
-
-                            <input
-                                type="text"
-                                value={teacherClass}
-                                readOnly
-                                className="w-sm border-2 border-gray-500 rounded-sm p-2
-                                bg-gray-200
-                                focus:outline-none"
-                            />
-
-                        </div>
-
-                        <div className="flex flex-col gap-2">
-
-                            <label htmlFor="student">
-                                Student:
-                            </label>
-
-                            <select
-                                required
-                                value={formData.studentId}
-                                disabled={!teacherClass}
-                                onChange={(e) =>
-                                    setFormData({
-                                        ...formData,
-                                        studentId: e.target.value
-                                    })
-                                }
-                                className="w-sm border-2 border-gray-500 rounded-sm p-2
-                                focus:outline-none focus:border-gray-900
-                                transition-colors duration-300 ease-in-out
-                                disabled:bg-gray-200 disabled:cursor-not-allowed"
-                                id="student"
-                                name="student"
-                            >
-
-                                <option value="" disabled>
-                                    Select a student
-                                </option>
-
-                                {students.map((student) => (
-
-                                    <option
-                                        key={student._id}
-                                        value={student._id}
-                                    >
-                                        {student.userId.name} -{" "}
-                                        {student.userId.uid.toUpperCase()}
+                                <select
+                                    id="student"
+                                    required
+                                    value={formData.studentId}
+                                    disabled={loadingStudents}
+                                    onChange={e =>
+                                        setFormData(previous => ({
+                                            ...previous,
+                                            studentId: e.target.value
+                                        }))
+                                    }
+                                    className={`${inputClass} disabled:cursor-not-allowed disabled:bg-gray-200`}
+                                >
+                                    <option value="" disabled>
+                                        {loadingStudents
+                                            ? "Loading students..."
+                                            : "Select a student"}
                                     </option>
 
-                                ))}
+                                    {students.map(student => (
+                                        <option
+                                            key={student._id}
+                                            value={student._id}
+                                        >
+                                            {student.userId.name} -{" "}
+                                            {student.userId.uid.toUpperCase()}
+                                        </option>
+                                    ))}
+                                </select>
 
-                            </select>
-
-                        </div>
+                                {!loadingStudents &&
+                                    students.length === 0 && (
+                                        <p className="text-sm text-gray-600">
+                                            No students found in your assigned class.
+                                        </p>
+                                    )}
+                            </div>
+                        )}
 
                         <div className="flex flex-col gap-2">
-
-                            <label htmlFor="subject">
-                                Subject:
-                            </label>
+                            <label htmlFor="subject">Subject:</label>
 
                             <select
+                                id="subject"
                                 required
                                 value={formData.subjectName}
-                                onChange={(e) =>
-                                    setFormData({
-                                        ...formData,
+                                onChange={e =>
+                                    setFormData(previous => ({
+                                        ...previous,
                                         subjectName: e.target.value
-                                    })
+                                    }))
                                 }
-                                className="w-sm border-2 border-gray-500 rounded-sm p-2
-                                focus:outline-none focus:border-gray-900
-                                transition-colors duration-300 ease-in-out"
-                                id="subject"
-                                name="subject"
+                                className={inputClass}
                             >
-
-                                <option disabled>
-                                    Select an option
+                                <option value="" disabled>
+                                    Select a subject
                                 </option>
-
-                                <option>Science</option>
-                                <option>Mathematics</option>
-                                <option>English</option>
-                                <option>Social Science</option>
-                                <option>Hindi</option>
-
+                                <option value="Science">Science</option>
+                                <option value="Mathematics">Mathematics</option>
+                                <option value="English">English</option>
+                                <option value="Social Science">
+                                    Social Science
+                                </option>
+                                <option value="Hindi">Hindi</option>
                             </select>
-
                         </div>
 
                         <div className="flex flex-col gap-2">
-
-                            <label htmlFor="type">
-                                Exam type:
-                            </label>
+                            <label htmlFor="exam">Exam type:</label>
 
                             <select
+                                id="exam"
                                 required
                                 value={formData.exam}
-                                onChange={(e) =>
-                                    setFormData({
-                                        ...formData,
+                                onChange={e =>
+                                    setFormData(previous => ({
+                                        ...previous,
                                         exam: e.target.value
-                                    })
+                                    }))
                                 }
-                                className="w-sm border-2 border-gray-500 rounded-sm p-2
-                                focus:outline-none focus:border-gray-900
-                                transition-colors duration-300 ease-in-out"
-                                id="type"
-                                name="exam"
+                                className={inputClass}
                             >
-
-                                <option disabled>
-                                    Select an option
+                                <option value="" disabled>
+                                    Select an exam
                                 </option>
-
-                                <option>class test</option>
-                                <option>mid term</option>
-                                <option>final</option>
-
+                                <option value="class test">Class test</option>
+                                <option value="mid term">Mid term</option>
+                                <option value="final">Final</option>
                             </select>
-
                         </div>
 
                         <div className="flex flex-col gap-2">
-
-                            <label htmlFor="obt">
-                                Marks Obtained:
-                            </label>
+                            <label htmlFor="obt">Marks Obtained:</label>
 
                             <input
-                                required
-                                value={formData.marksObtained}
-                                onChange={(e) =>
-                                    setFormData({
-                                        ...formData,
-                                        marksObtained: e.target.value
-                                    })
-                                }
-                                className="w-sm border-2 border-gray-500 rounded-sm p-2
-                                focus:outline-none focus:border-gray-900
-                                transition-colors duration-300 ease-in-out"
-                                type="number"
                                 id="obt"
-                                placeholder="Enter Marks Obtained"
                                 name="obt"
+                                type="number"
+                                required
+                                min="0"
+                                value={formData.marksObtained}
+                                onChange={e =>
+                                    setFormData(previous => ({
+                                        ...previous,
+                                        marksObtained: e.target.value
+                                    }))
+                                }
+                                className={inputClass}
+                                placeholder="Enter Marks Obtained"
                             />
-
                         </div>
 
                         <div className="flex flex-col gap-2">
-
-                            <label htmlFor="max">
-                                Max Marks:
-                            </label>
+                            <label htmlFor="max">Max Marks:</label>
 
                             <input
-                                required
-                                value={formData.totalMarks}
-                                onChange={(e) =>
-                                    setFormData({
-                                        ...formData,
-                                        totalMarks: e.target.value
-                                    })
-                                }
-                                className="w-sm border-2 border-gray-500 rounded-sm p-2
-                                focus:outline-none focus:border-gray-900
-                                transition-colors duration-300 ease-in-out"
-                                type="number"
                                 id="max"
-                                placeholder="Enter Max Marks"
                                 name="max"
+                                type="number"
+                                required
+                                min="1"
+                                value={formData.totalMarks}
+                                onChange={e =>
+                                    setFormData(previous => ({
+                                        ...previous,
+                                        totalMarks: e.target.value
+                                    }))
+                                }
+                                className={inputClass}
+                                placeholder="Enter Max Marks"
                             />
-
                         </div>
 
-                        <div>
+                        <div className="flex gap-5">
+                            <button
+                                type="submit"
+                                className="cursor-pointer rounded-lg bg-purple-300 px-6 py-3 font-medium text-purple-950 shadow-[0_2px_3px] transition-colors hover:bg-violet-300"
+                            >
+                                {isAdding ? "Add" : "Update"}
+                            </button>
 
-                            <div className="flex gap-5">
-
-                                <button
-                                    type="submit"
-                                    className="rounded-lg bg-purple-300 px-6 py-3 font-medium text-purple-950 shadow-[0_2px_3px] transition-colors hover:bg-violet-300 cursor-pointer"
-                                >
-                                    {isAdding ? "Add" : "Update"}
-                                </button>
-
-                                <button
-                                    onClick={() => navigate(-1)}
-                                    type="button"
-                                    className="rounded-lg bg-purple-300 px-6 py-3 font-medium text-purple-950 shadow-[0_2px_3px] transition-colors hover:bg-violet-300 cursor-pointer"
-                                >
-                                    Cancel
-                                </button>
-
-                            </div>
-
+                            <button
+                                type="button"
+                                onClick={() => navigate(-1)}
+                                className="cursor-pointer rounded-lg bg-purple-300 px-6 py-3 font-medium text-purple-950 shadow-[0_2px_3px] transition-colors hover:bg-violet-300"
+                            >
+                                Cancel
+                            </button>
                         </div>
-
                     </form>
-
                 </div>
-
             </div>
 
             <Modal
@@ -386,7 +359,6 @@ function MarksForm() {
                 message={modalMessage}
                 onClose={handleModalClose}
             />
-
         </div>
     );
 }

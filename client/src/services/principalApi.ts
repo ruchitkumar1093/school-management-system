@@ -147,9 +147,25 @@ export const getMarkTeachers = () => {
     return api.get("/principal/marks/teachers");
 };
 
-export const deactivateTeacher = (id: string) => {
-    return api.patch(`/principal/deactivateTeacher/${id}`);
+export const getMarkFormOptions = (className: string) => {
+    return api.get("/principal/markFormOptions", {
+        params: {
+            class: className
+        }
+    });
 };
+
+
+export const deactivateTeacher = (
+    id: string,
+    arrangedTeacherId: string
+) => {
+    return api.patch(
+        `/principal/deactivateTeacher/${id}`,
+        { arrangedTeacherId }
+    );
+};
+
 
 export const activateTeacher = (id: string) => {
     return api.patch(`/principal/activateTeacher/${id}`);
@@ -470,4 +486,22 @@ export const updateTeacherProfile = (
     data: Record<string, string>
 ) => {
     return api.patch(`/principal/teachers/${id}`, data);
+};
+
+//Arrangements
+// Fetch eligible teachers for a temporary arrangement
+export const getTeachersForArrangement = (className: string) =>
+    api.get("/principal/arrangement/teachers", {
+        params: { class: className }
+    });
+
+// Create a temporary arrangement
+export const createArrangement = (
+    originalTeacherId: string,
+    arrangedTeacherId: string
+) => {
+    return api.post("/principal/arrangement", {
+        originalTeacherId,
+        arrangedTeacherId
+    });
 };

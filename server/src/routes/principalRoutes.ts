@@ -13,7 +13,8 @@ import {
     rejectTeacherLeave, permanentlyDeleteTeacher, permanentlyDeleteStudent,
     deleteTeachers, deleteStudents, getStudentAttendanceDetails, getStudentMonthlyAttendance,
     getTeachersForAttendance, createTeacherAttendance, getTeacherAttendance, getTeacherAttendanceDetails,
-    getTeacherMonthlyAttendance, updateStudentProfile, updateTeacherProfile
+    getTeacherMonthlyAttendance, updateStudentProfile, updateTeacherProfile, getMarkFormOptions,
+    getTeachersForArrangement, createArrangement
 } from "../controllers/principalController";
 
 //home
@@ -90,6 +91,7 @@ router.post("/marks/addMark", createMark);
 router.put("/updateMark/:id", updateMark);
 router.delete("/deleteMark/:id", deleteMark);
 router.get("/marks/teachers", getMarkTeachers);
+router.get("/markFormOptions", getMarkFormOptions);
 
 //Exam
 router.get("/examResults", getExamResults);
@@ -97,5 +99,10 @@ router.get("/examResults", getExamResults);
 //Class Overview
 router.get("/class-overview/:class", getClassOverview);
 router.put("/class-overview/:class/teacher", assignClassTeacher);
+
+//Arrangement
+router.get("/arrangement/teachers", getTeachersForArrangement);
+
+router.post("/arrangement", createArrangement);
 
 export default router;

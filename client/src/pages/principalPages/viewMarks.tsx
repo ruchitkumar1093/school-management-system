@@ -54,6 +54,7 @@ function PrincipalViewMarks() {
     type Teacher = {
         id: string;
         name: string;
+        classAssigned: string;
     };
 
     const navigate = useNavigate();

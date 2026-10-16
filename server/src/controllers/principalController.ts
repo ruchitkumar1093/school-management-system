@@ -11,6 +11,7 @@ import bcrypt from "bcrypt";
 import Leave from "../models/Leave";
 import AdmissionRequest from "../models/AdmissionRequest";
 import TeacherAttendance from "../models/TeacherAttendance";
+import Arrangement from "../models/Arrangement";
 import Holiday from "../models/Holiday";
 
 export const deactivateStudent = async (req: Request, res: Response, next: NextFunction) => {
@@ -1599,7 +1600,8 @@ export const getMarkTeachers = async (
                 $project: {
                     _id: 0,
                     id: "$teacher._id",
-                    name: "$user.name"
+                    name: "$user.name",
+                    classAssigned: "$teacher.classAssigned"
                 }
             }
         ]);
@@ -2029,7 +2031,11 @@ export const deleteSubject = async (req: Request, res: Response, next: NextFunct
 
 // Teacher CRUD
 
-export const createTeacher = async (req: Request, res: Response, next: NextFunction) => {
+export const createTeacher = async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+) => {
     const session = await mongoose.startSession();
 
     try {
@@ -2040,18 +2046,20 @@ export const createTeacher = async (req: Request, res: Response, next: NextFunct
             classAssigned
         } = req.body;
 
+        session.startTransaction();
+
         const existingTeacher = await Teacher.findOne({
             department,
             classAssigned
         }).session(session);
 
         if (existingTeacher) {
+            await session.abortTransaction();
+
             return res.status(400).json({
                 message: "A teacher is already assigned to this department and class"
             });
         }
-
-        session.startTransaction();
 
         const teacherUsers = await User.find({
             role: "teacher",
@@ -2083,10 +2091,14 @@ export const createTeacher = async (req: Request, res: Response, next: NextFunct
 
         if (lastTeacher) {
             employeeNumber =
-                parseInt(lastTeacher.employeeID.replace("EMP", ""), 10) + 1;
+                parseInt(
+                    lastTeacher.employeeID.replace("EMP", ""),
+                    10
+                ) + 1;
         }
 
-        const employeeID = `EMP${String(employeeNumber).padStart(4, "0")}`;
+        const employeeID =
+            `EMP${String(employeeNumber).padStart(4, "0")}`;
 
         const hashedPassword = await bcrypt.hash(password, 10);
 
@@ -2114,16 +2126,27 @@ export const createTeacher = async (req: Request, res: Response, next: NextFunct
             { session }
         );
 
+        // Remove the temporary arrangement for this vacancy, if one exists.
+        const removedArrangement =
+            await Arrangement.findOneAndDelete({
+                class: classAssigned,
+                department
+            }).session(session);
+
         await session.commitTransaction();
 
-        res.status(200).json({
-            message: "Teacher created successfully"
+        return res.status(201).json({
+            message: removedArrangement
+                ? "Teacher created successfully and temporary arrangement removed"
+                : "Teacher created successfully"
         });
 
     } catch (error) {
-        await session.abortTransaction();
+        if (session.inTransaction()) {
+            await session.abortTransaction();
+        }
 
-        console.log(error);
+        console.error("Error creating teacher:", error);
         next(error);
 
     } finally {
@@ -2330,9 +2353,21 @@ export const getStudentById = async (req: Request, res: Response, next: NextFunc
     }
 };
 
-export const deactivateTeacher = async (req: Request, res: Response, next: NextFunction) => {
+
+export const deactivateTeacher = async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+) => {
+    let createdArrangementId: string | null = null;
+
     try {
-        const teacher = await Teacher.findById(req.params.id);
+        const { arrangedTeacherId } = req.body;
+
+        const teacher = await Teacher.findOne({
+            _id: req.params.id,
+            isDeleted: false
+        });
 
         if (!teacher) {
             return res.status(404).json({
@@ -2354,21 +2389,93 @@ export const deactivateTeacher = async (req: Request, res: Response, next: NextF
             });
         }
 
+        if (
+            !mongoose.isValidObjectId(arrangedTeacherId) ||
+            arrangedTeacherId.toString() === teacher._id.toString()
+        ) {
+            return res.status(400).json({
+                message: "A valid replacement teacher must be selected"
+            });
+        }
+
+        const arrangedTeacher = await Teacher.findOne({
+            _id: arrangedTeacherId,
+            isDeleted: false
+        });
+
+        if (!arrangedTeacher) {
+            return res.status(404).json({
+                message: "Replacement teacher not found"
+            });
+        }
+
+        const arrangedUser = await User.findById(
+            arrangedTeacher.userId
+        );
+
+        if (!arrangedUser || arrangedUser.isActive !== true) {
+            return res.status(400).json({
+                message: "The replacement teacher must have an active account"
+            });
+        }
+
+        const existingArrangement = await Arrangement.findOne({
+            originalTeacherId: teacher._id
+        });
+
+        if (existingArrangement) {
+            return res.status(409).json({
+                message: "A temporary arrangement already exists for this teacher"
+            });
+        }
+
+        // Create the arrangement before deactivating the original teacher.
+        const arrangement = await Arrangement.create({
+            originalTeacherId: teacher._id,
+            arrangedTeacherId: arrangedTeacher._id,
+            class: teacher.classAssigned,
+            department: teacher.department
+        });
+
+        createdArrangementId = arrangement._id.toString();
+
         user.isActive = false;
         await user.save();
 
-        res.status(200).json({
-            message: "Teacher account deactivated"
+        return res.status(200).json({
+            message: "Teacher account deactivated and temporary arrangement created successfully",
+            arrangement
         });
-    }
-    catch (error) {
+    } catch (error) {
+        // If deactivation fails after arrangement creation, clean it up.
+        if (createdArrangementId) {
+            try {
+                await Arrangement.findByIdAndDelete(
+                    createdArrangementId
+                );
+            } catch (cleanupError) {
+                console.error(
+                    "Failed to clean up arrangement after deactivation error:",
+                    cleanupError
+                );
+            }
+        }
+
         next(error);
     }
 };
 
-export const activateTeacher = async (req: Request, res: Response, next: NextFunction) => {
+
+export const activateTeacher = async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+) => {
     try {
-        const teacher = await Teacher.findById(req.params.id);
+        const teacher = await Teacher.findOne({
+            _id: req.params.id,
+            isDeleted: false
+        });
 
         if (!teacher) {
             return res.status(404).json({
@@ -2390,17 +2497,51 @@ export const activateTeacher = async (req: Request, res: Response, next: NextFun
             });
         }
 
-        user.isActive = true;
-        await user.save();
+        const arrangement = await Arrangement.findOne({
+            originalTeacherId: teacher._id
+        }).lean();
 
-        res.status(200).json({
-            message: "Teacher account activated"
+        // Remove the temporary arrangement before reactivation.
+        if (arrangement) {
+            await Arrangement.findByIdAndDelete(arrangement._id);
+        }
+
+        try {
+            user.isActive = true;
+            await user.save();
+        } catch (error) {
+            // Restore the arrangement if reactivation fails.
+            if (arrangement) {
+                try {
+                    await Arrangement.create({
+                        originalTeacherId: arrangement.originalTeacherId,
+                        arrangedTeacherId: arrangement.arrangedTeacherId,
+                        class: arrangement.class,
+                        department: arrangement.department,
+                        createdAt: arrangement.createdAt,
+                        updatedAt: arrangement.updatedAt
+                    });
+                } catch (restoreError) {
+                    console.error(
+                        "Failed to restore temporary arrangement:",
+                        restoreError
+                    );
+                }
+            }
+
+            throw error;
+        }
+
+        return res.status(200).json({
+            message: arrangement
+                ? "Teacher account activated and temporary arrangement removed"
+                : "Teacher account activated"
         });
-    }
-    catch (error) {
+    } catch (error) {
         next(error);
     }
 };
+
 
 export const updateStudent = async (req: Request, res: Response, next: NextFunction) => {
     try {
@@ -3619,10 +3760,6 @@ export const getTeachersForAttendance = async (
             });
         }
 
-        const holiday = await Holiday.findOne({
-            date: selectedDate
-        }).lean();
-
         const teacherFilter: Record<string, any> = {
             isDeleted: { $ne: true }
         };
@@ -3733,8 +3870,6 @@ export const getTeachersForAttendance = async (
         return res.status(200).json({
             teachers: result,
             attendanceMarked: Boolean(attendanceMarked),
-            isHoliday: Boolean(holiday),
-            holidayName: holiday?.name ?? null,
             totalTeachers,
             totalPages,
             currentPage: validPage,
@@ -4670,4 +4805,263 @@ export const updateTeacherProfile = async (
             message: "Failed to update teacher profile"
         });
     }
+};
+
+type ClassName =
+    | "1st" | "2nd" | "3rd" | "4th"
+    | "5th" | "6th" | "7th" | "8th"
+    | "9th" | "10th" | "11th" | "12th";
+
+const validClasses: ClassName[] = [
+    "1st", "2nd", "3rd", "4th",
+    "5th", "6th", "7th", "8th",
+    "9th", "10th", "11th", "12th"
+];
+
+export const getMarkFormOptions = async (
+    req: Request,
+    res: Response
+): Promise<void> => {
+    try {
+        const { class: className } = req.query;
+
+        if (
+            typeof className !== "string" ||
+            !validClasses.includes(className as ClassName)
+        ) {
+            res.status(400).json({
+                message: "A valid class is required."
+            });
+            return;
+        }
+
+        const selectedClass = className as ClassName;
+
+        const [students, teachers] = await Promise.all([
+            Student.find({ class: selectedClass })
+                .select("_id userId class rollNumber")
+                .populate("userId", "name uid")
+                .sort({ rollNumber: 1 })
+                .lean(),
+
+            Teacher.find({ classAssigned: selectedClass })
+                .select("_id userId employeeID department classAssigned")
+                .populate("userId", "name uid")
+                .sort({ employeeID: 1 })
+                .lean()
+        ]);
+
+        res.status(200).json({ students, teachers });
+    } catch (error) {
+        console.error("Error fetching mark form options:", error);
+
+        res.status(500).json({
+            message: "Failed to fetch students and teachers."
+        });
+    }
+};
+
+
+
+export const getTeachersForArrangement = async (
+    req: Request,
+    res: Response
+): Promise<void> => {
+    try {
+        const className = req.query.class;
+
+        const validClasses = [
+            "1st", "2nd", "3rd", "4th", "5th", "6th",
+            "7th", "8th", "9th", "10th", "11th", "12th"
+        ] as const;
+
+        if (
+            typeof className !== "string" ||
+            !validClasses.some(classOption => classOption === className)
+        ) {
+            res.status(400).json({
+                message: "A valid class from 1st to 12th is required."
+            });
+            return;
+        }
+
+        // Narrow className to the same literal union used by the schema.
+        const selectedClass = className as typeof validClasses[number];
+
+        const teachers = await Teacher.find({
+            classAssigned: selectedClass,
+            isDeleted: false
+        })
+            .select("_id userId employeeID department classAssigned")
+            .populate({
+                path: "userId",
+                select: "name uid isActive",
+                match: { isActive: true }
+            })
+            .sort({ employeeID: 1 })
+            .lean();
+
+        const eligibleTeachers = teachers.filter(
+            teacher => teacher.userId !== null
+        );
+
+        res.status(200).json({
+            teachers: eligibleTeachers
+        });
+    } catch (error) {
+        console.error(
+            "Error fetching teachers for arrangement:",
+            error
+        );
+
+        res.status(500).json({
+            message: "Failed to fetch teachers."
+        });
+    }
+};
+
+export const createArrangement = async (
+    req: Request,
+    res: Response
+): Promise<void> => {
+    try {
+        const { originalTeacherId, arrangedTeacherId } = req.body;
+
+        if (
+            !mongoose.isValidObjectId(originalTeacherId) ||
+            !mongoose.isValidObjectId(arrangedTeacherId)
+        ) {
+            res.status(400).json({
+                message: "Valid teacher IDs are required."
+            });
+            return;
+        }
+
+        if (originalTeacherId === arrangedTeacherId) {
+            res.status(400).json({
+                message: "A teacher cannot replace themselves."
+            });
+            return;
+        }
+
+        const originalTeacher = await Teacher.findOne({
+            _id: originalTeacherId,
+            isDeleted: false
+        });
+
+        if (!originalTeacher) {
+            res.status(404).json({
+                message: "Original teacher not found."
+            });
+            return;
+        }
+
+        const originalUser = await User.findById(
+            originalTeacher.userId
+        );
+
+        if (!originalUser || originalUser.isActive) {
+            res.status(400).json({
+                message: "The original teacher must be deactivated first."
+            });
+            return;
+        }
+
+        const arrangedTeacher = await Teacher.findOne({
+            _id: arrangedTeacherId,
+            isDeleted: false
+        });
+
+        if (!arrangedTeacher) {
+            res.status(404).json({
+                message: "Replacement teacher not found."
+            });
+            return;
+        }
+
+        const arrangedUser = await User.findById(
+            arrangedTeacher.userId
+        );
+
+        if (!arrangedUser || !arrangedUser.isActive) {
+            res.status(400).json({
+                message: "The replacement teacher must have an active account."
+            });
+            return;
+        }
+
+        const existingArrangement = await Arrangement.findOne({
+            originalTeacherId
+        });
+
+        if (existingArrangement) {
+            res.status(409).json({
+                message: "A temporary arrangement already exists for this teacher."
+            });
+            return;
+        }
+
+        const arrangement = await Arrangement.create({
+            originalTeacherId: originalTeacher._id,
+            arrangedTeacherId: arrangedTeacher._id,
+            class: originalTeacher.classAssigned,
+            department: originalTeacher.department
+        });
+
+        res.status(201).json({
+            message: "Temporary arrangement created successfully.",
+            arrangement
+        });
+    } catch (error) {
+        console.error("Error creating arrangement:", error);
+
+        res.status(500).json({
+            message: "Failed to create temporary arrangement."
+        });
+    }
+};
+
+export const deleteArrangementByOriginalTeacher = async (
+    originalTeacherId: string
+) => {
+    return Arrangement.findOneAndDelete({
+        originalTeacherId
+    });
+};
+
+// Remove an arrangement when a new teacher fills the vacancy.
+export const deleteArrangementByPosition = async (
+    className: string,
+    department: string
+) => {
+    const validClasses = [
+        "1st", "2nd", "3rd", "4th", "5th", "6th",
+        "7th", "8th", "9th", "10th", "11th", "12th"
+    ] as const;
+
+    const validDepartments = [
+        "Science",
+        "Mathematics",
+        "English",
+        "Social Science",
+        "Hindi"
+    ] as const;
+
+    if (
+        !validClasses.some(classOption => classOption === className) ||
+        !validDepartments.some(option => option === department)
+    ) {
+        throw new Error("Invalid class or department.");
+    }
+
+    const selectedClass =
+        className as typeof validClasses[number];
+
+    const selectedDepartment =
+        department as typeof validDepartments[number];
+
+    return Arrangement.findOneAndDelete({
+        class: selectedClass,
+        department: selectedDepartment
+    });
 };

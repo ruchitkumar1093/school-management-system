@@ -9,7 +9,9 @@ import {
     getTeacherById,
     deactivateTeacher,
     activateTeacher,
-    updateTeacherProfile
+    updateTeacherProfile,
+    getTeachersForArrangement,
+    createArrangement
 } from "../../services/principalApi";
 
 import teacher1 from "../../assets/profiles/profile1.png";
@@ -30,6 +32,18 @@ type TeacherInfo = {
         uid: string;
         role: string;
         isActive?: boolean;
+    };
+};
+
+type ArrangementTeacher = {
+    _id: string;
+    employeeID: string;
+    department: string;
+    classAssigned: string;
+    userId: {
+        name: string;
+        uid: string;
+        isActive: boolean;
     };
 };
 
@@ -134,6 +148,23 @@ function TeacherProfile() {
         : 0;
 
     const teacherPhoto = teacherPhotos[photoIndex];
+
+    const [arrangementModalOpen, setArrangementModalOpen] =
+        useState(false);
+
+    const [arrangementTeachers, setArrangementTeachers] =
+        useState<ArrangementTeacher[]>([]);
+
+    const [selectedTeacherId, setSelectedTeacherId] =
+        useState("");
+
+    const [loadingArrangementTeachers, setLoadingArrangementTeachers] =
+        useState(false);
+
+    const [savingArrangement, setSavingArrangement] =
+        useState(false);
+
+    const [selectedClass, setSelectedClass] = useState("");
 
     async function fetchTeacher() {
         if (!id) return;
@@ -242,7 +273,7 @@ function TeacherProfile() {
                             : key === "classAssigned"
                                 ? "Class Assigned"
                                 : key.charAt(0).toUpperCase() +
-                                  key.slice(1);
+                                key.slice(1);
 
                 setModalTitle("Validation Error");
                 setModalMessage(`${label} cannot be empty.`);
@@ -359,7 +390,7 @@ function TeacherProfile() {
                 ) : (
                     <p className="mt-1 break-words font-medium text-gray-900">
                         {field.key === "uid" ||
-                        field.key === "employeeID"
+                            field.key === "employeeID"
                             ? value.toUpperCase() || "Not available"
                             : value || "Not available"}
                     </p>
@@ -430,39 +461,37 @@ function TeacherProfile() {
         );
     }
 
-    function handleAccountAction() {
+
+    async function handleAccountAction() {
         if (!teacherInfo || accountActionPending) return;
 
-        const wasActive = isAccountActive;
         const currentTeacherId = teacherInfo._id;
 
-        setModalTitle(
-            wasActive ? "Deactivate Account" : "Activate Account"
-        );
+        // Do not deactivate until a replacement teacher is selected.
+        if (isAccountActive) {
+            setSelectedClass("");
+            setSelectedTeacherId("");
+            setArrangementTeachers([]);
+            setArrangementModalOpen(true);
+            return;
+        }
 
+        // Reactivation continues through the existing confirmation modal.
+        setModalTitle("Activate Account");
         setModalMessage(
-            wasActive
-                ? "Are you sure you want to deactivate this teacher's account?"
-                : "Are you sure you want to activate this teacher's account?"
+            "Are you sure you want to activate this teacher's account?"
         );
 
         setConfirmAction(() => async () => {
             try {
                 setAccountActionPending(true);
 
-                if (wasActive) {
-                    await deactivateTeacher(currentTeacherId);
-                } else {
-                    await activateTeacher(currentTeacherId);
-                }
-
+                await activateTeacher(currentTeacherId);
                 await fetchTeacher();
 
                 setModalTitle("Success");
                 setModalMessage(
-                    wasActive
-                        ? "Teacher account deactivated successfully."
-                        : "Teacher account activated successfully."
+                    "Teacher account activated successfully."
                 );
             } catch (error: any) {
                 console.error(error);
@@ -470,7 +499,7 @@ function TeacherProfile() {
                 setModalTitle("Error");
                 setModalMessage(
                     error.response?.data?.message ||
-                    "Failed to update teacher account."
+                    "Failed to activate teacher account."
                 );
             } finally {
                 setAccountActionPending(false);
@@ -479,6 +508,94 @@ function TeacherProfile() {
         });
 
         setModalOpen(true);
+    }
+
+
+
+    async function handleArrangementClassChange(className: string) {
+        setSelectedClass(className);
+        setSelectedTeacherId("");
+        setArrangementTeachers([]);
+
+        if (!className) {
+            return;
+        }
+
+        try {
+            setLoadingArrangementTeachers(true);
+
+            // Fetch only teachers belonging to the selected class.
+            const response = await getTeachersForArrangement(className);
+
+            const eligibleTeachers: ArrangementTeacher[] =
+                response.data.teachers.filter(
+                    (teacher: ArrangementTeacher) =>
+                        teacher._id !== teacherInfo?._id &&
+                        teacher.userId?.isActive === true
+                );
+
+            setArrangementTeachers(eligibleTeachers);
+        } catch (error: any) {
+            console.error(error);
+
+            setArrangementTeachers([]);
+            setModalTitle("Error");
+            setModalMessage(
+                error.response?.data?.message ||
+                "Failed to load teachers for the selected class."
+            );
+            setModalOpen(true);
+        } finally {
+            setLoadingArrangementTeachers(false);
+        }
+    }
+
+
+    async function handleConfirmArrangement() {
+        if (
+            !teacherInfo ||
+            !selectedTeacherId ||
+            savingArrangement
+        ) {
+            return;
+        }
+
+        const currentTeacherId = teacherInfo._id;
+
+        try {
+            setSavingArrangement(true);
+            setAccountActionPending(true);
+
+            await deactivateTeacher(
+                currentTeacherId,
+                selectedTeacherId
+            );
+
+            setArrangementModalOpen(false);
+            setSelectedTeacherId("");
+
+            await fetchTeacher();
+
+            setModalTitle("Success");
+            setModalMessage(
+                "Teacher account deactivated and temporary arrangement created successfully."
+            );
+            setModalOpen(true);
+        } catch (error: any) {
+            console.error(error);
+
+            setArrangementModalOpen(false);
+
+            setModalTitle("Error");
+            setModalMessage(
+                error.response?.data?.message ||
+                "The operation failed. Please check the teacher's account status and temporary arrangement before trying again."
+            );
+            setModalOpen(true);
+        } finally {
+            setSavingArrangement(false);
+            setAccountActionPending(false);
+        }
     }
 
     return (
@@ -520,11 +637,10 @@ function TeacherProfile() {
                                     </span>
 
                                     <span
-                                        className={`mt-2 rounded-full px-3 py-1 text-sm font-medium ${
-                                            isAccountActive
-                                                ? "bg-green-100 text-green-800"
-                                                : "bg-red-100 text-red-800"
-                                        }`}
+                                        className={`mt-2 rounded-full px-3 py-1 text-sm font-medium ${isAccountActive
+                                            ? "bg-green-100 text-green-800"
+                                            : "bg-red-100 text-red-800"
+                                            }`}
                                     >
                                         {isAccountActive
                                             ? "Active"
@@ -586,11 +702,10 @@ function TeacherProfile() {
                                                 Account Status
                                             </p>
                                             <p
-                                                className={`mt-1 font-medium ${
-                                                    isAccountActive
-                                                        ? "text-green-700"
-                                                        : "text-red-700"
-                                                }`}
+                                                className={`mt-1 font-medium ${isAccountActive
+                                                    ? "text-green-700"
+                                                    : "text-red-700"
+                                                    }`}
                                             >
                                                 {isAccountActive
                                                     ? "Active"
@@ -638,11 +753,10 @@ function TeacherProfile() {
                                         savingSection ||
                                         editingSection !== null
                                     }
-                                    className={`cursor-pointer rounded-lg px-5 py-2.5 font-medium text-white transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
-                                        isAccountActive
-                                            ? "bg-red-600 hover:bg-red-700"
-                                            : "bg-green-600 hover:bg-green-700"
-                                    }`}
+                                    className={`cursor-pointer rounded-lg px-5 py-2.5 font-medium text-white transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${isAccountActive
+                                        ? "bg-red-600 hover:bg-red-700"
+                                        : "bg-green-600 hover:bg-green-700"
+                                        }`}
                                 >
                                     {accountActionPending
                                         ? "Please wait..."
@@ -656,6 +770,128 @@ function TeacherProfile() {
                 </div>
             </div>
 
+            {arrangementModalOpen && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+                    <div className="w-full max-w-lg rounded-xl bg-white p-6 shadow-xl">
+                        <h2 className="text-xl font-semibold text-purple-950">
+                            Temporary Teacher Arrangement
+                        </h2>
+
+                        <p className="mt-2 text-sm text-gray-600">
+                            Select a temporary teacher for{" "}
+                            <strong>{savedData.department}</strong>{" - "}<strong>{savedData.classAssigned}</strong> before deactivation until a permanent replacement is appointed.
+                        </p>
+
+                        <div className="mt-5">
+
+                            <div className="mt-5 space-y-4">
+                                <div>
+                                    <label
+                                        htmlFor="arrangementClass"
+                                        className="mb-2 block text-sm font-medium text-gray-700"
+                                    >
+                                        Class
+                                    </label>
+
+                                    <select
+                                        id="arrangementClass"
+                                        value={selectedClass}
+                                        onChange={event =>
+                                            handleArrangementClassChange(event.target.value)
+                                        }
+                                        disabled={loadingArrangementTeachers || savingArrangement}
+                                        className="w-full rounded-lg border border-purple-300 bg-white px-3 py-3 outline-none focus:border-purple-600 focus:ring-2 focus:ring-purple-200 disabled:opacity-60"
+                                    >
+                                        <option value="">Select a class</option>
+
+                                        {classOptions.map(className => (
+                                            <option key={className} value={className}>
+                                                Class {className}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+
+                                {selectedClass && (
+                                    <div>
+                                        <label
+                                            htmlFor="arrangedTeacher"
+                                            className="mb-2 block text-sm font-medium text-gray-700"
+                                        >
+                                            Replacement Teacher
+                                        </label>
+
+                                        <select
+                                            id="arrangedTeacher"
+                                            value={selectedTeacherId}
+                                            onChange={event =>
+                                                setSelectedTeacherId(event.target.value)
+                                            }
+                                            disabled={loadingArrangementTeachers || savingArrangement}
+                                            className="w-full rounded-lg border border-purple-300 bg-white px-3 py-3 outline-none focus:border-purple-600 focus:ring-2 focus:ring-purple-200 disabled:opacity-60"
+                                        >
+                                            <option value="">
+                                                {loadingArrangementTeachers
+                                                    ? "Loading teachers..."
+                                                    : "Select a teacher"}
+                                            </option>
+
+                                            {arrangementTeachers.map(teacher => (
+                                                <option key={teacher._id} value={teacher._id}>
+                                                    {teacher.userId.name} —{" "}
+                                                    {teacher.employeeID.toUpperCase()} —{" "}
+                                                    {teacher.department}
+                                                </option>
+                                            ))}
+                                        </select>
+
+                                        {!loadingArrangementTeachers &&
+                                            arrangementTeachers.length === 0 && (
+                                                <p className="mt-2 text-sm text-gray-600">
+                                                    No eligible teachers were found for Class {selectedClass}.
+                                                </p>
+                                            )}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        <div className="mt-6 flex justify-end gap-3">
+                            <button
+                                type="button"
+
+                                onClick={() => {
+                                    setArrangementModalOpen(false);
+                                    setSelectedClass("");
+                                    setSelectedTeacherId("");
+                                    setArrangementTeachers([]);
+                                }}
+
+                                disabled={savingArrangement}
+                                className="rounded-lg border border-gray-300 px-4 py-2 font-medium text-gray-700 hover:bg-gray-100 disabled:opacity-60"
+                            >
+                                Cancel
+                            </button>
+
+                            <button
+                                type="button"
+                                onClick={handleConfirmArrangement}
+                                disabled={
+                                    !selectedClass ||
+                                    !selectedTeacherId ||
+                                    loadingArrangementTeachers ||
+                                    savingArrangement
+                                }
+                                className="rounded-lg bg-purple-700 px-4 py-2 font-medium text-white hover:bg-purple-800 disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                                {savingArrangement
+                                    ? "Processing..."
+                                    : "Confirm & Deactivate"}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
             <Modal
                 isOpen={modalOpen}
                 title={modalTitle}

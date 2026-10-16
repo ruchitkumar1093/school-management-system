@@ -10,6 +10,8 @@ import Leave from "../models/Leave";
 import AdmissionRequest from "../models/AdmissionRequest";
 import Holiday from "../models/Holiday";
 import TeacherAttendance from "../models/TeacherAttendance";
+import Class from "../models/Class";
+import Arrangement from "../models/Arrangement";
 
 export const applyLeave = async (
     req: Request,
@@ -453,6 +455,7 @@ export const rejectLeave = async (
     }
 };
 
+
 export const getTeacherHome = async (
     req: Request,
     res: Response
@@ -461,7 +464,8 @@ export const getTeacherHome = async (
         const userId = req.user?.userId;
 
         const teacher = await Teacher.findOne({
-            userId: userId
+            userId,
+            isDeleted: false
         });
 
         if (!teacher) {
@@ -470,13 +474,29 @@ export const getTeacherHome = async (
             });
         }
 
+        const classTeacher = await Class.exists({
+            class: teacher.classAssigned,
+            teacherId: teacher._id
+        });
+
+        // Check whether this teacher is temporarily covering another position.
+        const arrangement = await Arrangement.findOne({
+            arrangedTeacherId: teacher._id
+        }).select("class department");
+
         return res.status(200).json({
             employeeID: teacher.employeeID,
             department: teacher.department,
-            classAssigned: teacher.classAssigned
+            classAssigned: teacher.classAssigned,
+            isClassTeacher: Boolean(classTeacher),
+            temporaryArrangement: arrangement
+                ? {
+                    class: arrangement.class,
+                    department: arrangement.department
+                }
+                : null
         });
-    }
-    catch (error) {
+    } catch (error) {
         console.error(
             "Get teacher home error:",
             error
@@ -821,6 +841,8 @@ export const getStudents = async (
     next: NextFunction
 ) => {
     try {
+        console.log(req.user);
+        
         const teacher = await Teacher.findOne({
             userId: req.user?.userId
         });

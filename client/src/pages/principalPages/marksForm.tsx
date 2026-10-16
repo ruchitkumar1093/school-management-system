@@ -1,13 +1,11 @@
 import NavBar from "../../components/navBar";
 import SideBar from "../../components/sideBar";
-import { useSearchParams } from "react-router-dom";
-import { useNavigate } from "react-router-dom";
+import { useSearchParams, useNavigate } from "react-router-dom";
 import {
     addMark,
     updateMark,
     getMarkById,
-    viewStudents,
-    viewTeachers
+    getMarkFormOptions
 } from "../../services/principalApi";
 import { useState, useEffect } from "react";
 import Breadcrumb from "../../components/breadcrumb";
@@ -45,123 +43,140 @@ type Teacher = {
 };
 
 function MarksForm() {
-
     const [searchParams] = useSearchParams();
     const mode = searchParams.get("mode");
     const id = searchParams.get("id");
-
     const isAdding = mode === "add";
 
     const navigate = useNavigate();
 
     const [formData, setFormData] = useState<FormData>({
-        class: "Select an option",
+        class: "",
         studentId: "",
         teacherId: "",
-        subjectName: "Select an option",
-        exam: "Select an option",
+        subjectName: "",
+        exam: "",
         marksObtained: "",
         totalMarks: ""
     });
 
     const [students, setStudents] = useState<Student[]>([]);
     const [teachers, setTeachers] = useState<Teacher[]>([]);
+    const [loadingOptions, setLoadingOptions] = useState(false);
 
     const [modalOpen, setModalOpen] = useState(false);
     const [modalTitle, setModalTitle] = useState("");
     const [modalMessage, setModalMessage] = useState("");
 
+    // Fetch students and teachers only after selecting a class.
     useEffect(() => {
+        if (!isAdding || !formData.class) {
+            setStudents([]);
+            setTeachers([]);
+            return;
+        }
 
-        const fetchData = async () => {
+        let cancelled = false;
+
+        const fetchOptions = async () => {
+            setLoadingOptions(true);
 
             try {
+                const response = await getMarkFormOptions(
+                    formData.class
+                );
 
-                const [studentsResponse, teachersResponse] = await Promise.all([
-                    viewStudents("All", "", "", "asc", 1, 1000, false),
-                    viewTeachers("All", "", "", "asc", 1, 1000, false)
-                ]);
+                if (cancelled) return;
 
-                setStudents(studentsResponse.data.students);
-                setTeachers(teachersResponse.data.teachers);
+                setStudents(response.data.students);
+                setTeachers(response.data.teachers);
+            } catch (error) {
+                if (!cancelled) {
+                    console.error(
+                        "Failed to fetch students and teachers:",
+                        error
+                    );
 
-            }
-            catch (error) {
-                console.log(error);
+                    setStudents([]);
+                    setTeachers([]);
+                }
+            } finally {
+                if (!cancelled) {
+                    setLoadingOptions(false);
+                }
             }
         };
 
-        fetchData();
+        void fetchOptions();
 
-    }, []);
+        return () => {
+            cancelled = true;
+        };
+    }, [isAdding, formData.class]);
 
+    // Fetch the existing mark when editing.
     useEffect(() => {
+        if (isAdding || !id) return;
+
+        let cancelled = false;
 
         const fetchMark = async () => {
-
             try {
+                const response = await getMarkById(id);
 
-                if (!isAdding && id) {
+                if (cancelled) return;
 
-                    const response = await getMarkById(id);
-                    const mark = response.data;
-                    console.log("Mark being edited:", mark);
+                const mark = response.data;
 
-                    setFormData({
-                        class: mark.studentId?.class ?? "",
-                        studentId: mark.studentId?._id ?? "",
-                        teacherId: mark.teacherId?._id ?? "",
-                        subjectName: mark.subjectId?.name ?? "",
-                        exam: mark.exam ?? "",
-                        marksObtained: mark.marksObtained?.toString() ?? "",
-                        totalMarks: mark.totalMarks?.toString() ?? ""
-                    });
+                setFormData({
+                    class: mark.studentId?.class ?? "",
+                    studentId: mark.studentId?._id ?? "",
+                    teacherId: mark.teacherId?._id ?? "",
+                    subjectName: mark.subjectId?.name ?? "",
+                    exam: mark.exam ?? "",
+                    marksObtained: String(mark.marksObtained ?? ""),
+                    totalMarks: String(mark.totalMarks ?? "")
+                });
+            } catch (error) {
+                if (!cancelled) {
+                    console.error("Failed to fetch mark:", error);
                 }
-
-            }
-            catch (error) {
-                console.log(error);
             }
         };
 
-        fetchMark();
+        void fetchMark();
 
+        return () => {
+            cancelled = true;
+        };
     }, [id, isAdding]);
 
-    const filteredStudents = students.filter(
-        (student) => student.class === formData.class
-    );
-
-    const filteredTeachers = teachers.filter(
-        (teacher) => teacher.classAssigned === formData.class
-    );
-
     const handleClassChange = (value: string) => {
-
-        setFormData({
-            ...formData,
+        setFormData(previous => ({
+            ...previous,
             class: value,
             studentId: "",
             teacherId: ""
-        });
+        }));
 
+        // Clear the previous class's options immediately.
+        setStudents([]);
+        setTeachers([]);
     };
 
-    const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-
+    const handleSubmit = async (
+        e: React.FormEvent<HTMLFormElement>
+    ) => {
         e.preventDefault();
 
         try {
-
             if (isAdding) {
-
                 await addMark(formData);
 
                 setModalTitle("Success");
                 setModalMessage("Marks Added");
-
-            }
-            else if (id) {
+            } else {
+                if (!id) return;
 
                 await updateMark(id, formData);
 
@@ -170,16 +185,15 @@ function MarksForm() {
             }
 
             setModalOpen(true);
-
-        }
-        catch (error: any) {
-
-            console.log(error);
+        } catch (error: any) {
+            console.error(error);
 
             setModalTitle("Error");
             setModalMessage(
-                error.response?.data?.message || "Failed"
+                error.response?.data?.message ||
+                "Failed to save marks."
             );
+
             setModalOpen(true);
         }
     };
@@ -195,302 +209,243 @@ function MarksForm() {
         }
     };
 
+    const inputClass =
+        "w-sm rounded-sm border-2 border-gray-500 p-2 focus:outline-none focus:border-gray-900 transition-colors duration-300 ease-in-out";
+
     return (
-
-        <div className="flex flex-col min-h-screen font-fredoka">
-
+        <div className="flex min-h-screen flex-col font-fredoka">
             <NavBar />
 
             <div className="flex flex-1 bg-purple-100">
-
                 <SideBar />
 
                 <div>
-
                     <Breadcrumb />
 
                     <form
                         onSubmit={handleSubmit}
                         className="flex flex-col gap-7 p-15"
                     >
+                        {isAdding && (
+                            <>
+                                <div className="flex flex-col gap-2">
+                                    <label htmlFor="class">Class:</label>
 
-                        <div className="flex flex-col gap-2">
-
-                            <label htmlFor="class">
-                                Class:
-                            </label>
-
-                            <select
-                                required
-                                value={formData.class}
-                                onChange={(e) =>
-                                    handleClassChange(e.target.value)
-                                }
-                                className="w-sm border-2 border-gray-500 rounded-sm p-2
-                                focus:outline-none focus:border-gray-900
-                                transition-colors duration-300 ease-in-out"
-                                id="class"
-                                name="class"
-                            >
-
-                                <option disabled>
-                                    Select an option
-                                </option>
-
-                                <option>1st</option>
-                                <option>2nd</option>
-                                <option>3rd</option>
-                                <option>4th</option>
-                                <option>5th</option>
-                                <option>6th</option>
-                                <option>7th</option>
-                                <option>8th</option>
-                                <option>9th</option>
-                                <option>10th</option>
-                                <option>11th</option>
-                                <option>12th</option>
-
-                            </select>
-
-                        </div>
-
-                        <div className="flex flex-col gap-2">
-
-                            <label htmlFor="student">
-                                Student:
-                            </label>
-
-                            <select
-                                required
-                                disabled={formData.class === "Select an option"}
-                                value={formData.studentId}
-                                onChange={(e) =>
-                                    setFormData({
-                                        ...formData,
-                                        studentId: e.target.value
-                                    })
-                                }
-                                className="w-sm border-2 border-gray-500 rounded-sm p-2
-                                focus:outline-none focus:border-gray-900
-                                transition-colors duration-300 ease-in-out
-                                disabled:bg-gray-200 disabled:cursor-not-allowed"
-                                id="student"
-                                name="student"
-                            >
-
-                                <option value="" disabled>
-                                    Select a student
-                                </option>
-
-                                {filteredStudents.map((student) => (
-
-                                    <option
-                                        key={student._id}
-                                        value={student._id}
+                                    <select
+                                        id="class"
+                                        required
+                                        value={formData.class}
+                                        onChange={e =>
+                                            handleClassChange(e.target.value)
+                                        }
+                                        className={inputClass}
                                     >
-                                        {student.userId.name} -{" "}
-                                        {student.userId.uid.toUpperCase()}
-                                    </option>
+                                        <option value="" disabled>
+                                            Select a class
+                                        </option>
 
-                                ))}
+                                        {[
+                                            "1st", "2nd", "3rd", "4th",
+                                            "5th", "6th", "7th", "8th",
+                                            "9th", "10th", "11th", "12th"
+                                        ].map(className => (
+                                            <option
+                                                key={className}
+                                                value={className}
+                                            >
+                                                {className}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
 
-                            </select>
+                                <div className="flex flex-col gap-2">
+                                    <label htmlFor="student">Student:</label>
 
-                        </div>
-
-                        <div className="flex flex-col gap-2">
-
-                            <label htmlFor="teacher">
-                                Teacher:
-                            </label>
-
-                            <select
-                                required
-                                disabled={formData.class === "Select an option"}
-                                value={formData.teacherId}
-                                onChange={(e) =>
-                                    setFormData({
-                                        ...formData,
-                                        teacherId: e.target.value
-                                    })
-                                }
-                                className="w-sm border-2 border-gray-500 rounded-sm p-2
-                                focus:outline-none focus:border-gray-900
-                                transition-colors duration-300 ease-in-out
-                                disabled:bg-gray-200 disabled:cursor-not-allowed"
-                                id="teacher"
-                                name="teacher"
-                            >
-
-                                <option value="" disabled>
-                                    Select a teacher
-                                </option>
-
-                                {filteredTeachers.map((teacher) => (
-
-                                    <option
-                                        key={teacher._id}
-                                        value={teacher._id}
+                                    <select
+                                        id="student"
+                                        required
+                                        disabled={
+                                            !formData.class ||
+                                            loadingOptions
+                                        }
+                                        value={formData.studentId}
+                                        onChange={e =>
+                                            setFormData(previous => ({
+                                                ...previous,
+                                                studentId: e.target.value
+                                            }))
+                                        }
+                                        className={`${inputClass} disabled:bg-gray-200 disabled:cursor-not-allowed`}
                                     >
-                                        {teacher.userId.name} -{" "}
-                                        {teacher.employeeID.toUpperCase()}
-                                    </option>
+                                        <option value="" disabled>
+                                            {loadingOptions
+                                                ? "Loading students..."
+                                                : "Select a student"}
+                                        </option>
 
-                                ))}
+                                        {students.map(student => (
+                                            <option
+                                                key={student._id}
+                                                value={student._id}
+                                            >
+                                                {student.userId.name} -{" "}
+                                                {student.userId.uid.toUpperCase()}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
 
-                            </select>
+                                <div className="flex flex-col gap-2">
+                                    <label htmlFor="teacher">Teacher:</label>
 
-                        </div>
+                                    <select
+                                        id="teacher"
+                                        required
+                                        disabled={
+                                            !formData.class ||
+                                            loadingOptions
+                                        }
+                                        value={formData.teacherId}
+                                        onChange={e =>
+                                            setFormData(previous => ({
+                                                ...previous,
+                                                teacherId: e.target.value
+                                            }))
+                                        }
+                                        className={`${inputClass} disabled:bg-gray-200 disabled:cursor-not-allowed`}
+                                    >
+                                        <option value="" disabled>
+                                            {loadingOptions
+                                                ? "Loading teachers..."
+                                                : "Select a teacher"}
+                                        </option>
+
+                                        {teachers.map(teacher => (
+                                            <option
+                                                key={teacher._id}
+                                                value={teacher._id}
+                                            >
+                                                {teacher.userId.name} -{" "}
+                                                {teacher.employeeID.toUpperCase()}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+                            </>
+                        )}
 
                         <div className="flex flex-col gap-2">
-
-                            <label htmlFor="subject">
-                                Subject:
-                            </label>
+                            <label htmlFor="subject">Subject:</label>
 
                             <select
+                                id="subject"
                                 required
                                 value={formData.subjectName}
-                                onChange={(e) =>
-                                    setFormData({
-                                        ...formData,
+                                onChange={e =>
+                                    setFormData(previous => ({
+                                        ...previous,
                                         subjectName: e.target.value
-                                    })
+                                    }))
                                 }
-                                className="w-sm border-2 border-gray-500 rounded-sm p-2
-                                focus:outline-none focus:border-gray-900
-                                transition-colors duration-300 ease-in-out"
-                                id="subject"
-                                name="subject"
+                                className={inputClass}
                             >
-
-                                <option disabled>
-                                    Select an option
+                                <option value="" disabled>
+                                    Select a subject
                                 </option>
-
-                                <option>Science</option>
-                                <option>Mathematics</option>
-                                <option>English</option>
-                                <option>Social Science</option>
-                                <option>Hindi</option>
-
+                                <option value="Science">Science</option>
+                                <option value="Mathematics">Mathematics</option>
+                                <option value="English">English</option>
+                                <option value="Social Science">
+                                    Social Science
+                                </option>
+                                <option value="Hindi">Hindi</option>
                             </select>
-
                         </div>
 
                         <div className="flex flex-col gap-2">
-
-                            <label htmlFor="type">
-                                Exam type:
-                            </label>
+                            <label htmlFor="exam">Exam type:</label>
 
                             <select
+                                id="exam"
                                 required
                                 value={formData.exam}
-                                onChange={(e) =>
-                                    setFormData({
-                                        ...formData,
+                                onChange={e =>
+                                    setFormData(previous => ({
+                                        ...previous,
                                         exam: e.target.value
-                                    })
+                                    }))
                                 }
-                                className="w-sm border-2 border-gray-500 rounded-sm p-2
-                                focus:outline-none focus:border-gray-900
-                                transition-colors duration-300 ease-in-out"
-                                id="type"
-                                name="exam"
+                                className={inputClass}
                             >
-
-                                <option disabled>
-                                    Select an option
+                                <option value="" disabled>
+                                    Select an exam
                                 </option>
-
-                                <option>class test</option>
-                                <option>mid term</option>
-                                <option>final</option>
-
+                                <option value="class test">Class test</option>
+                                <option value="mid term">Mid term</option>
+                                <option value="final">Final</option>
                             </select>
-
                         </div>
 
                         <div className="flex flex-col gap-2">
-
-                            <label htmlFor="obt">
-                                Marks Obtained:
-                            </label>
+                            <label htmlFor="obt">Marks Obtained:</label>
 
                             <input
+                                id="obt"
+                                type="number"
+                                min="0"
                                 required
                                 value={formData.marksObtained}
-                                onChange={(e) =>
-                                    setFormData({
-                                        ...formData,
+                                onChange={e =>
+                                    setFormData(previous => ({
+                                        ...previous,
                                         marksObtained: e.target.value
-                                    })
+                                    }))
                                 }
-                                className="w-sm border-2 border-gray-500 rounded-sm p-2
-                                focus:outline-none focus:border-gray-900
-                                transition-colors duration-300 ease-in-out"
-                                type="number"
-                                id="obt"
+                                className={inputClass}
                                 placeholder="Enter Marks Obtained"
-                                name="obt"
                             />
-
                         </div>
 
                         <div className="flex flex-col gap-2">
-
-                            <label htmlFor="max">
-                                Max Marks:
-                            </label>
+                            <label htmlFor="max">Max Marks:</label>
 
                             <input
+                                id="max"
+                                type="number"
+                                min="1"
                                 required
                                 value={formData.totalMarks}
-                                onChange={(e) =>
-                                    setFormData({
-                                        ...formData,
+                                onChange={e =>
+                                    setFormData(previous => ({
+                                        ...previous,
                                         totalMarks: e.target.value
-                                    })
+                                    }))
                                 }
-                                className="w-sm border-2 border-gray-500 rounded-sm p-2
-                                focus:outline-none focus:border-gray-900
-                                transition-colors duration-300 ease-in-out"
-                                type="number"
-                                id="max"
+                                className={inputClass}
                                 placeholder="Enter Max Marks"
-                                name="max"
                             />
-
                         </div>
 
-                        <div>
+                        <div className="flex gap-5">
+                            <button
+                                type="submit"
+                                disabled={isAdding && loadingOptions}
+                                className="cursor-pointer rounded-lg bg-purple-300 px-6 py-3 font-medium text-purple-950 shadow-[0_2px_3px] transition-colors hover:bg-violet-300 disabled:cursor-not-allowed disabled:opacity-60"
+                            >
+                                {isAdding ? "Add" : "Update"}
+                            </button>
 
-                            <div className="flex gap-5">
-
-                                <button
-                                    type="submit"
-                                    className="rounded-lg bg-purple-300 px-6 py-3 font-medium text-purple-950 shadow-[0_2px_3px] transition-colors hover:bg-violet-300 cursor-pointer"
-                                >
-                                    {isAdding ? "Add" : "Update"}
-                                </button>
-
-                                <button
-                                    onClick={() => navigate(-1)}
-                                    type="button"
-                                    className="rounded-lg bg-purple-300 px-6 py-3 font-medium text-purple-950 shadow-[0_2px_3px] transition-colors hover:bg-violet-300 cursor-pointer"
-                                >
-                                    Cancel
-                                </button>
-
-                            </div>
-
+                            <button
+                                type="button"
+                                onClick={() => navigate(-1)}
+                                className="cursor-pointer rounded-lg bg-purple-300 px-6 py-3 font-medium text-purple-950 shadow-[0_2px_3px] transition-colors hover:bg-violet-300"
+                            >
+                                Cancel
+                            </button>
                         </div>
-
                     </form>
-
                 </div>
-
             </div>
 
             <Modal
@@ -499,7 +454,6 @@ function MarksForm() {
                 message={modalMessage}
                 onClose={handleModalClose}
             />
-
         </div>
     );
 }

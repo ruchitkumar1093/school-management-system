@@ -12,12 +12,18 @@ import {
     FiChevronRight
 } from "react-icons/fi";
 
+
 type HomeInfo = {
     employeeID: string;
     department: string;
     classAssigned: string;
     students: number;
     subjects: number;
+    isClassTeacher: boolean;
+    temporaryArrangement?: {
+        class: string;
+        department: string;
+    } | null;
 };
 
 function TeacherHome() {
@@ -61,13 +67,50 @@ function TeacherHome() {
 
                         {/* Welcome */}
                         <div className="mb-10">
-                            <h1 className="text-3xl font-medium text-gray-900">
-                                Welcome, {user.name}
-                            </h1>
+                            <div className="flex items-center gap-4">
+                                <h1 className="text-3xl font-medium text-gray-900">
+                                    Welcome, {user.name}
+                                </h1>
+
+                                {homeInfo?.isClassTeacher && (
+                                    <span className="rounded-full bg-purple-200 px-3 py-1 text-sm font-medium text-purple-800">
+                                        Class Teacher
+                                    </span>
+                                )}
+                            </div>
 
                             <p className="mt-2 text-gray-500">
                                 Here's an overview of your teaching information.
                             </p>
+
+
+                            {homeInfo?.temporaryArrangement && (
+                                <div className="mt-6 flex items-start gap-4 rounded-xl border border-amber-300 bg-amber-50 p-5 shadow-sm">
+                                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-700">
+                                        <FiCalendar size={22} />
+                                    </div>
+
+                                    <div>
+                                        <h2 className="text-lg font-semibold text-amber-900">
+                                            Temporary Teaching Assignment
+                                        </h2>
+
+                                        <p className="mt-1 text-sm leading-6 text-amber-800">
+                                            You have been temporarily assigned to cover{" "}
+                                            <strong>
+                                                Class {homeInfo.temporaryArrangement.class}
+                                            </strong>{" "}
+                                            for{" "}
+                                            <strong>
+                                                {homeInfo.temporaryArrangement.department}
+                                            </strong>.
+                                            This assignment will remain in place until a permanent
+                                            replacement is appointed.
+                                        </p>
+                                    </div>
+                                </div>
+                            )}
+
                         </div>
 
 
