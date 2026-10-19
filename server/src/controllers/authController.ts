@@ -10,7 +10,7 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
 
         if (!user) {
             return res.status(401).json({
-                message: "Invalid uid or password"
+                message: "Invalid Credentials"
             });
         }
 
@@ -24,7 +24,7 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
 
         if (!isMatch) {
             return res.status(401).json({
-                message: "Invalid uid or password"
+                message: "Invalid Credentials"
             });
         }
 

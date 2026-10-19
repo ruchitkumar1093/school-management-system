@@ -22,17 +22,21 @@ import Modal from "../../components/modal";
 import Breadcrumb from "../../components/breadcrumb";
 
 function PrincipalViewTeachers() {
+
     type Teacher = {
         _id: string;
         userId: {
             name: string;
+            isActive: boolean;
         };
         employeeID: string;
         department: string;
         classAssigned: string;
         isDeleted: boolean;
         deletedAt: string | null;
+        isClassTeacher: boolean;
     };
+
 
     const navigate = useNavigate();
 

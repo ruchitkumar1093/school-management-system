@@ -1,4 +1,6 @@
+
 import { useEffect, useState } from "react";
+import { FiLock } from "react-icons/fi";
 
 import NavBar from "../../components/navBar";
 import SideBar from "../../components/sideBar";
@@ -28,7 +30,6 @@ type LeaveApplication = {
 };
 
 function LeaveApplications() {
-
     const [activeView, setActiveView] = useState<
         "pending" | "applications"
     >("pending");
@@ -36,23 +37,20 @@ function LeaveApplications() {
     const [applications, setApplications] =
         useState<LeaveApplication[]>([]);
 
-    const [currentPage, setCurrentPage] =
-        useState(1);
+    const [currentPage, setCurrentPage] = useState(1);
+    const [limit, setLimit] = useState(5);
+    const [totalPages, setTotalPages] = useState(1);
 
-    const [limit, setLimit] =
-        useState(5);
-
-    const [totalPages, setTotalPages] =
-        useState(1);
-
-    const [error, setError] =
-        useState("");
-
+    const [error, setError] = useState("");
     const [fetchingApplications, setFetchingApplications] =
         useState(false);
 
     const [actionLoading, setActionLoading] =
         useState<string | null>(null);
+
+    const [isClassTeacher, setIsClassTeacher] = useState(false);
+    const [loadingTeacherStatus, setLoadingTeacherStatus] =
+        useState(true);
 
     async function fetchApplications() {
         try {
@@ -60,26 +58,22 @@ function LeaveApplications() {
             setError("");
 
             const status =
-                activeView === "pending"
-                    ? "Pending"
-                    : "All";
+                activeView === "pending" ? "Pending" : "All";
 
-            const response =
-                await getLeaveApplications(
-                    status,
-                    currentPage,
-                    limit
-                );
-
-            setApplications(
-                response.data.leaves
+            const response = await getLeaveApplications(
+                status,
+                currentPage,
+                limit
             );
 
-            setTotalPages(
-                response.data.totalPages
+            setApplications(response.data.leaves);
+            setTotalPages(response.data.totalPages);
+
+            setIsClassTeacher(
+                response.data.isClassTeacher === true
             );
-        }
-        catch (error) {
+            setLoadingTeacherStatus(false);
+        } catch (error) {
             console.error(
                 "Failed to fetch leave applications:",
                 error
@@ -87,114 +81,91 @@ function LeaveApplications() {
 
             setApplications([]);
             setTotalPages(1);
+            setError("Failed to load leave applications.");
 
-            setError(
-                "Failed to load leave applications."
-            );
-        }
-        finally {
+            setIsClassTeacher(false);
+            setLoadingTeacherStatus(false);
+        } finally {
             setFetchingApplications(false);
         }
     }
 
     useEffect(() => {
-        fetchApplications();
-    }, [
-        activeView,
-        currentPage,
-        limit
-    ]);
+        void fetchApplications();
+    }, [activeView, currentPage, limit]);
 
     useEffect(() => {
         setCurrentPage(1);
-    }, [
-        activeView,
-        limit
-    ]);
+    }, [activeView, limit]);
 
-    async function handleApprove(
-        id: string
-    ) {
+    async function handleApprove(id: string) {
+        if (!isClassTeacher || loadingTeacherStatus) {
+            return;
+        }
+
         try {
             setActionLoading(id);
             setError("");
 
             await approveLeave(id);
-
             await fetchApplications();
-        }
-        catch (error) {
-            console.error(
-                "Failed to approve leave:",
-                error
-            );
+        } catch (error: any) {
+            console.error("Failed to approve leave:", error);
 
             setError(
+                error.response?.data?.message ||
                 "Failed to approve leave application."
             );
-        }
-        finally {
+        } finally {
             setActionLoading(null);
         }
     }
 
-    async function handleReject(
-        id: string
-    ) {
+    async function handleReject(id: string) {
+        if (!isClassTeacher || loadingTeacherStatus) {
+            return;
+        }
+
         try {
             setActionLoading(id);
             setError("");
 
             await rejectLeave(id);
-
             await fetchApplications();
-        }
-        catch (error) {
-            console.error(
-                "Failed to reject leave:",
-                error
-            );
+        } catch (error: any) {
+            console.error("Failed to reject leave:", error);
 
             setError(
+                error.response?.data?.message ||
                 "Failed to reject leave application."
             );
-        }
-        finally {
+        } finally {
             setActionLoading(null);
         }
     }
 
     function formatDate(date: string) {
-        return new Date(date).toLocaleDateString(
-            "en-IN",
-            {
-                day: "numeric",
-                month: "short",
-                year: "numeric"
-            }
-        );
+        return new Date(date).toLocaleDateString("en-IN", {
+            day: "numeric",
+            month: "short",
+            year: "numeric"
+        });
     }
 
-    const startIndex =
-        (currentPage - 1) * limit;
+    const startIndex = (currentPage - 1) * limit;
 
     return (
         <div className="flex min-h-screen flex-col font-fredoka">
-
             <NavBar />
 
             <div className="flex flex-1 bg-purple-100">
-
                 <SideBar />
 
                 <div className="flex min-w-0 flex-1 flex-col">
-
                     <Breadcrumb />
 
                     <div className="flex flex-1 flex-col px-16 pt-10 pb-12">
-
                         <div className="mb-7">
-
                             <h1 className="text-3xl font-medium text-gray-900">
                                 Leave Applications
                             </h1>
@@ -202,24 +173,20 @@ function LeaveApplications() {
                             <p className="mt-1 text-sm text-gray-600">
                                 Review and manage student leave applications
                             </p>
-
                         </div>
 
                         <div className="mb-7 flex gap-2">
-
                             <button
                                 type="button"
                                 onClick={() => {
                                     setActiveView("pending");
+                                    setCurrentPage(1);
                                     setError("");
                                 }}
-                                className={`cursor-pointer rounded-lg px-5 py-2.5 text-sm font-medium
-                                transition-colors
-                                ${
-                                    activeView === "pending"
+                                className={`cursor-pointer rounded-lg px-5 py-2.5 text-sm font-medium transition-colors ${activeView === "pending"
                                         ? "bg-purple-800 text-white"
                                         : "bg-purple-200 text-gray-700 hover:bg-purple-300"
-                                }`}
+                                    }`}
                             >
                                 Pending Applications
                             </button>
@@ -228,20 +195,26 @@ function LeaveApplications() {
                                 type="button"
                                 onClick={() => {
                                     setActiveView("applications");
+                                    setCurrentPage(1);
                                     setError("");
                                 }}
-                                className={`cursor-pointer rounded-lg px-5 py-2.5 text-sm font-medium
-                                transition-colors
-                                ${
-                                    activeView === "applications"
+                                className={`cursor-pointer rounded-lg px-5 py-2.5 text-sm font-medium transition-colors ${activeView === "applications"
                                         ? "bg-purple-800 text-white"
                                         : "bg-purple-200 text-gray-700 hover:bg-purple-300"
-                                }`}
+                                    }`}
                             >
                                 All Applications
                             </button>
-
                         </div>
+
+                        {!loadingTeacherStatus && !isClassTeacher && (
+                            <div className="mb-5 flex items-center gap-2 rounded-lg border border-purple-200 bg-purple-50 px-4 py-3 text-sm text-purple-900">
+                                <FiLock className="h-4 w-4 shrink-0" />
+                                <span>
+                                    Only the class teacher can approve or reject leaves.
+                                </span>
+                            </div>
+                        )}
 
                         {error && (
                             <p className="mb-5 text-sm text-red-600">
@@ -250,7 +223,6 @@ function LeaveApplications() {
                         )}
 
                         <div className="w-full">
-
                             <h2 className="mb-4 text-xl font-medium text-gray-900">
                                 {activeView === "pending"
                                     ? "Pending Leave Applications"
@@ -258,231 +230,144 @@ function LeaveApplications() {
                             </h2>
 
                             <div className="overflow-hidden rounded-2xl bg-purple-200 shadow-sm">
-
                                 <div className="overflow-x-auto">
-
                                     <table className="w-full border-collapse">
-
                                         <thead>
-
                                             <tr className="border-b border-white bg-purple-300">
-
                                                 <th className="px-5 py-4 text-left text-base font-medium text-gray-700">
                                                     S.No.
                                                 </th>
-
                                                 <th className="px-5 py-4 text-left text-base font-medium text-gray-700">
                                                     Student
                                                 </th>
-
                                                 <th className="px-5 py-4 text-left text-base font-medium text-gray-700">
                                                     UID
                                                 </th>
-
                                                 <th className="px-5 py-4 text-left text-base font-medium text-gray-700">
                                                     Start Date
                                                 </th>
-
                                                 <th className="px-5 py-4 text-left text-base font-medium text-gray-700">
                                                     End Date
                                                 </th>
-
                                                 <th className="px-5 py-4 text-left text-base font-medium text-gray-700">
                                                     Reason
                                                 </th>
-
                                                 <th className="px-5 py-4 text-left text-base font-medium text-gray-700">
                                                     Status
                                                 </th>
-
                                                 <th className="px-5 py-4 text-left text-base font-medium text-gray-700">
                                                     Action
                                                 </th>
-
                                             </tr>
-
                                         </thead>
 
                                         <tbody>
-
                                             {fetchingApplications ? (
-
                                                 <tr>
-
-                                                    <td
-                                                        colSpan={8}
-                                                        className="px-5 py-10 text-center text-base text-gray-500"
-                                                    >
+                                                    <td colSpan={8} className="px-5 py-10 text-center text-base text-gray-500">
                                                         Loading leave applications...
                                                     </td>
-
                                                 </tr>
-
                                             ) : applications.length === 0 ? (
-
                                                 <tr>
-
-                                                    <td
-                                                        colSpan={8}
-                                                        className="px-5 py-10 text-center text-base text-gray-500"
-                                                    >
+                                                    <td colSpan={8} className="px-5 py-10 text-center text-base text-gray-500">
                                                         {activeView === "pending"
                                                             ? "No pending leave applications found"
                                                             : "No leave applications found"}
                                                     </td>
-
                                                 </tr>
-
                                             ) : (
+                                                applications.map((application, index) => (
+                                                    <tr
+                                                        key={application._id}
+                                                        className="border-b border-white"
+                                                    >
+                                                        <td className="px-5 py-4 text-base text-gray-600">
+                                                            {startIndex + index + 1}
+                                                        </td>
 
-                                                applications.map(
-                                                    (
-                                                        application,
-                                                        index
-                                                    ) => (
+                                                        <td className="px-5 py-4 text-base text-gray-600">
+                                                            {application.student.name}
+                                                        </td>
 
-                                                        <tr
-                                                            key={
-                                                                application._id
-                                                            }
-                                                            className="border-b border-white"
-                                                        >
+                                                        <td className="px-5 py-4 text-base text-gray-600 uppercase">
+                                                            {application.student.uid}
+                                                        </td>
 
-                                                            <td className="px-5 py-4 text-base text-gray-600">
-                                                                {startIndex + index + 1}
-                                                            </td>
+                                                        <td className="px-5 py-4 text-base text-gray-600">
+                                                            {formatDate(application.startDate)}
+                                                        </td>
 
-                                                            <td className="px-5 py-4 text-base text-gray-600">
-                                                                {
-                                                                    application.student.name
-                                                                }
-                                                            </td>
+                                                        <td className="px-5 py-4 text-base text-gray-600">
+                                                            {formatDate(application.endDate)}
+                                                        </td>
 
-                                                            <td className="px-5 py-4 text-base text-gray-600 uppercase">
-                                                                {
-                                                                    application.student.uid
-                                                                }
-                                                            </td>
+                                                        <td className="max-w-xs px-5 py-4 text-base text-gray-600">
+                                                            {application.reason}
+                                                        </td>
 
-                                                            <td className="px-5 py-4 text-base text-gray-600">
-                                                                {formatDate(
-                                                                    application.startDate
-                                                                )}
-                                                            </td>
-
-                                                            <td className="px-5 py-4 text-base text-gray-600">
-                                                                {formatDate(
-                                                                    application.endDate
-                                                                )}
-                                                            </td>
-
-                                                            <td className="max-w-xs px-5 py-4 text-base text-gray-600">
-                                                                {
-                                                                    application.reason
-                                                                }
-                                                            </td>
-
-                                                            <td className="px-5 py-4">
-
-                                                                <span
-                                                                    className={`rounded-full px-3 py-1 text-sm font-medium
-                                                                    ${
-                                                                        application.status ===
-                                                                        "Approved"
-                                                                            ? "bg-green-100 text-green-700"
-                                                                            : application.status ===
-                                                                              "Rejected"
+                                                        <td className="px-5 py-4">
+                                                            <span
+                                                                className={`rounded-full px-3 py-1 text-sm font-medium ${application.status === "Approved"
+                                                                        ? "bg-green-100 text-green-700"
+                                                                        : application.status === "Rejected"
                                                                             ? "bg-red-100 text-red-700"
                                                                             : "bg-yellow-100 text-yellow-700"
                                                                     }`}
-                                                                >
-                                                                    {
-                                                                        application.status
-                                                                    }
+                                                            >
+                                                                {application.status}
+                                                            </span>
+                                                        </td>
+
+                                                        <td className="px-5 py-4">
+                                                            {application.status !== "Pending" ? (
+                                                                <span className="text-sm text-gray-500">
+                                                                    No action needed
                                                                 </span>
+                                                            ) : loadingTeacherStatus ? (
+                                                                <span className="text-sm text-gray-500">
+                                                                    Checking permissions...
+                                                                </span>
+                                                            ) : !isClassTeacher ? (
+                                                                <div className="flex items-center gap-2 text-sm text-purple-800">
+                                                                    <FiLock className="h-4 w-4 shrink-0" />
+                                                                    <span>Class teacher only</span>
+                                                                </div>
+                                                            ) : (
+                                                                <div className="flex gap-2">
+                                                                    <button
+                                                                        type="button"
+                                                                        disabled={actionLoading === application._id}
+                                                                        onClick={() => handleApprove(application._id)}
+                                                                        className="cursor-pointer rounded-lg bg-green-700 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-green-800 disabled:cursor-not-allowed disabled:opacity-60"
+                                                                    >
+                                                                        {actionLoading === application._id
+                                                                            ? "..."
+                                                                            : "Approve"}
+                                                                    </button>
 
-                                                            </td>
-
-                                                            <td className="px-5 py-4">
-
-                                                                {application.status ===
-                                                                "Pending" ? (
-
-                                                                    <div className="flex gap-2">
-
-                                                                        <button
-                                                                            type="button"
-                                                                            disabled={
-                                                                                actionLoading ===
-                                                                                application._id
-                                                                            }
-                                                                            onClick={() =>
-                                                                                handleApprove(
-                                                                                    application._id
-                                                                                )
-                                                                            }
-                                                                            className="cursor-pointer rounded-lg bg-green-700
-                                                                            px-4 py-2 text-sm font-medium text-white
-                                                                            transition-colors hover:bg-green-700
-                                                                            disabled:cursor-not-allowed disabled:opacity-60"
-                                                                        >
-                                                                            {actionLoading ===
-                                                                            application._id
-                                                                                ? "..."
-                                                                                : "Approve"}
-                                                                        </button>
-
-                                                                        <button
-                                                                            type="button"
-                                                                            disabled={
-                                                                                actionLoading ===
-                                                                                application._id
-                                                                            }
-                                                                            onClick={() =>
-                                                                                handleReject(
-                                                                                    application._id
-                                                                                )
-                                                                            }
-                                                                            className="cursor-pointer rounded-lg bg-red-700
-                                                                            px-4 py-2 text-sm font-medium text-white
-                                                                            transition-colors hover:bg-red-700
-                                                                            disabled:cursor-not-allowed disabled:opacity-60"
-                                                                        >
-                                                                            {actionLoading ===
-                                                                            application._id
-                                                                                ? "..."
-                                                                                : "Reject"}
-                                                                        </button>
-
-                                                                    </div>
-
-                                                                ) : (
-
-                                                                    <span className="text-sm text-gray-500">
-                                                                        No action needed
-                                                                    </span>
-
-                                                                )}
-
-                                                            </td>
-
-                                                        </tr>
-
-                                                    )
-                                                )
-
+                                                                    <button
+                                                                        type="button"
+                                                                        disabled={actionLoading === application._id}
+                                                                        onClick={() => handleReject(application._id)}
+                                                                        className="cursor-pointer rounded-lg bg-red-700 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-800 disabled:cursor-not-allowed disabled:opacity-60"
+                                                                    >
+                                                                        {actionLoading === application._id
+                                                                            ? "..."
+                                                                            : "Reject"}
+                                                                    </button>
+                                                                </div>
+                                                            )}
+                                                        </td>
+                                                    </tr>
+                                                ))
                                             )}
-
                                         </tbody>
-
                                     </table>
-
                                 </div>
-
                             </div>
 
-                            <div className="flex justify-between mt-5 items-center">
-
+                            <div className="mt-5 flex items-center justify-between">
                                 <div className="mt-1">
                                     <Pagination
                                         currentPage={currentPage}
@@ -495,17 +380,11 @@ function LeaveApplications() {
                                     setLimit={setLimit}
                                     limit={limit}
                                 />
-
                             </div>
-
                         </div>
-
                     </div>
-
                 </div>
-
             </div>
-
         </div>
     );
 }

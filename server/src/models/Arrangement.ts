@@ -34,6 +34,11 @@ const arrangementSchema = new mongoose.Schema(
                 "Hindi"
             ],
             required: true
+        },
+
+        wasClassTeacher: {
+            type: Boolean,
+            default: false
         }
     },
     {
@@ -42,12 +47,14 @@ const arrangementSchema = new mongoose.Schema(
     }
 );
 
-// Each original teacher can have only one temporary arrangement.
 arrangementSchema.index(
     { originalTeacherId: 1 },
     { unique: true }
 );
 
-const Arrangement = mongoose.model("Arrangement", arrangementSchema);
+const Arrangement = mongoose.model(
+    "Arrangement",
+    arrangementSchema
+);
 
 export default Arrangement;

@@ -26,6 +26,7 @@ type Student = {
     userId: {
         name: string;
         uid: string;
+        isActive: boolean;
     };
     class: string;
     rollNumber: number;
@@ -57,9 +58,12 @@ function TeacherViewStudents() {
     const [modalConfirm, setModalConfirm] = useState(false);
     const [modalAction, setModalAction] = useState<(() => void) | null>(null);
 
+    const [isClassTeacher, setIsClassTeacher] = useState(false);
+    const [loadingTeacherStatus, setLoadingTeacherStatus] = useState(true);
+
     const fetchStudents = async () => {
         try {
-            const students = await viewStudents(
+            const response = await viewStudents(
                 debouncedSearch,
                 sortBy,
                 orderBy,
@@ -68,14 +72,22 @@ function TeacherViewStudents() {
                 showDeleted
             );
 
-            console.log("Students response:", students.data);
+            console.log("Students response:", response.data);
 
-            setStudentsData(students.data.students);
-            setTotalPages(students.data.totalPages);
+            setStudentsData(response.data.students);
+            setTotalPages(response.data.totalPages);
+
+            setIsClassTeacher(
+                response.data.isClassTeacher === true
+            );
         } catch (error) {
-            console.log(error);
+            console.error(error);
+
             setStudentsData([]);
             setTotalPages(1);
+            setIsClassTeacher(false);
+        } finally {
+            setLoadingTeacherStatus(false);
         }
     };
 
@@ -146,6 +158,17 @@ function TeacherViewStudents() {
     }
 
     function handleDeleteAll() {
+        if (loadingTeacherStatus) return;
+
+        if (!isClassTeacher) {
+            setModalTitle("Access Restricted");
+            setModalMessage("Only class teachers can delete students.");
+            setModalConfirm(false);
+            setModalAction(null);
+            setModalOpen(true);
+            return;
+        }
+
         if (selectedStudents.length === 0) {
             return;
         }
@@ -185,7 +208,7 @@ function TeacherViewStudents() {
             setModalTitle("Error");
             setModalMessage(
                 error.response?.data?.message ||
-                    "Failed to delete students."
+                "Failed to delete students."
             );
             setModalConfirm(false);
             setModalAction(null);
@@ -194,14 +217,34 @@ function TeacherViewStudents() {
     }
 
     function handleEditStudent(id: string) {
+        if (loadingTeacherStatus) return;
+
+        if (!isClassTeacher) {
+            setModalTitle("Access Restricted");
+            setModalMessage("Only class teachers can edit student details.");
+            setModalConfirm(false);
+            setModalAction(null);
+            setModalOpen(true);
+            return;
+        }
+
         navigate(`studentForm?mode=edit&id=${id}`);
     }
 
     function handleDeleteStudent(id: string) {
+        if (loadingTeacherStatus) return;
+
+        if (!isClassTeacher) {
+            setModalTitle("Access Restricted");
+            setModalMessage("Only class teachers can delete students.");
+            setModalConfirm(false);
+            setModalAction(null);
+            setModalOpen(true);
+            return;
+        }
+
         setModalTitle("Delete Student");
-        setModalMessage(
-            "Are you sure you want to delete this student?"
-        );
+        setModalMessage("Are you sure you want to delete this student?");
         setModalConfirm(true);
         setModalAction(() => () => confirmDeleteStudent(id));
         setModalOpen(true);
@@ -226,7 +269,7 @@ function TeacherViewStudents() {
             setModalTitle("Error");
             setModalMessage(
                 error.response?.data?.message ||
-                    "Failed to delete student."
+                "Failed to delete student."
             );
             setModalConfirm(false);
             setModalAction(null);
@@ -249,7 +292,7 @@ function TeacherViewStudents() {
             setModalTitle("Error");
             setModalMessage(
                 error.response?.data?.message ||
-                    "Failed to restore student."
+                "Failed to restore student."
             );
             setModalConfirm(false);
             setModalAction(null);
@@ -290,7 +333,7 @@ function TeacherViewStudents() {
             setModalTitle("Error");
             setModalMessage(
                 error.response?.data?.message ||
-                    "Failed to permanently delete student."
+                "Failed to permanently delete student."
             );
             setModalConfirm(false);
             setModalAction(null);
@@ -345,7 +388,9 @@ function TeacherViewStudents() {
 
                             <div className="flex gap-10">
                                 {selectedStudents.length > 0 &&
-                                    !showDeleted && (
+                                    !showDeleted &&
+                                    isClassTeacher &&
+                                    !loadingTeacherStatus && (
                                         <button
                                             onClick={handleDeleteAll}
                                             type="button"
@@ -361,9 +406,7 @@ function TeacherViewStudents() {
                                             type="checkbox"
                                             checked={showDeleted}
                                             onChange={(e) => {
-                                                setShowDeleted(
-                                                    e.target.checked
-                                                );
+                                                setShowDeleted(e.target.checked);
                                                 setCurrentPage(1);
                                             }}
                                             className="peer sr-only"
@@ -419,6 +462,8 @@ function TeacherViewStudents() {
                                 }
                                 allStudentsSelected={allStudentsSelected}
                                 startIndex={startIndex}
+                                isClassTeacher={isClassTeacher}
+                                loadingTeacherStatus={loadingTeacherStatus}
                             />
                         </div>
 
@@ -458,10 +503,10 @@ function TeacherViewStudents() {
                     modalTitle === "Permanently Delete Student"
                         ? "Delete Permanently"
                         : modalTitle === "Delete Students"
-                          ? "Yes"
-                          : modalTitle === "Delete Student"
-                            ? "Delete"
-                            : "Confirm"
+                            ? "Yes"
+                            : modalTitle === "Delete Student"
+                                ? "Delete"
+                                : "Confirm"
                 }
             />
         </div>

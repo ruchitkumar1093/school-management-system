@@ -11,6 +11,7 @@ type Student = {
     userId: {
         name: string;
         uid: string;
+        isActive: boolean;
     };
     class: string;
     rollNumber: number;
@@ -30,6 +31,8 @@ type Props = {
     handleSelectAllStudents: () => void;
     allStudentsSelected: boolean;
     startIndex: number;
+    isClassTeacher: boolean;
+    loadingTeacherStatus: boolean;
 };
 
 function TeacherStudentsTable({
@@ -43,7 +46,9 @@ function TeacherStudentsTable({
     handleSelectStudent,
     handleSelectAllStudents,
     allStudentsSelected,
-    startIndex
+    startIndex,
+    isClassTeacher,
+    loadingTeacherStatus
 }: Props) {
     return (
         <div className="overflow-x-auto rounded-lg shadow-md">
@@ -104,20 +109,19 @@ function TeacherStudentsTable({
                         student.map((std, index) => (
                             <tr
                                 key={std._id}
-                                className={`border-b border-purple-300 last:border-b-0 transition-colors ${
-                                    std.isDeleted
-                                        ? "bg-gray-200 text-gray-500"
+                                className={`border-b border-purple-300 last:border-b-0 transition-colors ${std.isDeleted
+                                    ? "bg-gray-200 text-gray-500"
+                                    : !std.userId.isActive
+                                        ? "bg-red-50/70 text-gray-500"
                                         : "hover:bg-purple-300/40"
-                                }`}
+                                    }`}
                             >
                                 <td className="w-12 border-r border-purple-300 p-3 text-center">
                                     <input
                                         type="checkbox"
                                         checked={
                                             !std.isDeleted &&
-                                            selectedStudents.includes(
-                                                std._id
-                                            )
+                                            selectedStudents.includes(std._id)
                                         }
                                         disabled={std.isDeleted}
                                         onChange={() =>
@@ -132,14 +136,21 @@ function TeacherStudentsTable({
                                 </td>
 
                                 <td className="border-r border-purple-300 p-3 font-medium">
-                                    <div className="flex items-center gap-2">
+                                    <div className="flex flex-wrap items-center gap-2">
                                         <span>{std.userId.name}</span>
 
                                         {std.isDeleted && (
-                                            <span className="rounded-full bg-gray-400 px-2 py-0.5 text-xs font-medium text-white">
+                                            <span className="rounded-full bg-gray-400 px-2.5 py-1 text-xs font-medium text-white">
                                                 Deleted
                                             </span>
                                         )}
+
+                                        {!std.isDeleted &&
+                                            !std.userId.isActive && (
+                                                <span className="rounded-full bg-red-100 px-2.5 py-1 text-xs font-medium text-red-700">
+                                                    Deactivated
+                                                </span>
+                                            )}
                                     </div>
                                 </td>
 
@@ -163,9 +174,7 @@ function TeacherStudentsTable({
                                                     type="button"
                                                     title="Restore"
                                                     onClick={() =>
-                                                        handleRestoreStudent(
-                                                            std._id
-                                                        )
+                                                        handleRestoreStudent(std._id)
                                                     }
                                                     className="cursor-pointer p-1.5 text-purple-900 transition-colors hover:text-green-700"
                                                 >
@@ -176,9 +185,7 @@ function TeacherStudentsTable({
                                                     type="button"
                                                     title="Permanently Delete"
                                                     onClick={() =>
-                                                        handlePermanentlyDeleteStudent(
-                                                            std._id
-                                                        )
+                                                        handlePermanentlyDeleteStudent(std._id)
                                                     }
                                                     className="cursor-pointer p-1.5 text-purple-900 transition-colors hover:text-red-700"
                                                 >
@@ -189,12 +196,12 @@ function TeacherStudentsTable({
                                             <>
                                                 <button
                                                     type="button"
-                                                    title="Edit"
-                                                    onClick={() =>
-                                                        handleEditStudent(
-                                                            std._id
-                                                        )
+                                                    title={
+                                                        isClassTeacher
+                                                            ? "Edit"
+                                                            : "Only class teachers can edit students"
                                                     }
+                                                    onClick={() => handleEditStudent(std._id)}
                                                     className="cursor-pointer p-1.5 text-purple-900 transition-colors hover:text-purple-600"
                                                 >
                                                     <FiEdit className="h-4 w-4" />
@@ -202,12 +209,12 @@ function TeacherStudentsTable({
 
                                                 <button
                                                     type="button"
-                                                    title="Delete"
-                                                    onClick={() =>
-                                                        handleDeleteStudent(
-                                                            std._id
-                                                        )
+                                                    title={
+                                                        isClassTeacher
+                                                            ? "Delete"
+                                                            : "Only class teachers can delete students"
                                                     }
+                                                    onClick={() => handleDeleteStudent(std._id)}
                                                     className="cursor-pointer p-1.5 text-purple-900 transition-colors hover:text-red-700"
                                                 >
                                                     <FiTrash className="h-4 w-4" />
@@ -217,9 +224,7 @@ function TeacherStudentsTable({
                                                     type="button"
                                                     title="View"
                                                     onClick={() =>
-                                                        handleStudentProfile(
-                                                            std._id
-                                                        )
+                                                        handleStudentProfile(std._id)
                                                     }
                                                     className="cursor-pointer p-1.5 text-purple-900 transition-colors hover:text-purple-600"
                                                 >

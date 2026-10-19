@@ -151,7 +151,8 @@ export const getLeaveApplications = async (
         const userId = req.user?.userId;
 
         const teacher = await Teacher.findOne({
-            userId
+            userId,
+            isDeleted: false
         });
 
         if (!teacher) {
@@ -184,8 +185,22 @@ export const getLeaveApplications = async (
             });
         }
 
+        // Find the class this teacher currently manages.
+        const assignedClass = await Class.findOne({
+            teacherId: teacher._id
+        })
+            .select("class")
+            .lean();
+
+        const isClassTeacher = Boolean(assignedClass);
+
+        // Use the temporary class when assigned; otherwise use the usual class.
+        const currentClass =
+            assignedClass?.class ?? teacher.classAssigned;
+
         const students = await Student.find({
-            class: teacher.classAssigned
+            class: currentClass,
+            isDeleted: { $ne: true }
         }).select("_id");
 
         const studentIds = students.map(
@@ -223,48 +238,43 @@ export const getLeaveApplications = async (
                 }
             });
 
-        const formattedLeaves = leaves.map(
-            leave => {
-                const student =
-                    leave.studentId as any;
+        const formattedLeaves = leaves.map(leave => {
+            const student = leave.studentId as any;
 
-                return {
-                    _id: leave._id,
-                    student: {
-                        _id: student._id,
-                        name: student.userId.name,
-                        uid: student.userId.uid
-                    },
-                    startDate: leave.startDate,
-                    endDate: leave.endDate,
-                    reason: leave.reason,
-                    status: leave.status
-                };
-            }
+            return {
+                _id: leave._id,
+                student: {
+                    _id: student._id,
+                    name: student.userId.name,
+                    uid: student.userId.uid
+                },
+                startDate: leave.startDate,
+                endDate: leave.endDate,
+                reason: leave.reason,
+                status: leave.status
+            };
+        });
+
+        const totalPages = Math.ceil(
+            totalLeaves / pageLimit
         );
-
-        const totalPages =
-            Math.ceil(
-                totalLeaves / pageLimit
-            );
 
         return res.status(200).json({
             leaves: formattedLeaves,
             totalLeaves,
             totalPages,
             currentPage,
-            limit: pageLimit
+            limit: pageLimit,
+            isClassTeacher
         });
-    }
-    catch (error) {
+    } catch (error) {
         console.error(
             "Get teacher leave applications error:",
             error
         );
 
         return res.status(500).json({
-            message:
-                "Failed to get leave applications"
+            message: "Failed to get leave applications"
         });
     }
 };
@@ -475,7 +485,6 @@ export const getTeacherHome = async (
         }
 
         const classTeacher = await Class.exists({
-            class: teacher.classAssigned,
             teacherId: teacher._id
         });
 
@@ -842,9 +851,10 @@ export const getStudents = async (
 ) => {
     try {
         console.log(req.user);
-        
+
         const teacher = await Teacher.findOne({
-            userId: req.user?.userId
+            userId: req.user?.userId,
+            isDeleted: false
         });
 
         if (!teacher) {
@@ -877,8 +887,18 @@ export const getStudents = async (
 
         const skip = (currentPage - 1) * pageLimit;
 
+        // Find the class where this teacher is currently the class teacher.
+        const assignedClass = await Class.findOne({
+            teacherId: teacher._id
+        })
+            .select("class")
+            .lean();
+
+        // Determine whether this teacher is currently a class teacher.
+        const classTeacher = Boolean(assignedClass);
+
         const match: any = {
-            class: teacher.classAssigned
+            class: assignedClass?.class ?? teacher.classAssigned
         };
 
         // Default: show active students only.
@@ -978,12 +998,13 @@ export const getStudents = async (
         const totalStudents = result[0]?.total[0]?.count || 0;
         const totalPages = Math.ceil(totalStudents / pageLimit);
 
-        res.status(200).json({
+        return res.status(200).json({
             students,
             totalStudents,
             totalPages,
             currentPage,
-            limit: pageLimit
+            limit: pageLimit,
+            isClassTeacher: classTeacher
         });
     } catch (error) {
         next(error);
@@ -1880,7 +1901,8 @@ export const getStudentsForAttendance = async (
         }
 
         const teacher = await Teacher.findOne({
-            userId: req.user?.userId
+            userId: req.user?.userId,
+            isDeleted: false
         });
 
         if (!teacher) {
@@ -1889,9 +1911,21 @@ export const getStudentsForAttendance = async (
             });
         }
 
+        // Find the class this teacher currently manages.
+        const assignedClass = await Class.findOne({
+            teacherId: teacher._id
+        })
+            .select("class")
+            .lean();
+
+        const isClassTeacher = Boolean(assignedClass);
+
+        // Use the temporary class when assigned; otherwise use the usual class.
+        const currentClass = assignedClass?.class ?? teacher.classAssigned;
 
         const classStudentIds = await Student.find({
-            class: teacher.classAssigned
+            class: currentClass,
+            isDeleted: { $ne: true }
         }).distinct("_id");
 
         const attendanceMarked = await Attendance.exists({
@@ -1900,15 +1934,11 @@ export const getStudentsForAttendance = async (
         });
 
         const studentFilter: any = {
-            class: teacher.classAssigned
+            class: currentClass,
+            isDeleted: { $ne: true }
         };
 
-        /*
-         * Search by student name or UID.
-         * Since name and UID are stored in User,
-         * first find matching users and then use
-         * their IDs to filter students.
-         */
+        // Search by student name or UID.
         if (search) {
             const searchRegex = {
                 $regex: search,
@@ -1927,20 +1957,12 @@ export const getStudentsForAttendance = async (
             };
         }
 
-        /*
-         * Get total number of students matching
-         * the class + search filters.
-         */
         const totalStudents =
             await Student.countDocuments(studentFilter);
 
         const totalPages =
             Math.ceil(totalStudents / pageLimit);
 
-        /*
-         * Prevent requesting a page beyond the
-         * available pages.
-         */
         const validPage =
             totalPages > 0
                 ? Math.min(currentPage, totalPages)
@@ -1949,31 +1971,16 @@ export const getStudentsForAttendance = async (
         const skip =
             (validPage - 1) * pageLimit;
 
-        /*
-         * Fetch ONLY the students needed for
-         * the current page.
-         *
-         * rollNumber is used for sorting but is
-         * not returned to the frontend.
-         */
-        const students = await Student.find(
-            studentFilter
-        )
+        const students = await Student.find(studentFilter)
             .select("_id userId")
             .populate({
                 path: "userId",
                 select: "name uid"
             })
-            .sort({
-                rollNumber: 1
-            })
+            .sort({ rollNumber: 1 })
             .skip(skip)
             .limit(pageLimit);
 
-        /*
-         * Only check leaves for the students
-         * that are actually being displayed.
-         */
         const studentIds = students.map(
             student => student._id
         );
@@ -1982,17 +1989,13 @@ export const getStudentsForAttendance = async (
             status: "Approved",
             startDate: { $lte: selectedDate },
             endDate: { $gte: selectedDate },
-            studentId: {
-                $in: studentIds
-            }
+            studentId: { $in: studentIds }
         }).select("studentId");
 
         const studentsOnLeave = new Set(
             approvedLeaves
                 .filter(leave => leave.studentId)
-                .map(leave =>
-                    leave.studentId!.toString()
-                )
+                .map(leave => leave.studentId!.toString())
         );
 
         const existingAttendance = await Attendance.find({
@@ -2011,11 +2014,13 @@ export const getStudentsForAttendance = async (
             _id: student._id,
             userId: student.userId,
             onLeave: studentsOnLeave.has(student._id.toString()),
-            attendanceStatus: attendanceMap.get(student._id.toString()) ?? null
+            attendanceStatus:
+                attendanceMap.get(student._id.toString()) ?? null
         }));
 
         return res.status(200).json({
-            class: teacher.classAssigned,
+            class: currentClass,
+            isClassTeacher,
             students: paginatedStudents,
             attendanceMarked: Boolean(attendanceMarked),
             totalStudents,
@@ -2023,10 +2028,9 @@ export const getStudentsForAttendance = async (
             currentPage: validPage,
             limit: pageLimit
         });
-    }
-    catch (error) {
+    } catch (error) {
         console.log(error);
-        next(error);
+        return next(error);
     }
 };
 

@@ -29,6 +29,7 @@ function PrincipalViewStudents() {
         userId: {
             name: string;
             uid: string;
+            isActive: boolean;
         };
         class: string;
         rollNumber: number;

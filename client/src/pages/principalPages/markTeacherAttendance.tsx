@@ -632,7 +632,7 @@ function MarkTeacherAttendance() {
                         <div className="flex justify-between items-center mb-6">
                             <div>
                                 <h1 className="text-3xl font-medium text-gray-900">
-                                    Teacher Attendance
+                                    Mark Attendance
                                 </h1>
 
                                 <p className="mt-1 text-sm text-gray-600">

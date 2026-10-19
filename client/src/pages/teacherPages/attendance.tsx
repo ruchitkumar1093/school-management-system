@@ -108,6 +108,12 @@ function TeacherAttendance() {
     const [modalConfirm, setModalConfirm] =
         useState<(() => void) | undefined>();
 
+    const [isClassTeacher, setIsClassTeacher] = useState(false);
+    const [loadingTeacherStatus, setLoadingTeacherStatus] = useState(true);
+
+    const attendanceControlsDisabled =
+        attendanceMarked || !isClassTeacher || loadingTeacherStatus;
+
     const fetchHolidays = async (year: number) => {
         try {
             const response = await getHolidays(year);
@@ -137,33 +143,22 @@ function TeacherAttendance() {
 
     const fetchStudents = async () => {
         try {
-            const response =
-                await getStudentsForAttendance(
-                    date,
-                    debouncedSearch,
-                    currentPage,
-                    limit
-                );
-
-            setStudentsData(
-                response.data.students
+            const response = await getStudentsForAttendance(
+                date,
+                debouncedSearch,
+                currentPage,
+                limit
             );
 
-            setClassName(
-                response.data.class
-            );
-
-            setTotalStudents(
-                response.data.totalStudents
-            );
-
-            setTotalPages(
-                response.data.totalPages
-            );
-
+            setStudentsData(response.data.students);
+            setClassName(response.data.class);
+            setTotalStudents(response.data.totalStudents);
+            setTotalPages(response.data.totalPages);
             setAttendanceMarked(response.data.attendanceMarked);
-        }
-        catch (error) {
+
+            setIsClassTeacher(response.data.isClassTeacher === true);
+            setLoadingTeacherStatus(false);
+        } catch (error) {
             console.log(error);
 
             setStudentsData([]);
@@ -171,6 +166,8 @@ function TeacherAttendance() {
             setTotalStudents(0);
             setTotalPages(1);
             setAttendanceMarked(false);
+            setIsClassTeacher(false);
+            setLoadingTeacherStatus(false);
         }
     };
 
@@ -630,7 +627,7 @@ function TeacherAttendance() {
 
                             <div>
                                 <h1 className="text-3xl font-medium text-gray-900">
-                                    Attendance
+                                    Mark Attendance
                                 </h1>
 
                                 <p className="mt-1 text-sm text-gray-600">
@@ -697,33 +694,29 @@ function TeacherAttendance() {
                         <div className="flex justify-between">
 
                             <div>
-
                                 <div className="text-lg">
                                     Class:{" "}
-
                                     <span className="font-medium">
                                         {className || "-"}
                                     </span>
                                 </div>
 
-                                <div className="text-lg mb-5">
-                                    Marked:{" "}
-
-                                    <span className="font-medium">
-                                        {markedCount}
-                                        /
-                                        {totalStudents}
-                                    </span>
-                                </div>
-
+                                {!attendanceMarked && isClassTeacher && !loadingTeacherStatus && (
+                                    <div className="text-lg mb-5">
+                                        Marked:{" "}
+                                        <span className="font-medium">
+                                            {markedCount}/{totalStudents}
+                                        </span>
+                                    </div>
+                                )}
                             </div>
 
-                            <div className="flex gap-3 self-start mt-1">
+                            <div className="flex gap-3 self-start mt-1 mb-5">
 
                                 <button
                                     type="button"
                                     onClick={handleMarkAllPresent}
-                                    disabled={attendanceMarked}
+                                    disabled={attendanceControlsDisabled}
                                     className="ml-5 rounded-lg bg-purple-300 px-6 py-3 font-medium text-purple-950 shadow-[0_2px_3px] transition-colors hover:bg-violet-300 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
                                     Mark all present
@@ -732,7 +725,7 @@ function TeacherAttendance() {
                                 <button
                                     type="button"
                                     onClick={handleMarkAllAbsent}
-                                    disabled={attendanceMarked}
+                                    disabled={attendanceControlsDisabled}
                                     className="rounded-lg bg-gray-200 px-6 py-3 font-medium text-purple-950 shadow-[0_2px_3px] transition-colors hover:bg-red-200 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
                                     Mark all absent
@@ -758,6 +751,7 @@ function TeacherAttendance() {
                                     startIndex
                                 }
                                 markAllStatus={markAllStatus}
+                                isClassTeacher={isClassTeacher}
                             />
 
                         </div>
@@ -792,11 +786,10 @@ function TeacherAttendance() {
                         </div>
 
                         <div className="flex justify-center gap-10 pt-3">
-
                             <button
                                 type="button"
                                 onClick={handleSubmitAttendance}
-                                disabled={attendanceMarked}
+                                disabled={attendanceControlsDisabled}
                                 className="rounded-lg bg-purple-300 px-6 py-3 font-medium text-purple-950 shadow-[0_2px_3px] transition-colors hover:bg-violet-300 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                                 Submit Attendance
@@ -804,14 +797,12 @@ function TeacherAttendance() {
 
                             <button
                                 type="button"
-                                onClick={
-                                    handleReset
-                                }
-                                className="rounded-lg bg-purple-300 px-6 py-3 font-medium text-purple-950 shadow-[0_2px_3px] transition-colors hover:bg-violet-300 cursor-pointer"
+                                onClick={handleReset}
+                                disabled={attendanceControlsDisabled}
+                                className="rounded-lg bg-purple-300 px-6 py-3 font-medium text-purple-950 shadow-[0_2px_3px] transition-colors hover:bg-violet-300 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                                 Reset
                             </button>
-
                         </div>
 
                     </div>

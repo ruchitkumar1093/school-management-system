@@ -7,19 +7,21 @@ import { useState, useEffect } from "react";
 import Breadcrumb from "../../components/breadcrumb";
 import Modal from "../../components/modal";
 
+type FormData = {
+    name: string;
+    uid: string;
+    password: string;
+    employeeID: string;
+    department: string;
+    classAssigned: string;
+};
+
 function TeacherForm() {
-    type FormData = {
-        name: string;
-        uid: string;
-        password: string;
-        employeeID: string;
-        department: string;
-        classAssigned: string;
-    };
 
     const [searchParams] = useSearchParams();
     const mode = searchParams.get("mode");
     const id = searchParams.get("id");
+    const navigate = useNavigate();
 
     const isAdding = mode === "add";
 
@@ -61,7 +63,6 @@ function TeacherForm() {
         fetchTeacher();
     }, [id, isAdding]);
 
-    const navigate = useNavigate();
 
     const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();

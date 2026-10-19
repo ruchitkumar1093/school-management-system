@@ -47,9 +47,9 @@ function Login() {
                 navigate("/student");
             }
         }
-        catch (error) {
+        catch (error: any) {
             console.log(error);
-            setError("Invalid Credentials");
+            setError(error.response?.data?.message);
         }
         finally {
             setLoading(false);

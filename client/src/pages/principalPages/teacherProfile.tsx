@@ -26,6 +26,7 @@ type TeacherInfo = {
     department: string;
     classAssigned: string;
     isDeleted?: boolean;
+    isClassTeacher?: boolean;
     userId: {
         _id?: string;
         name: string;
@@ -774,13 +775,29 @@ function TeacherProfile() {
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
                     <div className="w-full max-w-lg rounded-xl bg-white p-6 shadow-xl">
                         <h2 className="text-xl font-semibold text-purple-950">
-                            Temporary Teacher Arrangement
+                            Temporary teacher arrangement
                         </h2>
 
                         <p className="mt-2 text-sm text-gray-600">
                             Select a temporary teacher for{" "}
-                            <strong>{savedData.department}</strong>{" - "}<strong>{savedData.classAssigned}</strong> before deactivation until a permanent replacement is appointed.
+                            <strong>{savedData.department}</strong>
+                            {" - "}
+                            <strong>Class {savedData.classAssigned}</strong>
+                            {" "}before deactivation until a permanent replacement is appointed.
                         </p>
+
+                        {teacherInfo?.isClassTeacher && (
+                            <div className="mt-4 rounded-lg border border-purple-300 bg-purple-50 p-4">
+                                <h3 className="font-medium text-purple-950">
+                                    Temporary class teacher
+                                </h3>
+
+                                <p className="mt-1 text-sm text-purple-900">
+                                    The selected replacement teacher will also temporarily become
+                                    the class teacher for Class {savedData.classAssigned}.
+                                </p>
+                            </div>
+                        )}
 
                         <div className="mt-5">
 

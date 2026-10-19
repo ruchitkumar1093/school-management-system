@@ -11,6 +11,7 @@ type Student = {
     userId: {
         name: string;
         uid: string;
+        isActive: boolean;
     };
     class: string;
     rollNumber: number;
@@ -102,7 +103,9 @@ function PrincipalStudentsTable({
                                 className={`border-b border-purple-300 last:border-b-0 transition-colors ${
                                     std.isDeleted
                                         ? "bg-gray-200 text-gray-500"
-                                        : "hover:bg-purple-300/40"
+                                        : !std.userId.isActive
+                                            ? "bg-red-50/70 text-gray-500"
+                                            : "hover:bg-purple-300/40"
                                 }`}
                             >
                                 <td className="w-12 border-r border-purple-300 p-3 text-center">
@@ -125,14 +128,21 @@ function PrincipalStudentsTable({
                                 </td>
 
                                 <td className="border-r border-purple-300 p-3 font-medium">
-                                    <div className="flex items-center gap-2">
+                                    <div className="flex flex-wrap items-center gap-2">
                                         <span>{std.userId.name}</span>
 
                                         {std.isDeleted && (
-                                            <span className="rounded-full bg-gray-400 px-2 py-0.5 text-xs font-medium text-white">
+                                            <span className="rounded-full bg-gray-400 px-2.5 py-1 text-xs font-medium text-white">
                                                 Deleted
                                             </span>
                                         )}
+
+                                        {!std.isDeleted &&
+                                            !std.userId.isActive && (
+                                                <span className="rounded-full bg-red-100 px-2.5 py-1 text-xs font-medium text-red-700">
+                                                    Deactivated
+                                                </span>
+                                            )}
                                     </div>
                                 </td>
 
