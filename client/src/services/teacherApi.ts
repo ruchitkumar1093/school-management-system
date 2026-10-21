@@ -67,6 +67,10 @@ export const viewMarks = (
     });
 };
 
+export const getTeacherSubjects = () => {
+    return api.get("teacher/subjects/assigned");
+};
+
 export const applyLeave = (data: {
     startDate: string;
     endDate: string;

@@ -1,3 +1,4 @@
+
 import NavBar from "../../components/navBar";
 import SideBar from "../../components/sideBar";
 import SortBy from "../../components/sortBy";
@@ -7,21 +8,29 @@ import ExamFilter from "../../components/examFilter";
 import SearchBar from "../../components/searchBar";
 import Pagination from "../../components/pagination";
 import Limit from "../../components/limit";
+
 import { useState, useEffect } from "react";
 import PrincipalMarksTable from "../../components/principalComponents/marksTable";
 import TeacherFilter from "../../components/teacherFilter";
 import SubjectFilter from "../../components/subjectFilter";
+
 import {
     viewMarks,
     deleteMark,
-    getMarkTeachers
+    getMarkTeachers,
+    getMarkSubjects
 } from "../../services/principalApi";
-import { useNavigate, useSearchParams } from "react-router-dom";
+
+import {
+    useNavigate,
+    useSearchParams,
+    useLocation
+} from "react-router-dom";
+
 import Breadcrumb from "../../components/breadcrumb";
 import Modal from "../../components/modal";
 
 function PrincipalViewMarks() {
-
     type ExamType = "All" | "class test" | "mid term" | "final";
 
     type Mark = {
@@ -58,7 +67,12 @@ function PrincipalViewMarks() {
     };
 
     const navigate = useNavigate();
+    const location = useLocation();
     const [searchParams] = useSearchParams();
+
+    // Class passed from the Class Overview page.
+    const selectedClassFromNavigation: string | undefined =
+        location.state?.selectedClass;
 
     const [marksData, setMarksData] = useState<Mark[]>([]);
 
@@ -71,9 +85,17 @@ function PrincipalViewMarks() {
 
     const [sortBy, setSortBy] = useState("None");
     const [orderBy, setOrderBy] = useState("asc");
-    const [classFilter, setClassFilter] = useState("All");
+
+    // Default to the class passed by Class Overview,
+    // or "All" when this page is opened directly.
+    const [classFilter, setClassFilter] = useState<string>(
+        selectedClassFromNavigation ?? "All"
+    );
+
     const [examType, setExamType] = useState<ExamType>("All");
     const [subjectFilter, setSubjectFilter] = useState("All");
+    const [subjects, setSubjects] = useState<string[]>([]);
+
     const [teacherFilter, setTeacherFilter] = useState(
         searchParams.get("teacher") || "All"
     );
@@ -85,7 +107,8 @@ function PrincipalViewMarks() {
     const [modalMessage, setModalMessage] = useState("");
     const [noTeacherMarks, setNoTeacherMarks] = useState(false);
     const [modalConfirm, setModalConfirm] = useState(false);
-    const [modalAction, setModalAction] = useState<(() => void) | null>(null);
+    const [modalAction, setModalAction] =
+        useState<(() => void) | null>(null);
 
     const fetchMarks = async () => {
         try {
@@ -111,8 +134,7 @@ function PrincipalViewMarks() {
                 marks.data.marks.length === 0 &&
                 marks.data.totalMarks === 0
             );
-        }
-        catch (error) {
+        } catch (error) {
             console.log(error);
             setMarksData([]);
             setTotalPages(1);
@@ -126,16 +148,38 @@ function PrincipalViewMarks() {
             const teacherList = response.data.teachers;
 
             setTeachers(teacherList);
-        }
-        catch (error) {
+        } catch (error) {
             console.log(error);
             setTeachers([]);
         }
     };
 
+    const fetchSubjects = async () => {
+        try {
+            const response = await getMarkSubjects();
+            setSubjects(response.data.subjects);
+        } catch (error) {
+            console.log(error);
+            setSubjects([]);
+        }
+    };
+
     useEffect(() => {
-        fetchTeachers();
+        void fetchTeachers();
+        void fetchSubjects();
     }, []);
+
+    // Apply a newly received class if navigation state changes
+    // while this page remains mounted.
+    useEffect(() => {
+        if (
+            typeof selectedClassFromNavigation === "string" &&
+            selectedClassFromNavigation !== classFilter
+        ) {
+            setClassFilter(selectedClassFromNavigation);
+            setCurrentPage(1);
+        }
+    }, [selectedClassFromNavigation]);
 
     useEffect(() => {
         const timer = setTimeout(() => {
@@ -148,7 +192,7 @@ function PrincipalViewMarks() {
     }, [search]);
 
     useEffect(() => {
-        fetchMarks();
+        void fetchMarks();
     }, [
         classFilter,
         examType,
@@ -208,7 +252,8 @@ function PrincipalViewMarks() {
 
             setModalTitle("Error");
             setModalMessage(
-                error.response?.data?.message || "Failed to delete mark."
+                error.response?.data?.message ||
+                    "Failed to delete mark."
             );
             setModalConfirm(false);
             setModalAction(null);
@@ -224,28 +269,21 @@ function PrincipalViewMarks() {
         "Marks Obtained"
     ];
 
-    const startIndex =
-        (currentPage - 1) * limit;
+    const startIndex = (currentPage - 1) * limit;
 
     return (
-        <div className="flex flex-col min-h-screen font-fredoka">
-
+        <div className="flex min-h-screen flex-col font-fredoka">
             <NavBar />
 
             <div className="flex flex-1 bg-purple-100">
-
                 <SideBar />
 
                 <div>
-
                     <Breadcrumb />
 
-                    <div className="flex flex-col pt-12 pl-20 mb-10 mr-10">
-
-                        <div className="flex justify-between items-center mb-4">
-
+                    <div className="mb-10 mr-10 flex flex-col pl-20 pt-12">
+                        <div className="mb-4 flex items-center justify-between">
                             <div>
-
                                 <h1 className="text-3xl font-medium text-gray-900">
                                     Marks
                                 </h1>
@@ -253,23 +291,19 @@ function PrincipalViewMarks() {
                                 <p className="mt-1 text-sm text-gray-600">
                                     View and Manage Student Marks
                                 </p>
-
                             </div>
 
                             <button
                                 type="button"
                                 onClick={handleAddMarks}
-                                className="rounded-lg bg-purple-300 px-6 py-3 font-medium text-purple-950 shadow-[0_2px_3px] transition-colors hover:bg-violet-300 cursor-pointer"
+                                className="cursor-pointer rounded-lg bg-purple-300 px-6 py-3 font-medium text-purple-950 shadow-[0_2px_3px] transition-colors hover:bg-violet-300"
                             >
                                 Add Marks
                             </button>
-
                         </div>
 
-                        <div className="flex justify-between items-center mb-3">
-
-                            <div className="flex gap-8 mb-3">
-
+                        <div className="mb-3 flex items-center justify-between">
+                            <div className="mb-3 flex gap-8">
                                 <SortBy
                                     sortOptions={sortOptions}
                                     sortBy={sortBy}
@@ -295,6 +329,7 @@ function PrincipalViewMarks() {
                                 <SubjectFilter
                                     subjectFilter={subjectFilter}
                                     setSubjectFilter={setSubjectFilter}
+                                    subjects={subjects}
                                 />
 
                                 <TeacherFilter
@@ -302,22 +337,17 @@ function PrincipalViewMarks() {
                                     setTeacherFilter={setTeacherFilter}
                                     teachers={teachers}
                                 />
-
                             </div>
 
                             <div>
-
                                 <SearchBar
                                     search={search}
                                     setSearch={setSearch}
                                 />
-
                             </div>
-
                         </div>
 
                         <div className="flex flex-wrap gap-10">
-
                             {noTeacherMarks ? (
                                 <div className="w-full rounded-lg bg-purple-200 p-6 text-center shadow-md">
                                     <p className="text-lg font-medium text-purple-950">
@@ -332,32 +362,24 @@ function PrincipalViewMarks() {
                                     startIndex={startIndex}
                                 />
                             )}
-
                         </div>
 
-                        <div className="flex justify-between mt-5 items-center">
-
+                        <div className="mt-5 flex items-center justify-between">
                             <div className="mt-1">
-
                                 <Pagination
                                     currentPage={currentPage}
                                     totalPages={totalPages}
                                     setCurrentPage={setCurrentPage}
                                 />
-
                             </div>
 
                             <Limit
                                 setLimit={setLimit}
                                 limit={limit}
                             />
-
                         </div>
-
                     </div>
-
                 </div>
-
             </div>
 
             <Modal
@@ -380,7 +402,6 @@ function PrincipalViewMarks() {
                         : "Confirm"
                 }
             />
-
         </div>
     );
 }

@@ -1,3 +1,4 @@
+
 import NavBar from "../../components/navBar";
 import SideBar from "../../components/sideBar";
 import SortBy from "../../components/sortBy";
@@ -18,7 +19,7 @@ import {
 } from "../../services/principalApi";
 
 import PrincipalStudentsTable from "../../components/principalComponents/studentsTable";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 
 import Breadcrumb from "../../components/breadcrumb";
 import Modal from "../../components/modal";
@@ -38,6 +39,11 @@ function PrincipalViewStudents() {
     };
 
     const navigate = useNavigate();
+    const location = useLocation();
+
+    // Receive the selected class from the Class Overview page.
+    const selectedClassFromNavigation =
+        location.state?.selectedClass;
 
     const [studentsData, setStudentsData] = useState<Student[]>([]);
     const [currentPage, setCurrentPage] = useState(1);
@@ -48,16 +54,22 @@ function PrincipalViewStudents() {
     const [debouncedSearch, setDebouncedSearch] = useState("");
     const [sortBy, setSortBy] = useState("None");
     const [orderBy, setOrderBy] = useState("asc");
-    const [classFilter, setClassFilter] = useState("All");
-    const [showDeleted, setShowDeleted] = useState(false);
 
+    // Use the class received from Class Overview.
+    // If this page is opened directly, keep "All" as the default.
+    const [classFilter, setClassFilter] = useState<string>(
+        selectedClassFromNavigation ?? "All"
+    );
+
+    const [showDeleted, setShowDeleted] = useState(false);
     const [selectedStudents, setSelectedStudents] = useState<string[]>([]);
 
     const [modalOpen, setModalOpen] = useState(false);
     const [modalTitle, setModalTitle] = useState("");
     const [modalMessage, setModalMessage] = useState("");
     const [modalConfirm, setModalConfirm] = useState(false);
-    const [modalAction, setModalAction] = useState<(() => void) | null>(null);
+    const [modalAction, setModalAction] =
+        useState<(() => void) | null>(null);
 
     const fetchStudents = async () => {
         try {
@@ -75,13 +87,24 @@ function PrincipalViewStudents() {
 
             setStudentsData(students.data.students);
             setTotalPages(students.data.totalPages);
-        }
-        catch (error) {
+        } catch (error) {
             console.log(error);
             setStudentsData([]);
             setTotalPages(1);
         }
     };
+
+    // If navigation state changes while this page remains mounted,
+    // update the filter to the newly selected class.
+    useEffect(() => {
+        if (
+            typeof selectedClassFromNavigation === "string" &&
+            selectedClassFromNavigation !== classFilter
+        ) {
+            setClassFilter(selectedClassFromNavigation);
+            setCurrentPage(1);
+        }
+    }, [selectedClassFromNavigation]);
 
     useEffect(() => {
         const timer = setTimeout(() => {
@@ -105,7 +128,7 @@ function PrincipalViewStudents() {
     ]);
 
     useEffect(() => {
-        fetchStudents();
+        void fetchStudents();
     }, [
         debouncedSearch,
         sortBy,
@@ -151,8 +174,7 @@ function PrincipalViewStudents() {
             setSelectedStudents((prev) =>
                 prev.filter((id) => !activeStudentIds.includes(id))
             );
-        }
-        else {
+        } else {
             setSelectedStudents((prev) => [
                 ...new Set([...prev, ...activeStudentIds])
             ]);
@@ -179,10 +201,12 @@ function PrincipalViewStudents() {
 
             setSelectedStudents([]);
 
-            if (studentsData.length === selectedStudents.length && currentPage > 1) {
+            if (
+                studentsData.length === selectedStudents.length &&
+                currentPage > 1
+            ) {
                 setCurrentPage(currentPage - 1);
-            }
-            else {
+            } else {
                 await fetchStudents();
             }
 
@@ -191,13 +215,13 @@ function PrincipalViewStudents() {
             setModalConfirm(false);
             setModalAction(null);
             setModalOpen(true);
-        }
-        catch (error: any) {
+        } catch (error: any) {
             console.log(error);
 
             setModalTitle("Error");
             setModalMessage(
-                error.response?.data?.message || "Failed to delete students."
+                error.response?.data?.message ||
+                    "Failed to delete students."
             );
             setModalConfirm(false);
             setModalAction(null);
@@ -208,7 +232,6 @@ function PrincipalViewStudents() {
     function handleEditStudent(id: string) {
         navigate(`studentForm?mode=edit&id=${id}`);
     }
-
 
     function handleDeleteStudent(id: string) {
         setModalTitle("Delete Student");
@@ -238,15 +261,14 @@ function PrincipalViewStudents() {
 
             setModalTitle("Error");
             setModalMessage(
-                error.response?.data?.message || "Failed to delete student."
+                error.response?.data?.message ||
+                    "Failed to delete student."
             );
             setModalConfirm(false);
             setModalAction(null);
             setModalOpen(true);
         }
     }
-
-
 
     async function handleRestoreStudent(id: string) {
         try {
@@ -262,7 +284,8 @@ function PrincipalViewStudents() {
 
             setModalTitle("Error");
             setModalMessage(
-                error.response?.data?.message || "Failed to restore student."
+                error.response?.data?.message ||
+                    "Failed to restore student."
             );
             setModalConfirm(false);
             setModalAction(null);
@@ -270,14 +293,15 @@ function PrincipalViewStudents() {
         }
     }
 
-
     function handlePermanentlyDeleteStudent(id: string) {
         setModalTitle("Permanently Delete Student");
         setModalMessage(
             "Are you sure you want to permanently delete this student? This action cannot be undone."
         );
         setModalConfirm(true);
-        setModalAction(() => () => confirmPermanentlyDeleteStudent(id));
+        setModalAction(
+            () => () => confirmPermanentlyDeleteStudent(id)
+        );
         setModalOpen(true);
     }
 
@@ -287,8 +311,7 @@ function PrincipalViewStudents() {
 
             if (studentsData.length === 1 && currentPage > 1) {
                 setCurrentPage(currentPage - 1);
-            }
-            else {
+            } else {
                 await fetchStudents();
             }
 
@@ -297,14 +320,13 @@ function PrincipalViewStudents() {
             setModalConfirm(false);
             setModalAction(null);
             setModalOpen(true);
-        }
-        catch (error: any) {
+        } catch (error: any) {
             console.log(error);
 
             setModalTitle("Error");
             setModalMessage(
                 error.response?.data?.message ||
-                "Failed to permanently delete student."
+                    "Failed to permanently delete student."
             );
             setModalConfirm(false);
             setModalAction(null);
@@ -316,7 +338,12 @@ function PrincipalViewStudents() {
         navigate(`studentProfile?id=${id}`);
     }
 
-    const sortOptions = ["None", "Student Name", "Class", "Roll no"];
+    const sortOptions = [
+        "None",
+        "Student Name",
+        "Class",
+        "Roll no"
+    ];
 
     const startIndex = (currentPage - 1) * limit;
 
@@ -331,7 +358,7 @@ function PrincipalViewStudents() {
         );
 
     return (
-        <div className="flex flex-col min-h-screen font-fredoka">
+        <div className="flex min-h-screen flex-col font-fredoka">
             <NavBar />
 
             <div className="flex flex-1 bg-purple-100">
@@ -340,9 +367,8 @@ function PrincipalViewStudents() {
                 <div>
                     <Breadcrumb />
 
-                    <div className="flex flex-col pt-12 pl-20 mb-10">
-
-                        <div className="flex justify-between items-center mb-4">
+                    <div className="mb-10 flex flex-col pl-20 pt-12">
+                        <div className="mb-4 flex items-center justify-between">
                             <div>
                                 <h1 className="text-3xl font-medium text-gray-900">
                                     Students
@@ -358,7 +384,7 @@ function PrincipalViewStudents() {
                                     <button
                                         onClick={handleDeleteAll}
                                         type="button"
-                                        className="rounded-lg bg-red-600 px-6 py-3 font-medium text-white shadow-[0_2px_3px] transition-colors hover:bg-red-600 cursor-pointer"
+                                        className="cursor-pointer rounded-lg bg-red-600 px-6 py-3 font-medium text-white shadow-[0_2px_3px] transition-colors hover:bg-red-700"
                                     >
                                         Delete All
                                     </button>
@@ -376,9 +402,9 @@ function PrincipalViewStudents() {
                                             className="peer sr-only"
                                         />
 
-                                        <div className="h-4 w-7 rounded-full bg-gray-300 transition-colors peer-checked:bg-purple-700"></div>
+                                        <div className="h-4 w-7 rounded-full bg-gray-300 transition-colors peer-checked:bg-purple-700" />
 
-                                        <div className="absolute left-0.5 top-0.5 h-3 w-3 rounded-full bg-white shadow-sm transition-transform peer-checked:translate-x-3"></div>
+                                        <div className="absolute left-0.5 top-0.5 h-3 w-3 rounded-full bg-white shadow-sm transition-transform peer-checked:translate-x-3" />
                                     </div>
 
                                     <span>Show deleted students</span>
@@ -386,8 +412,8 @@ function PrincipalViewStudents() {
                             </div>
                         </div>
 
-                        <div className="flex justify-between items-center mb-3">
-                            <div className="flex gap-8 mb-3">
+                        <div className="mb-3 flex items-center justify-between">
+                            <div className="mb-3 flex gap-8">
                                 <SortBy
                                     sortOptions={sortOptions}
                                     sortBy={sortBy}
@@ -430,7 +456,7 @@ function PrincipalViewStudents() {
                             />
                         </div>
 
-                        <div className="flex justify-between mt-5 items-center">
+                        <div className="mt-5 flex items-center justify-between">
                             <div className="mt-1">
                                 <Pagination
                                     currentPage={currentPage}
@@ -444,7 +470,6 @@ function PrincipalViewStudents() {
                                 limit={limit}
                             />
                         </div>
-
                     </div>
                 </div>
             </div>
@@ -463,7 +488,6 @@ function PrincipalViewStudents() {
                         ? modalAction
                         : undefined
                 }
-
                 confirmText={
                     modalTitle === "Permanently Delete Student"
                         ? "Delete Permanently"
@@ -473,7 +497,6 @@ function PrincipalViewStudents() {
                                 ? "Delete"
                                 : "Confirm"
                 }
-
             />
         </div>
     );

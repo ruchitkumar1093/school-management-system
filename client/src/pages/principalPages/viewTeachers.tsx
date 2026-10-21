@@ -1,3 +1,4 @@
+
 import NavBar from "../../components/navBar";
 import SideBar from "../../components/sideBar";
 import PrincipalTeachersTable from "../../components/principalComponents/teachersTable";
@@ -17,12 +18,11 @@ import {
 } from "../../services/principalApi";
 
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import Modal from "../../components/modal";
 import Breadcrumb from "../../components/breadcrumb";
 
 function PrincipalViewTeachers() {
-
     type Teacher = {
         _id: string;
         userId: {
@@ -37,8 +37,12 @@ function PrincipalViewTeachers() {
         isClassTeacher: boolean;
     };
 
-
     const navigate = useNavigate();
+    const location = useLocation();
+
+    // Read the class selected on the Class Overview page.
+    const selectedClassFromNavigation: string | undefined =
+        location.state?.selectedClass;
 
     const [teachersData, setTeachersData] = useState<Teacher[]>([]);
     const [currentPage, setCurrentPage] = useState(1);
@@ -49,16 +53,21 @@ function PrincipalViewTeachers() {
     const [debouncedSearch, setDebouncedSearch] = useState("");
     const [sortBy, setSortBy] = useState("None");
     const [orderBy, setOrderBy] = useState("asc");
-    const [classFilter, setClassFilter] = useState("All");
-    const [showDeleted, setShowDeleted] = useState(false);
 
+    // Default to the received class, or "All" when opened directly.
+    const [classFilter, setClassFilter] = useState<string>(
+        selectedClassFromNavigation ?? "All"
+    );
+
+    const [showDeleted, setShowDeleted] = useState(false);
     const [selectedTeachers, setSelectedTeachers] = useState<string[]>([]);
 
     const [modalOpen, setModalOpen] = useState(false);
     const [modalTitle, setModalTitle] = useState("");
     const [modalMessage, setModalMessage] = useState("");
     const [modalConfirm, setModalConfirm] = useState(false);
-    const [modalAction, setModalAction] = useState<(() => void) | null>(null);
+    const [modalAction, setModalAction] =
+        useState<(() => void) | null>(null);
 
     const fetchTeachers = async () => {
         try {
@@ -76,16 +85,26 @@ function PrincipalViewTeachers() {
 
             setTeachersData(teachers.data.teachers);
             setTotalPages(teachers.data.totalPages);
-        }
-        catch (error) {
+        } catch (error) {
             console.log(error);
             setTeachersData([]);
             setTotalPages(1);
         }
     };
 
+    // Apply a new class if navigation state changes while mounted.
     useEffect(() => {
-        fetchTeachers();
+        if (
+            typeof selectedClassFromNavigation === "string" &&
+            selectedClassFromNavigation !== classFilter
+        ) {
+            setClassFilter(selectedClassFromNavigation);
+            setCurrentPage(1);
+        }
+    }, [selectedClassFromNavigation]);
+
+    useEffect(() => {
+        void fetchTeachers();
     }, [
         debouncedSearch,
         sortBy,
@@ -152,8 +171,7 @@ function PrincipalViewTeachers() {
             setSelectedTeachers((prev) =>
                 prev.filter((id) => !activeTeacherIds.includes(id))
             );
-        }
-        else {
+        } else {
             setSelectedTeachers((prev) => [
                 ...new Set([...prev, ...activeTeacherIds])
             ]);
@@ -180,10 +198,12 @@ function PrincipalViewTeachers() {
 
             setSelectedTeachers([]);
 
-            if (teachersData.length === selectedTeachers.length && currentPage > 1) {
+            if (
+                teachersData.length === selectedTeachers.length &&
+                currentPage > 1
+            ) {
                 setCurrentPage(currentPage - 1);
-            }
-            else {
+            } else {
                 await fetchTeachers();
             }
 
@@ -192,13 +212,13 @@ function PrincipalViewTeachers() {
             setModalConfirm(false);
             setModalAction(null);
             setModalOpen(true);
-        }
-        catch (error: any) {
+        } catch (error: any) {
             console.log(error);
 
             setModalTitle("Error");
             setModalMessage(
-                error.response?.data?.message || "Failed to delete teachers."
+                error.response?.data?.message ||
+                "Failed to delete teachers."
             );
             setModalConfirm(false);
             setModalAction(null);
@@ -213,7 +233,6 @@ function PrincipalViewTeachers() {
     function handleEditTeacher(id: string) {
         navigate(`teacherForm?mode=edit&id=${id}`);
     }
-
 
     function handleDeleteTeacher(id: string) {
         setModalTitle("Delete Teacher");
@@ -241,15 +260,14 @@ function PrincipalViewTeachers() {
         } catch (error: any) {
             setModalTitle("Error");
             setModalMessage(
-                error.response?.data?.message || "Failed to delete teacher."
+                error.response?.data?.message ||
+                "Failed to delete teacher."
             );
             setModalConfirm(false);
             setModalAction(null);
             setModalOpen(true);
         }
     }
-
-
 
     async function handleRestoreTeacher(id: string) {
         try {
@@ -263,7 +281,8 @@ function PrincipalViewTeachers() {
         } catch (error: any) {
             setModalTitle("Error");
             setModalMessage(
-                error.response?.data?.message || "Failed to restore teacher."
+                error.response?.data?.message ||
+                "Failed to restore teacher."
             );
             setModalConfirm(false);
             setModalAction(null);
@@ -277,7 +296,9 @@ function PrincipalViewTeachers() {
             "Are you sure you want to permanently delete this teacher? This action cannot be undone."
         );
         setModalConfirm(true);
-        setModalAction(() => () => confirmPermanentlyDeleteTeacher(id));
+        setModalAction(
+            () => () => confirmPermanentlyDeleteTeacher(id)
+        );
         setModalOpen(true);
     }
 
@@ -287,8 +308,7 @@ function PrincipalViewTeachers() {
 
             if (teachersData.length === 1 && currentPage > 1) {
                 setCurrentPage(currentPage - 1);
-            }
-            else {
+            } else {
                 await fetchTeachers();
             }
 
@@ -297,13 +317,13 @@ function PrincipalViewTeachers() {
             setModalConfirm(false);
             setModalAction(null);
             setModalOpen(true);
-        }
-        catch (error: any) {
+        } catch (error: any) {
             console.log(error);
 
             setModalTitle("Error");
             setModalMessage(
-                error.response?.data?.message || "Failed to permanently delete teacher."
+                error.response?.data?.message ||
+                "Failed to permanently delete teacher."
             );
             setModalConfirm(false);
             setModalAction(null);
@@ -316,11 +336,16 @@ function PrincipalViewTeachers() {
     }
 
     function handleTeacherMarks(id: string) {
-        navigate(`../viewMarks?teacher=${id}`);
+        // Preserve the teacher filter and selected class.
+        navigate(`../viewMarks?teacher=${id}`, {
+            state: {
+                selectedClass:
+                    classFilter === "All" ? undefined : classFilter
+            }
+        });
     }
 
     const startIndex = (currentPage - 1) * limit;
-
     const sortOptions = ["None", "Teacher Name", "Class Assigned"];
 
     const activeTeachers = teachersData.filter(
@@ -334,7 +359,7 @@ function PrincipalViewTeachers() {
         );
 
     return (
-        <div className="flex flex-col min-h-screen font-fredoka">
+        <div className="flex min-h-screen flex-col font-fredoka">
             <NavBar />
 
             <div className="flex flex-1 bg-purple-100">
@@ -343,9 +368,8 @@ function PrincipalViewTeachers() {
                 <div>
                     <Breadcrumb />
 
-                    <div className="flex flex-col pt-12 pl-20 mb-10">
-
-                        <div className="flex justify-between items-center mb-4">
+                    <div className="mb-10 flex flex-col pl-20 pt-12">
+                        <div className="mb-4 flex items-center justify-between">
                             <div>
                                 <h1 className="text-3xl font-medium text-gray-900">
                                     Teachers
@@ -361,7 +385,7 @@ function PrincipalViewTeachers() {
                                     <button
                                         onClick={handleDeleteAll}
                                         type="button"
-                                        className="rounded-lg bg-red-600 px-6 py-3 font-medium text-white shadow-[0_2px_3px] transition-colors hover:bg-red-600 cursor-pointer"
+                                        className="cursor-pointer rounded-lg bg-red-600 px-6 py-3 font-medium text-white shadow-[0_2px_3px] transition-colors hover:bg-red-700"
                                     >
                                         Delete All
                                     </button>
@@ -379,9 +403,9 @@ function PrincipalViewTeachers() {
                                             className="peer sr-only"
                                         />
 
-                                        <div className="h-4 w-7 rounded-full bg-gray-300 transition-colors peer-checked:bg-purple-700"></div>
+                                        <div className="h-4 w-7 rounded-full bg-gray-300 transition-colors peer-checked:bg-purple-700" />
 
-                                        <div className="absolute left-0.5 top-0.5 h-3 w-3 rounded-full bg-white shadow-sm transition-transform peer-checked:translate-x-3"></div>
+                                        <div className="absolute left-0.5 top-0.5 h-3 w-3 rounded-full bg-white shadow-sm transition-transform peer-checked:translate-x-3" />
                                     </div>
 
                                     <span>Show deleted teachers</span>
@@ -390,15 +414,15 @@ function PrincipalViewTeachers() {
                                 <button
                                     onClick={handleAddTeacher}
                                     type="button"
-                                    className="rounded-lg bg-purple-300 px-6 py-3 font-medium text-purple-950 shadow-[0_2px_3px] transition-colors hover:bg-violet-300 cursor-pointer"
+                                    className="cursor-pointer rounded-lg bg-purple-300 px-6 py-3 font-medium text-purple-950 shadow-[0_2px_3px] transition-colors hover:bg-violet-300"
                                 >
                                     Add Teacher
                                 </button>
                             </div>
                         </div>
 
-                        <div className="flex justify-between items-center mb-3">
-                            <div className="flex gap-8 mb-3">
+                        <div className="mb-3 flex items-center justify-between">
+                            <div className="mb-3 flex gap-8">
                                 <SortBy
                                     sortOptions={sortOptions}
                                     sortBy={sortBy}
@@ -442,7 +466,7 @@ function PrincipalViewTeachers() {
                             />
                         </div>
 
-                        <div className="flex justify-between mt-5 items-center">
+                        <div className="mt-5 flex items-center justify-between">
                             <div className="mt-1">
                                 <Pagination
                                     currentPage={currentPage}
@@ -469,7 +493,11 @@ function PrincipalViewTeachers() {
                     setModalConfirm(false);
                     setModalAction(null);
                 }}
-                onConfirm={modalConfirm && modalAction ? modalAction : undefined}
+                onConfirm={
+                    modalConfirm && modalAction
+                        ? modalAction
+                        : undefined
+                }
                 confirmText={
                     modalTitle === "Permanently Delete Teacher"
                         ? "Delete Permanently"

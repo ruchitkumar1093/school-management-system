@@ -1,17 +1,51 @@
+
 import logo from "../assets/logo.png";
-import { useNavigate } from "react-router-dom";
-import { Link } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { jwtDecode } from "jwt-decode";
+
+type TokenPayload = {
+    role: "principal" | "teacher" | "student";
+};
 
 function Hero() {
-
     const navigate = useNavigate();
+
+    const [dashboardPath, setDashboardPath] =
+        useState<string | null>(null);
+
+    useEffect(() => {
+        const token = localStorage.getItem("token");
+
+        if (!token) {
+            setDashboardPath(null);
+            return;
+        }
+
+        try {
+            const decoded = jwtDecode<TokenPayload>(token);
+
+            const routes: Record<string, string> = {
+                principal: "/principal",
+                teacher: "/teacher",
+                student: "/student",
+            };
+
+            setDashboardPath(
+                routes[decoded.role] ?? null
+            );
+        } catch {
+            setDashboardPath(null);
+        }
+    }, []);
 
     return (
         <div className="flex min-h-screen flex-col font-fredoka bg-purple-100">
 
             {/* Navbar */}
             <nav className="z-10 flex items-center justify-between bg-purple-300 px-8 py-4 shadow-sm">
-                <div className="flex items-center gap-3">
+                <Link to="/" className="flex cursor-pointer items-center">
+                    <div className="flex items-center gap-3">
                     <img
                         src={logo}
                         alt="school logo"
@@ -22,18 +56,35 @@ function Hero() {
                         GPS
                     </h1>
                 </div>
+                </Link>
+                
 
-                <button
-                    className="rounded-lg bg-purple-800 px-5 py-2.5 font-medium text-white
-            shadow-[0_2px_1px_rgba(0,0,0,0.15)]
-            transition-all duration-200
-            hover:bg-purple-900
-            cursor-pointer"
-                    type="button"
-                    onClick={() => navigate("/login")}
-                >
-                    Login
-                </button>
+                <div className="flex items-center gap-3">
+                    {dashboardPath && (
+                        <button
+                            className="rounded-lg border-2 border-purple-800 px-5 py-2.5 font-medium text-purple-800
+                            transition-all duration-200
+                            hover:bg-purple-200
+                            cursor-pointer"
+                            type="button"
+                            onClick={() => navigate(dashboardPath)}
+                        >
+                            Back to Dashboard
+                        </button>
+                    )}
+
+                    <button
+                        className="rounded-lg bg-purple-800 px-5 py-2.5 font-medium text-white
+                        shadow-[0_2px_1px_rgba(0,0,0,0.15)]
+                        transition-all duration-200
+                        hover:bg-purple-900
+                        cursor-pointer"
+                        type="button"
+                        onClick={() => navigate("/login")}
+                    >
+                        Login
+                    </button>
+                </div>
             </nav>
 
             {/* Main Content */}
@@ -42,7 +93,6 @@ function Hero() {
                 {/* Hero Section */}
                 <section className="flex flex-1 items-center">
                     <div className="w-full">
-
                         <div className="max-w-4xl">
                             <p className="mb-3 text-sm font-medium uppercase tracking-widest text-purple-800">
                                 Welcome to
@@ -69,10 +119,10 @@ function Hero() {
                                     onClick={() => navigate("/admission")}
                                     type="button"
                                     className="rounded-lg bg-purple-800 px-6 py-3 font-medium text-white
-                            shadow-[0_2px_1px_rgba(0,0,0,0.15)]
-                            transition-all duration-200
-                            hover:bg-purple-900
-                            cursor-pointer"
+                                    shadow-[0_2px_1px_rgba(0,0,0,0.15)]
+                                    transition-all duration-200
+                                    hover:bg-purple-900
+                                    cursor-pointer"
                                 >
                                     Apply for Admission
                                 </button>
@@ -81,23 +131,21 @@ function Hero() {
                                     onClick={() => navigate("/login")}
                                     type="button"
                                     className="rounded-lg border-2 border-purple-800 px-6 py-3
-                            font-medium text-purple-800
-                            transition-all duration-200
-                            hover:bg-purple-200
-                            cursor-pointer"
+                                    font-medium text-purple-800
+                                    transition-all duration-200
+                                    hover:bg-purple-200
+                                    cursor-pointer"
                                 >
                                     Access Portal
                                 </button>
                             </div>
                         </div>
-
                     </div>
                 </section>
 
                 {/* Portal Section */}
                 <section className="mt-16">
                     <div className="rounded-2xl bg-purple-300 p-7 shadow-sm md:p-8">
-
                         <div className="max-w-4xl">
                             <p className="mb-2 text-sm font-medium uppercase tracking-wide text-purple-800">
                                 School Management Portal
@@ -116,12 +164,11 @@ function Hero() {
                             <Link
                                 to="/login"
                                 className="mt-4 inline-block font-medium text-purple-800
-                        transition-colors hover:text-purple-950"
+                                transition-colors hover:text-purple-950"
                             >
                                 Click here to login →
                             </Link>
                         </div>
-
                     </div>
                 </section>
 

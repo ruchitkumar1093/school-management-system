@@ -23,6 +23,7 @@ type Props = {
   markAllStatus: "Present" | "Absent" | null;
   startIndex: number;
   isClassTeacher: boolean;
+  attendanceMarked: boolean;
 };
 
 function TeacherAttendanceTable({
@@ -32,6 +33,7 @@ function TeacherAttendanceTable({
   setAttendance,
   markAllStatus,
   isClassTeacher,
+  attendanceMarked,
 }: Props) {
   const navigate = useNavigate();
 
@@ -159,6 +161,32 @@ function TeacherAttendanceTable({
                             />
                             Absent
                           </label>
+                        </div>
+                      )}
+                    </td>
+                  ) : attendanceMarked ? (
+                    <td className="border-r border-purple-300 border-b border-purple-300 p-2">
+                      {student.onLeave ? (
+                        <div className="flex justify-center">
+                          <span className="rounded-md px-5 py-2 font-medium text-yellow-600">
+                            Leave
+                          </span>
+                        </div>
+                      ) : student.attendanceStatus !== null ? (
+                        <div className="flex justify-center">
+                          <span
+                            className={`rounded-md px-5 py-2 font-medium ${
+                              student.attendanceStatus === "Present"
+                                ? "text-green-600"
+                                : "text-red-600"
+                            }`}
+                          >
+                            {student.attendanceStatus}
+                          </span>
+                        </div>
+                      ) : (
+                        <div className="text-center text-gray-500">
+                          —
                         </div>
                       )}
                     </td>

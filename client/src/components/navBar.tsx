@@ -72,17 +72,10 @@ function NavBar() {
         };
     }, []);
 
-    const homePath =
-        user.role === "principal"
-            ? "/principal"
-            : user.role === "teacher"
-                ? "/teacher"
-                : "/student";
-
     return (
         <div>
             <nav className="z-10 flex justify-between bg-purple-300 p-3 font-fredoka shadow-sm">
-                <Link to={homePath} className="flex cursor-pointer items-center">
+                <Link to="/" className="flex cursor-pointer items-center">
                     <img src={logo} alt="school logo" className="h-10" />
                     <h1 className="text-3xl font-medium text-gray-900">GPS</h1>
                 </Link>

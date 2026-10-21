@@ -752,6 +752,7 @@ function TeacherAttendance() {
                                 }
                                 markAllStatus={markAllStatus}
                                 isClassTeacher={isClassTeacher}
+                                attendanceMarked={attendanceMarked}
                             />
 
                         </div>

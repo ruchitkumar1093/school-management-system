@@ -5,7 +5,8 @@ import {
     addMark,
     updateMark,
     getMarkById,
-    viewStudents
+    viewStudents,
+    getTeacherSubjects
 } from "../../services/teacherApi";
 import { useState, useEffect } from "react";
 import Breadcrumb from "../../components/breadcrumb";
@@ -19,6 +20,13 @@ type Student = {
     };
     class: string;
     rollNumber: number;
+};
+
+type TeacherSubject = {
+    _id: string;
+    name: string;
+    class: string;
+    subjectCode: string;
 };
 
 type FormData = {
@@ -38,7 +46,9 @@ function MarksForm() {
     const navigate = useNavigate();
 
     const [students, setStudents] = useState<Student[]>([]);
+    const [teacherSubjects, setTeacherSubjects] = useState<TeacherSubject[]>([]);
     const [loadingStudents, setLoadingStudents] = useState(false);
+    const [loadingSubjects, setLoadingSubjects] = useState(true);
 
     const [formData, setFormData] = useState<FormData>({
         studentId: "",
@@ -51,6 +61,47 @@ function MarksForm() {
     const [modalOpen, setModalOpen] = useState(false);
     const [modalTitle, setModalTitle] = useState("");
     const [modalMessage, setModalMessage] = useState("");
+
+    // Fetch only subjects assigned to the logged-in teacher.
+    useEffect(() => {
+        let cancelled = false;
+
+        const fetchSubjects = async () => {
+            setLoadingSubjects(true);
+
+            try {
+                const response = await getTeacherSubjects();
+
+                if (cancelled) return;
+
+                const subjects: TeacherSubject[] = response.data.subjects;
+                setTeacherSubjects(subjects);
+
+                // Select the teacher's assigned subject by default.
+                if (isAdding && subjects.length > 0) {
+                    setFormData(previous => ({
+                        ...previous,
+                        subjectName: subjects[0].name
+                    }));
+                }
+            } catch (error) {
+                if (!cancelled) {
+                    console.error("Failed to fetch assigned subjects:", error);
+                    setTeacherSubjects([]);
+                }
+            } finally {
+                if (!cancelled) {
+                    setLoadingSubjects(false);
+                }
+            }
+        };
+
+        void fetchSubjects();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [isAdding]);
 
     // Fetch students only when adding marks.
     // The API returns students from the teacher's assigned class.
@@ -134,6 +185,25 @@ function MarksForm() {
         e.preventDefault();
 
         try {
+            if (loadingSubjects || teacherSubjects.length === 0) {
+                setModalTitle("Validation Error");
+                setModalMessage("No assigned subjects are available.");
+                setModalOpen(true);
+                return;
+            }
+
+            // Prevent selecting a subject outside the teacher's assignment.
+            if (
+                !teacherSubjects.some(
+                    subject => subject.name === formData.subjectName
+                )
+            ) {
+                setModalTitle("Validation Error");
+                setModalMessage("Please select one of your assigned subjects.");
+                setModalOpen(true);
+                return;
+            }
+
             if (isAdding) {
                 if (!formData.studentId) {
                     setModalTitle("Validation Error");
@@ -230,12 +300,11 @@ function MarksForm() {
                                     ))}
                                 </select>
 
-                                {!loadingStudents &&
-                                    students.length === 0 && (
-                                        <p className="text-sm text-gray-600">
-                                            No students found in your assigned class.
-                                        </p>
-                                    )}
+                                {!loadingStudents && students.length === 0 && (
+                                    <p className="text-sm text-gray-600">
+                                        No students found in your assigned class.
+                                    </p>
+                                )}
                             </div>
                         )}
 
@@ -245,6 +314,10 @@ function MarksForm() {
                             <select
                                 id="subject"
                                 required
+                                disabled={
+                                    loadingSubjects ||
+                                    teacherSubjects.length === 0
+                                }
                                 value={formData.subjectName}
                                 onChange={e =>
                                     setFormData(previous => ({
@@ -252,18 +325,24 @@ function MarksForm() {
                                         subjectName: e.target.value
                                     }))
                                 }
-                                className={inputClass}
+                                className={`${inputClass} disabled:cursor-not-allowed disabled:bg-gray-200`}
                             >
                                 <option value="" disabled>
-                                    Select a subject
+                                    {loadingSubjects
+                                        ? "Loading assigned subjects..."
+                                        : teacherSubjects.length === 0
+                                            ? "No assigned subjects available"
+                                            : "Select a subject"}
                                 </option>
-                                <option value="Science">Science</option>
-                                <option value="Mathematics">Mathematics</option>
-                                <option value="English">English</option>
-                                <option value="Social Science">
-                                    Social Science
-                                </option>
-                                <option value="Hindi">Hindi</option>
+
+                                {teacherSubjects.map(subject => (
+                                    <option
+                                        key={subject._id}
+                                        value={subject.name}
+                                    >
+                                        {subject.name}
+                                    </option>
+                                ))}
                             </select>
                         </div>
 
@@ -336,7 +415,12 @@ function MarksForm() {
                         <div className="flex gap-5">
                             <button
                                 type="submit"
-                                className="cursor-pointer rounded-lg bg-purple-300 px-6 py-3 font-medium text-purple-950 shadow-[0_2px_3px] transition-colors hover:bg-violet-300"
+                                disabled={
+                                    loadingSubjects ||
+                                    teacherSubjects.length === 0 ||
+                                    (isAdding && loadingStudents)
+                                }
+                                className="cursor-pointer rounded-lg bg-purple-300 px-6 py-3 font-medium text-purple-950 shadow-[0_2px_3px] transition-colors hover:bg-violet-300 disabled:cursor-not-allowed disabled:opacity-60"
                             >
                                 {isAdding ? "Add" : "Update"}
                             </button>

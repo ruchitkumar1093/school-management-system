@@ -5,3 +5,29 @@
 @theme {
   --font-fredoka: "Fredoka", sans-serif;
 }
+
+/* Horizontal class selector scrollbar */
+.classes-scrollbar {
+    scrollbar-width: thin;
+    scrollbar-color: #d4a9fc #eadcff;
+    scrollbar-gutter: stable;
+}
+
+.classes-scrollbar::-webkit-scrollbar {
+    height: 6px;
+}
+
+.classes-scrollbar::-webkit-scrollbar-track {
+    background: #eadcff;
+    border-radius: 999px;
+}
+
+.classes-scrollbar::-webkit-scrollbar-thumb {
+    background: #c084fc;
+    border-radius: 999px;
+    border: 1px solid #eadcff;
+}
+
+.classes-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: #9333ea;
+}

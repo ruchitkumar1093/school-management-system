@@ -584,19 +584,34 @@ export const getPrincipalHome = async (
     res: Response
 ) => {
     try {
-        const totalStudents = await Student.countDocuments();
+        const [
+            totalStudents,
+            totalTeachers,
+            totalSubjects,
+            totalClasses,
+            classes
+        ] = await Promise.all([
+            Student.countDocuments(),
+            Teacher.countDocuments(),
+            Subject.countDocuments(),
+            Class.countDocuments(),
+            Class.find({})
+                .select("class")
+                .lean()
+        ]);
 
-        const totalTeachers = await Teacher.countDocuments();
-
-        const totalSubjects = await Subject.countDocuments();
-
-        const totalClasses = await Class.countDocuments();
+        // Sort classes numerically: 1st, 2nd, 3rd ... 12th.
+        const sortedClasses = classes.sort(
+            (a, b) =>
+                parseInt(a.class, 10) - parseInt(b.class, 10)
+        );
 
         return res.status(200).json({
             totalStudents,
             totalTeachers,
             totalSubjects,
-            totalClasses
+            totalClasses,
+            classes: sortedClasses
         });
     }
     catch (error) {
@@ -5158,4 +5173,21 @@ export const deleteArrangementByPosition = async (
         class: selectedClass,
         department: selectedDepartment
     });
+};
+
+
+export const getMarkSubjects = async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+) => {
+    try {
+        const subjects = await Subject.distinct("name");
+
+        return res.status(200).json({
+            subjects: subjects.sort()
+        });
+    } catch (error) {
+        next(error);
+    }
 };

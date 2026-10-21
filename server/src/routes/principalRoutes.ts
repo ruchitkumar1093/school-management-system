@@ -14,7 +14,7 @@ import {
     deleteTeachers, deleteStudents, getStudentAttendanceDetails, getStudentMonthlyAttendance,
     getTeachersForAttendance, createTeacherAttendance, getTeacherAttendance, getTeacherAttendanceDetails,
     getTeacherMonthlyAttendance, updateStudentProfile, updateTeacherProfile, getMarkFormOptions,
-    getTeachersForArrangement, createArrangement
+    getTeachersForArrangement, createArrangement, getMarkSubjects
 } from "../controllers/principalController";
 
 //home
@@ -83,6 +83,7 @@ router.post("/subjects/addSubject", createSubject);
 router.put("/updateSubject/:id", updateSubject);
 router.delete("/deleteSubject/:id", deleteSubject);
 router.get("/subjects", getSubjects);
+router.get("/marks/subjects/all", getMarkSubjects);
 
 //Marks
 router.get("/marks", getMarks);

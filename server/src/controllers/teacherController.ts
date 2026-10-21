@@ -622,12 +622,13 @@ export const getMarks = async (
 ) => {
     try {
         const teacher = await Teacher.findOne({
-            userId: req.user?.userId
+            userId: req.user?.userId,
+            isDeleted: false
         });
 
         if (!teacher) {
             return res.status(404).json({
-                message: "teacher not found"
+                message: "Teacher not found"
             });
         }
 
@@ -643,9 +644,6 @@ export const getMarks = async (
         const order =
             req.query.order?.toString() || "asc";
 
-        const subject =
-            req.query.subject?.toString() || "All";
-
         const currentPage = Math.max(
             Number(req.query.page) || 1,
             1
@@ -656,12 +654,29 @@ export const getMarks = async (
             1
         );
 
+        // Find the subject assigned to this teacher's
+        // department and assigned class.
+        const subject = await Subject.findOne({
+            name: teacher.department,
+            class: teacher.classAssigned
+        }).select("_id");
+
+        if (!subject) {
+            return res.status(200).json({
+                marks: [],
+                totalMarks: 0,
+                totalPages: 0,
+                currentPage,
+                limit: pageLimit
+            });
+        }
+
         const students = await Student.find({
             class: teacher.classAssigned
         }).select("_id");
 
         const studentIds = students.map(
-            student => student._id
+            (student) => student._id
         );
 
         if (studentIds.length === 0) {
@@ -679,7 +694,8 @@ export const getMarks = async (
                 $match: {
                     studentId: {
                         $in: studentIds
-                    }
+                    },
+                    subjectId: subject._id
                 }
             },
             {
@@ -725,15 +741,7 @@ export const getMarks = async (
             });
         }
 
-        if (subject !== "All") {
-            pipeline.push({
-                $match: {
-                    "subjectId.name": subject
-                }
-            });
-        }
-
-        if (search !== "") {
+        if (search) {
             pipeline.push({
                 $match: {
                     "studentUser.name": {
@@ -751,24 +759,21 @@ export const getMarks = async (
                         order === "desc" ? -1 : 1
                 }
             });
-        }
-        else if (sortBy === "Subject Name") {
+        } else if (sortBy === "Subject Name") {
             pipeline.push({
                 $sort: {
                     "subjectId.name":
                         order === "desc" ? -1 : 1
                 }
             });
-        }
-        else if (sortBy === "Marks Obtained") {
+        } else if (sortBy === "Marks Obtained") {
             pipeline.push({
                 $sort: {
                     marksObtained:
                         order === "desc" ? -1 : 1
                 }
             });
-        }
-        else {
+        } else {
             pipeline.push({
                 $sort: {
                     _id: 1
@@ -776,8 +781,7 @@ export const getMarks = async (
             });
         }
 
-        const skip =
-            (currentPage - 1) * pageLimit;
+        const skip = (currentPage - 1) * pageLimit;
 
         pipeline.push({
             $facet: {
@@ -797,19 +801,16 @@ export const getMarks = async (
             }
         });
 
-        const result =
-            await Mark.aggregate(pipeline);
+        const result = await Mark.aggregate(pipeline);
 
-        const marks =
-            result[0]?.marks || [];
+        const marks = result[0]?.marks || [];
 
         const totalMarks =
             result[0]?.total[0]?.count || 0;
 
-        const totalPages =
-            Math.ceil(
-                totalMarks / pageLimit
-            );
+        const totalPages = Math.ceil(
+            totalMarks / pageLimit
+        );
 
         const formattedMarks = marks.map(
             (mark: any) => ({
@@ -838,8 +839,7 @@ export const getMarks = async (
             currentPage,
             limit: pageLimit
         });
-    }
-    catch (error) {
+    } catch (error) {
         next(error);
     }
 };
@@ -3290,6 +3290,37 @@ export const getMyMonthlyAttendance = async (
             ).sort((a, b) =>
                 a.date.localeCompare(b.date)
             )
+        });
+    } catch (error) {
+        next(error);
+    }
+};
+
+
+export const getTeacherSubjects = async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+) => {
+    try {
+        const teacher = await Teacher.findOne({
+            userId: req.user?.userId,
+            isDeleted: false
+        });
+
+        if (!teacher) {
+            return res.status(404).json({
+                message: "Teacher not found"
+            });
+        }
+
+        const subjects = await Subject.find({
+            name: teacher.department,
+            class: teacher.classAssigned
+        }).select("_id name class subjectCode");
+
+        return res.status(200).json({
+            subjects
         });
     } catch (error) {
         next(error);

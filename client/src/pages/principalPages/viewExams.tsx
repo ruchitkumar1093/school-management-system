@@ -1,3 +1,4 @@
+
 import NavBar from "../../components/navBar";
 import SideBar from "../../components/sideBar";
 import SortBy from "../../components/sortBy";
@@ -7,13 +8,15 @@ import ExamFilter from "../../components/examFilter";
 import SearchBar from "../../components/searchBar";
 import Pagination from "../../components/pagination";
 import Limit from "../../components/limit";
+
 import { useState, useEffect } from "react";
+import { useLocation } from "react-router-dom";
+
 import PrincipalExamTable from "../../components/principalComponents/examTable";
 import { getExamResults } from "../../services/principalApi";
 import Breadcrumb from "../../components/breadcrumb";
 
 function PrincipalViewExams() {
-
     type ExamResult = {
         studentName: string;
         uid: string;
@@ -56,6 +59,12 @@ function PrincipalViewExams() {
 
     type ExamType = "All" | "class test" | "mid term" | "final";
 
+    const location = useLocation();
+
+    // Receive the selected class from Class Overview.
+    const selectedClassFromNavigation: string | undefined =
+        location.state?.selectedClass;
+
     const [examData, setExamData] = useState<ExamResult[]>([]);
 
     const [search, setSearch] = useState("");
@@ -64,7 +73,11 @@ function PrincipalViewExams() {
     const [sortBy, setSortBy] = useState("None");
     const [orderBy, setOrderBy] = useState("asc");
 
-    const [classFilter, setClassFilter] = useState("1st");
+    // Preserve the original default when opened directly.
+    const [classFilter, setClassFilter] = useState<string>(
+        selectedClassFromNavigation ?? "1st"
+    );
+
     const [examType, setExamType] = useState<ExamType>("class test");
 
     const [currentPage, setCurrentPage] = useState(1);
@@ -87,11 +100,24 @@ function PrincipalViewExams() {
 
             setExamData(response.data.results);
             setTotalPages(response.data.totalPages);
-        }
-        catch (error) {
+        } catch (error) {
             console.log(error);
+            setExamData([]);
+            setTotalPages(1);
         }
     };
+
+    // Update the selected class if navigation state changes
+    // while this page remains mounted.
+    useEffect(() => {
+        if (
+            typeof selectedClassFromNavigation === "string" &&
+            selectedClassFromNavigation !== classFilter
+        ) {
+            setClassFilter(selectedClassFromNavigation);
+            setCurrentPage(1);
+        }
+    }, [selectedClassFromNavigation]);
 
     useEffect(() => {
         const timer = setTimeout(() => {
@@ -104,7 +130,7 @@ function PrincipalViewExams() {
     }, [search]);
 
     useEffect(() => {
-        fetchExamResults();
+        void fetchExamResults();
     }, [
         classFilter,
         examType,
@@ -137,7 +163,7 @@ function PrincipalViewExams() {
     const startIndex = (currentPage - 1) * limit;
 
     return (
-        <div className="flex flex-col min-h-screen font-fredoka">
+        <div className="flex min-h-screen flex-col font-fredoka">
             <NavBar />
 
             <div className="flex flex-1 bg-purple-100">
@@ -146,9 +172,8 @@ function PrincipalViewExams() {
                 <div>
                     <Breadcrumb />
 
-                    <div className="flex flex-col pt-12 pl-20 mb-10 mr-10">
-
-                        <div className="flex justify-between items-center mb-4">
+                    <div className="mb-10 mr-10 flex flex-col pl-20 pt-12">
+                        <div className="mb-4 flex items-center justify-between">
                             <div>
                                 <h1 className="text-3xl font-medium text-gray-900">
                                     Exams
@@ -160,10 +185,8 @@ function PrincipalViewExams() {
                             </div>
                         </div>
 
-                        <div className="flex justify-between items-center mb-3">
-
-                            <div className="flex gap-8 mb-3">
-
+                        <div className="mb-3 flex items-center justify-between">
+                            <div className="mb-3 flex gap-8">
                                 <SortBy
                                     sortOptions={sortOptions}
                                     sortBy={sortBy}
@@ -187,7 +210,6 @@ function PrincipalViewExams() {
                                     setExamType={setExamType}
                                     showAll={false}
                                 />
-
                             </div>
 
                             <div>
@@ -196,7 +218,6 @@ function PrincipalViewExams() {
                                     setSearch={setSearch}
                                 />
                             </div>
-
                         </div>
 
                         <div className="flex flex-wrap gap-10">
@@ -206,8 +227,7 @@ function PrincipalViewExams() {
                             />
                         </div>
 
-                        <div className="flex justify-between mt-5 items-center">
-
+                        <div className="mt-5 flex items-center justify-between">
                             <div className="mt-1">
                                 <Pagination
                                     currentPage={currentPage}
@@ -220,9 +240,7 @@ function PrincipalViewExams() {
                                 setLimit={setLimit}
                                 limit={limit}
                             />
-
                         </div>
-
                     </div>
                 </div>
             </div>

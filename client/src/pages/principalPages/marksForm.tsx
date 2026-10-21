@@ -5,7 +5,8 @@ import {
     addMark,
     updateMark,
     getMarkById,
-    getMarkFormOptions
+    getMarkFormOptions,
+    getMarkSubjects
 } from "../../services/principalApi";
 import { useState, useEffect } from "react";
 import Breadcrumb from "../../components/breadcrumb";
@@ -62,11 +63,45 @@ function MarksForm() {
 
     const [students, setStudents] = useState<Student[]>([]);
     const [teachers, setTeachers] = useState<Teacher[]>([]);
+    const [subjects, setSubjects] = useState<string[]>([]);
     const [loadingOptions, setLoadingOptions] = useState(false);
+    const [loadingSubjects, setLoadingSubjects] = useState(true);
 
     const [modalOpen, setModalOpen] = useState(false);
     const [modalTitle, setModalTitle] = useState("");
     const [modalMessage, setModalMessage] = useState("");
+
+    // Fetch current subjects from the database.
+    useEffect(() => {
+        let cancelled = false;
+
+        const fetchSubjects = async () => {
+            try {
+                setLoadingSubjects(true);
+
+                const response = await getMarkSubjects();
+
+                if (!cancelled) {
+                    setSubjects(response.data.subjects);
+                }
+            } catch (error) {
+                if (!cancelled) {
+                    console.error("Failed to fetch subjects:", error);
+                    setSubjects([]);
+                }
+            } finally {
+                if (!cancelled) {
+                    setLoadingSubjects(false);
+                }
+            }
+        };
+
+        void fetchSubjects();
+
+        return () => {
+            cancelled = true;
+        };
+    }, []);
 
     // Fetch students and teachers only after selecting a class.
     useEffect(() => {
@@ -159,7 +194,6 @@ function MarksForm() {
             teacherId: ""
         }));
 
-        // Clear the previous class's options immediately.
         setStudents([]);
         setTeachers([]);
     };
@@ -341,6 +375,7 @@ function MarksForm() {
                             <select
                                 id="subject"
                                 required
+                                disabled={loadingSubjects || subjects.length === 0}
                                 value={formData.subjectName}
                                 onChange={e =>
                                     setFormData(previous => ({
@@ -348,18 +383,24 @@ function MarksForm() {
                                         subjectName: e.target.value
                                     }))
                                 }
-                                className={inputClass}
+                                className={`${inputClass} disabled:bg-gray-200 disabled:cursor-not-allowed`}
                             >
                                 <option value="" disabled>
-                                    Select a subject
+                                    {loadingSubjects
+                                        ? "Loading subjects..."
+                                        : subjects.length === 0
+                                            ? "No subjects available"
+                                            : "Select a subject"}
                                 </option>
-                                <option value="Science">Science</option>
-                                <option value="Mathematics">Mathematics</option>
-                                <option value="English">English</option>
-                                <option value="Social Science">
-                                    Social Science
-                                </option>
-                                <option value="Hindi">Hindi</option>
+
+                                {subjects.map(subject => (
+                                    <option
+                                        key={subject}
+                                        value={subject}
+                                    >
+                                        {subject}
+                                    </option>
+                                ))}
                             </select>
                         </div>
 
@@ -430,7 +471,11 @@ function MarksForm() {
                         <div className="flex gap-5">
                             <button
                                 type="submit"
-                                disabled={isAdding && loadingOptions}
+                                disabled={
+                                    (isAdding && loadingOptions) ||
+                                    loadingSubjects ||
+                                    subjects.length === 0
+                                }
                                 className="cursor-pointer rounded-lg bg-purple-300 px-6 py-3 font-medium text-purple-950 shadow-[0_2px_3px] transition-colors hover:bg-violet-300 disabled:cursor-not-allowed disabled:opacity-60"
                             >
                                 {isAdding ? "Add" : "Update"}

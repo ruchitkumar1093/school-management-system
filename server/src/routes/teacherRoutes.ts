@@ -7,7 +7,7 @@ import {
     getStudentsForAttendance, createAttendance, getAttendance, getStudentAttendance, getTeacherHome,
     getTeacher, getLeaveApplications, approveLeave, rejectLeave, applyLeave, getMyLeaves,
     getStudentMonthlyAttendance, getMyAttendance, getMyMonthlyAttendance,
-    deleteStudents, restoreStudent, permanentlyDeleteStudent
+    deleteStudents, restoreStudent, permanentlyDeleteStudent, getTeacherSubjects
 }
     from "../controllers/teacherController";
 
@@ -54,6 +54,7 @@ router.delete("/deleteMark/:id", deleteMark);
 
 //Subjects
 router.get("/subjects", getSubjects);
+router.get("/subjects/assigned", getTeacherSubjects);
 
 //Exam
 router.get("/examResults", getExamResults);

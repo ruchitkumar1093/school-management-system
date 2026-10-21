@@ -30,6 +30,10 @@ export const activateStudent = (id: string) => {
     return api.patch(`/principal/activateStudent/${id}`);
 };
 
+export const getMarkSubjects = () => {
+    return api.get("principal/marks/subjects/all");
+};
+
 //GET ALL:
 export const viewTeachers = (
     classFilter: string,

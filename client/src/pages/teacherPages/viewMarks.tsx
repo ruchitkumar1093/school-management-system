@@ -7,20 +7,22 @@ import SubjectFilter from "../../components/subjectFilter";
 import SearchBar from "../../components/searchBar";
 import Pagination from "../../components/pagination";
 import Limit from "../../components/limit";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import TeacherMarksTable from "../../components/teacherComponents/marksTable";
-import { viewMarks, deleteMark } from "../../services/teacherApi";
+import {
+    viewMarks,
+    deleteMark,
+    getTeacherSubjects,
+} from "../../services/teacherApi";
 import { useNavigate } from "react-router-dom";
 import Breadcrumb from "../../components/breadcrumb";
 import Modal from "../../components/modal";
 
 function TeacherViewMarks() {
-
     type ExamType = "All" | "class test" | "mid term" | "final";
 
     type Mark = {
         _id: string;
-
         studentId: {
             _id: string;
             class: string;
@@ -29,14 +31,19 @@ function TeacherViewMarks() {
                 uid: string;
             } | null;
         } | null;
-
         subjectId: {
             name: string;
         } | null;
-
         exam: string;
         marksObtained: number;
         totalMarks: number;
+    };
+
+    type TeacherSubject = {
+        _id: string;
+        name: string;
+        class: string;
+        subjectCode: string;
     };
 
     const navigate = useNavigate();
@@ -51,47 +58,106 @@ function TeacherViewMarks() {
 
     const [sortBy, setSortBy] = useState("None");
     const [orderBy, setOrderBy] = useState("asc");
+    const [examType, setExamType] = useState<ExamType>("All");
 
-    const [examType, setExamType] =
-        useState<ExamType>("All");
-
-    const [subjectFilter, setSubjectFilter] =
-        useState("All");
+    const [teacherSubjects, setTeacherSubjects] = useState<
+        TeacherSubject[]
+    >([]);
+    const [subjectFilter, setSubjectFilter] = useState("All");
+    const [subjectsLoading, setSubjectsLoading] = useState(true);
 
     const [modalOpen, setModalOpen] = useState(false);
     const [modalTitle, setModalTitle] = useState("");
     const [modalMessage, setModalMessage] = useState("");
     const [modalConfirm, setModalConfirm] = useState(false);
-    const [modalAction, setModalAction] = useState<(() => void) | null>(null);
+    const [modalAction, setModalAction] =
+        useState<(() => void) | null>(null);
 
     const sortOptions = [
         "None",
         "Student Name",
         "Subject Name",
-        "Marks Obtained"
+        "Marks Obtained",
     ];
 
-    const fetchMarks = async () => {
+    // Fetch only the subjects permitted for the logged-in teacher.
+    useEffect(() => {
+        const fetchTeacherSubjects = async () => {
+            try {
+                setSubjectsLoading(true);
+
+                const response = await getTeacherSubjects();
+                const subjects: TeacherSubject[] =
+                    response.data.subjects;
+
+                setTeacherSubjects(subjects);
+
+            } catch (error) {
+                console.log(error);
+                setTeacherSubjects([]);
+                setSubjectFilter("");
+            } finally {
+                setSubjectsLoading(false);
+            }
+        };
+
+        fetchTeacherSubjects();
+    }, []);
+
+    const fetchMarks = useCallback(async () => {
+        if (subjectsLoading) {
+            return;
+        }
+
+        if (teacherSubjects.length === 0) {
+            setMarksData([]);
+            setTotalPages(1);
+            return;
+        }
+
+        if (
+            subjectFilter !== "All" &&
+            !teacherSubjects.some(
+                (subject) => subject.name === subjectFilter
+            )
+        ) {
+            setMarksData([]);
+            setTotalPages(1);
+            return;
+        }
+
         try {
-            const marks = await viewMarks(
+            const selectedSubject =
+                subjectFilter === "All" ? "All" : subjectFilter;
+
+            const response = await viewMarks(
                 examType,
                 debouncedSearch,
                 sortBy,
                 orderBy,
                 currentPage,
                 limit,
-                subjectFilter
+                selectedSubject
             );
 
-            setMarksData(marks.data.marks);
-            setTotalPages(marks.data.totalPages);
-        }
-        catch (error) {
+            setMarksData(response.data.marks);
+            setTotalPages(response.data.totalPages);
+        } catch (error) {
             console.log(error);
             setMarksData([]);
             setTotalPages(1);
         }
-    };
+    }, [
+        subjectsLoading,
+        teacherSubjects,
+        subjectFilter,
+        examType,
+        debouncedSearch,
+        sortBy,
+        orderBy,
+        currentPage,
+        limit,
+    ]);
 
     useEffect(() => {
         const timer = setTimeout(() => {
@@ -105,15 +171,7 @@ function TeacherViewMarks() {
 
     useEffect(() => {
         fetchMarks();
-    }, [
-        examType,
-        debouncedSearch,
-        sortBy,
-        orderBy,
-        currentPage,
-        limit,
-        subjectFilter
-    ]);
+    }, [fetchMarks]);
 
     useEffect(() => {
         setCurrentPage(1);
@@ -123,7 +181,7 @@ function TeacherViewMarks() {
         sortBy,
         orderBy,
         limit,
-        subjectFilter
+        subjectFilter,
     ]);
 
     function handleAddMarks() {
@@ -151,7 +209,7 @@ function TeacherViewMarks() {
             setModalAction(null);
 
             if (marksData.length === 1 && currentPage > 1) {
-                setCurrentPage(currentPage - 1);
+                setCurrentPage((prev) => prev - 1);
             } else {
                 await fetchMarks();
             }
@@ -168,28 +226,21 @@ function TeacherViewMarks() {
         }
     }
 
-    const startIndex =
-        (currentPage - 1) * limit;
+    const startIndex = (currentPage - 1) * limit;
 
     return (
         <div className="flex flex-col min-h-screen font-fredoka">
-
             <NavBar />
 
             <div className="flex flex-1 bg-purple-100">
-
                 <SideBar />
 
                 <div>
-
                     <Breadcrumb />
 
                     <div className="flex flex-col pt-12 pl-20 mb-10 mr-5">
-
                         <div className="flex justify-between items-center mb-10">
-
                             <div>
-
                                 <h1 className="text-3xl font-medium text-gray-900">
                                     Marks
                                 </h1>
@@ -197,7 +248,6 @@ function TeacherViewMarks() {
                                 <p className="mt-1 text-sm text-gray-600">
                                     View and Manage Student Marks
                                 </p>
-
                             </div>
 
                             <button
@@ -207,13 +257,10 @@ function TeacherViewMarks() {
                             >
                                 Add Marks
                             </button>
-
                         </div>
 
                         <div className="flex justify-between items-center mb-3">
-
                             <div className="flex gap-8 mb-3">
-
                                 <SortBy
                                     sortOptions={sortOptions}
                                     sortBy={sortBy}
@@ -234,55 +281,58 @@ function TeacherViewMarks() {
                                 <SubjectFilter
                                     subjectFilter={subjectFilter}
                                     setSubjectFilter={setSubjectFilter}
+                                    subjects={teacherSubjects.map(
+                                        (subject) => subject.name
+                                    )}
+                                    disabled={subjectsLoading}
                                 />
-
                             </div>
 
                             <div>
-
                                 <SearchBar
                                     search={search}
                                     setSearch={setSearch}
                                 />
-
                             </div>
-
                         </div>
 
-                        <div className="flex flex-wrap gap-10">
+                        {subjectsLoading ? (
+                            <p className="py-8 text-center text-gray-600">
+                                Loading your assigned subjects...
+                            </p>
+                        ) : teacherSubjects.length === 0 ? (
+                            <p className="py-8 text-center text-gray-600">
+                                No subjects are assigned to you.
+                            </p>
+                        ) : (
+                            <>
+                                <div className="flex flex-wrap gap-10">
+                                    <TeacherMarksTable
+                                        marksData={marksData}
+                                        handleEditMarks={handleEditMarks}
+                                        handleDeleteMarks={handleDeleteMarks}
+                                        startIndex={startIndex}
+                                    />
+                                </div>
 
-                            <TeacherMarksTable
-                                marksData={marksData}
-                                handleEditMarks={handleEditMarks}
-                                handleDeleteMarks={handleDeleteMarks}
-                                startIndex={startIndex}
-                            />
+                                <div className="flex justify-between mt-5 items-center">
+                                    <div className="mt-1">
+                                        <Pagination
+                                            currentPage={currentPage}
+                                            totalPages={totalPages}
+                                            setCurrentPage={setCurrentPage}
+                                        />
+                                    </div>
 
-                        </div>
-
-                        <div className="flex justify-between mt-5 items-center">
-
-                            <div className="mt-1">
-
-                                <Pagination
-                                    currentPage={currentPage}
-                                    totalPages={totalPages}
-                                    setCurrentPage={setCurrentPage}
-                                />
-
-                            </div>
-
-                            <Limit
-                                setLimit={setLimit}
-                                limit={limit}
-                            />
-
-                        </div>
-
+                                    <Limit
+                                        setLimit={setLimit}
+                                        limit={limit}
+                                    />
+                                </div>
+                            </>
+                        )}
                     </div>
-
                 </div>
-
             </div>
 
             <Modal
@@ -300,12 +350,9 @@ function TeacherViewMarks() {
                         : undefined
                 }
                 confirmText={
-                    modalTitle === "Delete Mark"
-                        ? "Delete"
-                        : "Confirm"
+                    modalTitle === "Delete Mark" ? "Delete" : "Confirm"
                 }
             />
-
         </div>
     );
 }

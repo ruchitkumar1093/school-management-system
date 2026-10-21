@@ -1,3 +1,4 @@
+
 import NavBar from "../../components/navBar";
 import SideBar from "../../components/sideBar";
 import SortBy from "../../components/sortBy";
@@ -6,24 +7,35 @@ import ClassFilter from "../../components/classFilter";
 import SearchBar from "../../components/searchBar";
 import Pagination from "../../components/pagination";
 import Limit from "../../components/limit";
-import { viewSubjects, deleteSubject } from "../../services/principalApi";
+
+import {
+    viewSubjects,
+    deleteSubject
+} from "../../services/principalApi";
+
 import PrincipalSubjectsTable from "../../components/principalComponents/subjectsTable";
+
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
+
 import Breadcrumb from "../../components/breadcrumb";
 import Modal from "../../components/modal";
 
 function PrincipalViewSubjects() {
-
     type Subject = {
         _id: string;
         name: string;
         subjectCode: string;
         class: string;
         teacherName: string;
-    }
+    };
 
     const navigate = useNavigate();
+    const location = useLocation();
+
+    // Read the class selected on the Class Overview page.
+    const selectedClassFromNavigation: string | undefined =
+        location.state?.selectedClass;
 
     const [subjectsData, setSubjectsData] = useState<Subject[]>([]);
 
@@ -36,13 +48,18 @@ function PrincipalViewSubjects() {
 
     const [sortBy, setSortBy] = useState("None");
     const [orderBy, setOrderBy] = useState("asc");
-    const [classFilter, setClassFilter] = useState("All");
+
+    // Use the received class, or "All" when opened directly.
+    const [classFilter, setClassFilter] = useState<string>(
+        selectedClassFromNavigation ?? "All"
+    );
 
     const [modalOpen, setModalOpen] = useState(false);
     const [modalTitle, setModalTitle] = useState("");
     const [modalMessage, setModalMessage] = useState("");
     const [modalConfirm, setModalConfirm] = useState(false);
-    const [modalAction, setModalAction] = useState<(() => void) | null>(null);
+    const [modalAction, setModalAction] =
+        useState<(() => void) | null>(null);
 
     const fetchSubjects = async () => {
         try {
@@ -59,11 +76,24 @@ function PrincipalViewSubjects() {
 
             setSubjectsData(subjects.data.subjects);
             setTotalPages(subjects.data.totalPages);
-        }
-        catch (error) {
+        } catch (error) {
             console.log(error);
+            setSubjectsData([]);
+            setTotalPages(1);
         }
-    }
+    };
+
+    // Update the filter if navigation supplies a different class
+    // while this component is already mounted.
+    useEffect(() => {
+        if (
+            typeof selectedClassFromNavigation === "string" &&
+            selectedClassFromNavigation !== classFilter
+        ) {
+            setClassFilter(selectedClassFromNavigation);
+            setCurrentPage(1);
+        }
+    }, [selectedClassFromNavigation]);
 
     useEffect(() => {
         const timer = setTimeout(() => {
@@ -76,17 +106,6 @@ function PrincipalViewSubjects() {
     }, [search]);
 
     useEffect(() => {
-        fetchSubjects();
-    }, [
-        classFilter,
-        debouncedSearch,
-        sortBy,
-        orderBy,
-        currentPage,
-        limit
-    ]);
-
-    useEffect(() => {
         setCurrentPage(1);
     }, [
         classFilter,
@@ -96,7 +115,22 @@ function PrincipalViewSubjects() {
         limit
     ]);
 
-    const sortOptions = ["None", "Subject Name", "Class"];
+    useEffect(() => {
+        void fetchSubjects();
+    }, [
+        classFilter,
+        debouncedSearch,
+        sortBy,
+        orderBy,
+        currentPage,
+        limit
+    ]);
+
+    const sortOptions = [
+        "None",
+        "Subject Name",
+        "Class"
+    ];
 
     function handleAddSubject() {
         navigate("subjectForm?mode=add");
@@ -108,7 +142,9 @@ function PrincipalViewSubjects() {
 
     function handleDeleteSubject(id: string) {
         setModalTitle("Delete Subject");
-        setModalMessage("Are you sure you want to delete this subject?");
+        setModalMessage(
+            "Are you sure you want to delete this subject?"
+        );
         setModalConfirm(true);
         setModalAction(() => () => confirmDeleteSubject(id));
         setModalOpen(true);
@@ -132,7 +168,8 @@ function PrincipalViewSubjects() {
 
             setModalTitle("Error");
             setModalMessage(
-                error.response?.data?.message || "Failed to delete subject."
+                error.response?.data?.message ||
+                    "Failed to delete subject."
             );
             setModalConfirm(false);
             setModalAction(null);
@@ -143,7 +180,7 @@ function PrincipalViewSubjects() {
     const startIndex = (currentPage - 1) * limit;
 
     return (
-        <div className="flex flex-col min-h-screen font-fredoka">
+        <div className="flex min-h-screen flex-col font-fredoka">
             <NavBar />
 
             <div className="flex flex-1 bg-purple-100">
@@ -152,9 +189,8 @@ function PrincipalViewSubjects() {
                 <div>
                     <Breadcrumb />
 
-                    <div className="flex flex-col pt-12 pl-20 mb-10">
-
-                        <div className="flex justify-between items-center mb-4">
+                    <div className="mb-10 flex flex-col pl-20 pt-12">
+                        <div className="mb-4 flex items-center justify-between">
                             <div>
                                 <h1 className="text-3xl font-medium text-gray-900">
                                     School Subjects
@@ -168,15 +204,14 @@ function PrincipalViewSubjects() {
                             <button
                                 onClick={handleAddSubject}
                                 type="button"
-                                className="rounded-lg bg-purple-300 px-6 py-3 font-medium text-purple-950 shadow-[0_2px_3px] transition-colors hover:bg-violet-300 cursor-pointer"
+                                className="cursor-pointer rounded-lg bg-purple-300 px-6 py-3 font-medium text-purple-950 shadow-[0_2px_3px] transition-colors hover:bg-violet-300"
                             >
                                 Add Subject
                             </button>
                         </div>
 
-                        <div className="flex justify-between items-center mb-3">
-
-                            <div className="flex gap-8 mb-3">
+                        <div className="mb-3 flex items-center justify-between">
+                            <div className="mb-3 flex gap-8">
                                 <SortBy
                                     sortOptions={sortOptions}
                                     sortBy={sortBy}
@@ -201,7 +236,6 @@ function PrincipalViewSubjects() {
                                     setSearch={setSearch}
                                 />
                             </div>
-
                         </div>
 
                         <div className="flex flex-wrap gap-10">
@@ -213,8 +247,7 @@ function PrincipalViewSubjects() {
                             />
                         </div>
 
-                        <div className="flex justify-between mt-5 items-center">
-
+                        <div className="mt-5 flex items-center justify-between">
                             <div className="mt-1">
                                 <Pagination
                                     currentPage={currentPage}
@@ -227,9 +260,7 @@ function PrincipalViewSubjects() {
                                 setLimit={setLimit}
                                 limit={limit}
                             />
-
                         </div>
-
                     </div>
                 </div>
             </div>

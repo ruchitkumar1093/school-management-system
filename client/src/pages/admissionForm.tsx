@@ -1,31 +1,26 @@
 import logo from "../assets/logo.png";
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { createAdmission } from "../services/admissionApi";
 import Modal from "../components/modal";
 
 function AdmissionForm() {
-
     type FormData = {
         studentName: string;
         dateOfBirth: string;
         gender: string;
         classApplyingFor: string;
         previousClass: string;
-
         fatherName: string;
         motherName: string;
         phone: string;
         email: string;
-
         address: string;
         city: string;
         state: string;
         pinCode: string;
-
         bloodGroup: string;
         aadhaarNumber: string;
-
         academicYear: string;
     };
 
@@ -34,32 +29,66 @@ function AdmissionForm() {
     const [formData, setFormData] = useState<FormData>({
         studentName: "",
         dateOfBirth: "",
-        gender: "Select an option",
-        classApplyingFor: "Select an option",
+        gender: "",
+        classApplyingFor: "",
         previousClass: "",
-
         fatherName: "",
         motherName: "",
         phone: "",
         email: "",
-
         address: "",
         city: "",
         state: "",
         pinCode: "",
-
-        bloodGroup: "Select an option",
+        bloodGroup: "",
         aadhaarNumber: "",
-
-        academicYear: "2026-27"
+        academicYear: "2026-27",
     });
 
     const [modalOpen, setModalOpen] = useState(false);
     const [modalTitle, setModalTitle] = useState("");
     const [modalMessage, setModalMessage] = useState("");
+    const [errors, setErrors] = useState<Record<string, string>>({});
+    const [declaration, setDeclaration] = useState(false);
 
     const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
+
+        const newErrors: Record<string, string> = {};
+
+        const requiredFields: (keyof FormData)[] = [
+            "studentName",
+            "dateOfBirth",
+            "gender",
+            "classApplyingFor",
+            "previousClass",
+            "fatherName",
+            "motherName",
+            "phone",
+            "address",
+            "city",
+            "state",
+            "pinCode",
+            "bloodGroup",
+            "aadhaarNumber",
+            "academicYear",
+        ];
+
+        requiredFields.forEach((field) => {
+            if (!formData[field].trim()) {
+                newErrors[field] = "This field is required.";
+            }
+        });
+
+        if (!declaration) {
+            newErrors.declaration = "Please accept the declaration.";
+        }
+
+        setErrors(newErrors);
+
+        if (Object.keys(newErrors).length > 0) {
+            return;
+        }
 
         try {
             await createAdmission(formData);
@@ -67,13 +96,13 @@ function AdmissionForm() {
             setModalTitle("Success");
             setModalMessage("Applied Successfully");
             setModalOpen(true);
-        }
-        catch (error: any) {
+        } catch (error: any) {
             console.log(error);
 
             setModalTitle("Error");
             setModalMessage(
-                error.response?.data?.message || "Failed to submit Admission"
+                error.response?.data?.message ||
+                    "Failed to submit Admission"
             );
             setModalOpen(true);
         }
@@ -88,36 +117,48 @@ function AdmissionForm() {
     };
 
     const handleChange = (
-        e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
+        e: React.ChangeEvent<
+            HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement
+        >
     ) => {
-        setFormData({
-            ...formData,
-            [e.target.name]: e.target.value
-        });
+        const { name, value } = e.target;
+
+        setFormData((prev) => ({
+            ...prev,
+            [name]: value,
+        }));
+
+        if (value.trim()) {
+            setErrors((prev) => ({
+                ...prev,
+                [name]: "",
+            }));
+        }
     };
+
+    const renderError = (field: keyof FormData) =>
+        errors[field] ? (
+            <p className="text-xs text-red-600">{errors[field]}</p>
+        ) : null;
 
     return (
         <div className="flex flex-col min-h-screen font-fredoka bg-purple-100">
-
             <nav className="z-10 flex items-center justify-between bg-purple-300 px-8 py-4 shadow-sm">
-                <div className="flex items-center gap-3">
-                    <img
-                        src={logo}
-                        alt="school logo"
-                        className="h-10 w-auto"
-                    />
-
-                    <h1 className="text-3xl font-medium text-gray-900">
-                        GPS
-                    </h1>
-                </div>
+                <Link to="/" className="flex cursor-pointer items-center">
+                    <div className="flex items-center gap-3">
+                        <img
+                            src={logo}
+                            alt="school logo"
+                            className="h-10 w-auto"
+                        />
+                        <h1 className="text-3xl font-medium text-gray-900">
+                            GPS
+                        </h1>
+                    </div>
+                </Link>
 
                 <button
-                    className="rounded-lg bg-purple-800 px-5 py-2.5 font-medium text-white
-            shadow-[0_2px_1px_rgba(0,0,0,0.15)]
-            transition-all duration-200
-            hover:bg-purple-900
-            cursor-pointer"
+                    className="rounded-lg bg-purple-800 px-5 py-2.5 font-medium text-white shadow-[0_2px_1px_rgba(0,0,0,0.15)] transition-all duration-200 hover:bg-purple-900 cursor-pointer"
                     type="button"
                     onClick={() => navigate("/login")}
                 >
@@ -126,107 +167,93 @@ function AdmissionForm() {
             </nav>
 
             <div className="flex justify-center py-12 px-5">
-                <form onSubmit={handleSubmit}
-                    className="w-full max-w-4xl bg-white rounded-xl shadow-lg p-10 flex flex-col gap-10">
-
+                <form
+                    noValidate
+                    onSubmit={handleSubmit}
+                    className="w-full max-w-4xl bg-white rounded-xl shadow-lg p-10 flex flex-col gap-10"
+                >
                     <div className="text-center">
-                        <h1 className="text-4xl mb-2">Student Admission Form
+                        <h1 className="text-4xl mb-2">
+                            Student Admission Form
                         </h1>
-
                         <p className="text-gray-600">
-                            Please provide the required information to apply for admission.
+                            Please provide the required information to apply
+                            for admission.
                         </p>
                     </div>
 
+                    {/* Student Details */}
                     <div className="flex flex-col gap-6">
-
-                        <h2 className="text-2xl border-b-2 border-purple-200 pb-2">Student Details
+                        <h2 className="text-2xl border-b-2 border-purple-200 pb-2">
+                            Student Details
                         </h2>
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-
                             <div className="flex flex-col gap-2">
                                 <label htmlFor="studentName">Student Name:</label>
-
                                 <input
                                     required
                                     value={formData.studentName}
                                     onChange={handleChange}
-                                    className="border-2 border-gray-500 rounded-sm p-2
-                                    focus:outline-none focus:border-gray-900
-                                    transition-colors duration-300 ease-in-out"
+                                    className="border-2 border-gray-500 rounded-sm p-2 focus:outline-none focus:border-gray-900 transition-colors duration-300 ease-in-out"
                                     type="text"
                                     id="studentName"
                                     name="studentName"
                                     placeholder="Enter Student Name"
                                 />
+                                {renderError("studentName")}
                             </div>
 
                             <div className="flex flex-col gap-2">
                                 <label htmlFor="dateOfBirth">Date of Birth:</label>
-
                                 <input
-                                    max={new Date().toISOString().split("T")[0]}
                                     required
+                                    max={new Date().toISOString().split("T")[0]}
                                     value={formData.dateOfBirth}
                                     onChange={handleChange}
-                                    className="border-2 border-gray-500 rounded-sm p-2
-                                    focus:outline-none focus:border-gray-900
-                                    transition-colors duration-300 ease-in-out"
+                                    className="border-2 border-gray-500 rounded-sm p-2 focus:outline-none focus:border-gray-900 transition-colors duration-300 ease-in-out"
                                     type="date"
                                     id="dateOfBirth"
                                     name="dateOfBirth"
                                 />
+                                {renderError("dateOfBirth")}
                             </div>
 
                             <div className="flex flex-col gap-2">
                                 <label htmlFor="gender">Gender:</label>
-
                                 <select
                                     required
                                     value={formData.gender}
                                     onChange={handleChange}
-                                    className="border-2 border-gray-500 rounded-sm p-2
-                                    focus:outline-none focus:border-gray-900
-                                    transition-colors duration-300 ease-in-out"
+                                    className="border-2 border-gray-500 rounded-sm p-2 focus:outline-none focus:border-gray-900 transition-colors duration-300 ease-in-out"
                                     id="gender"
                                     name="gender"
                                 >
-                                    <option value="Select an option" disabled>
+                                    <option value="" disabled>
                                         Select an option
                                     </option>
-
-                                    <option value="Male">
-                                        Male
-                                    </option>
-
-                                    <option value="Female">
-                                        Female
-                                    </option>
-
-                                    <option value="Other">
-                                        Other
-                                    </option>
+                                    <option value="Male">Male</option>
+                                    <option value="Female">Female</option>
+                                    <option value="Other">Other</option>
                                 </select>
+                                {renderError("gender")}
                             </div>
 
                             <div className="flex flex-col gap-2">
-                                <label htmlFor="classApplyingFor">Class Applying For:</label>
-
+                                <label htmlFor="classApplyingFor">
+                                    Class Applying For:
+                                </label>
                                 <select
                                     required
                                     value={formData.classApplyingFor}
                                     onChange={handleChange}
-                                    className="border-2 border-gray-500 rounded-sm p-2
-                                    focus:outline-none focus:border-gray-900
-                                    transition-colors duration-300 ease-in-out"
+                                    className="border-2 border-gray-500 rounded-sm p-2 focus:outline-none focus:border-gray-900 transition-colors duration-300 ease-in-out"
                                     id="classApplyingFor"
                                     name="classApplyingFor"
                                 >
-                                    <option value="Select an option" disabled>
+                                    <option value="" disabled>
                                         Select an option
                                     </option>
-
                                     <option value="1st">1st</option>
                                     <option value="2nd">2nd</option>
                                     <option value="3rd">3rd</option>
@@ -240,24 +267,24 @@ function AdmissionForm() {
                                     <option value="11th">11th</option>
                                     <option value="12th">12th</option>
                                 </select>
+                                {renderError("classApplyingFor")}
                             </div>
 
                             <div className="flex flex-col gap-2">
-                                <label htmlFor="previousClass">Previous Class: </label>
-
+                                <label htmlFor="previousClass">
+                                    Previous Class:
+                                </label>
                                 <select
+                                    required
                                     value={formData.previousClass}
                                     onChange={handleChange}
-                                    className="border-2 border-gray-500 rounded-sm p-2
-                                    focus:outline-none focus:border-gray-900
-                                    transition-colors duration-300 ease-in-out"
+                                    className="border-2 border-gray-500 rounded-sm p-2 focus:outline-none focus:border-gray-900 transition-colors duration-300 ease-in-out"
                                     id="previousClass"
                                     name="previousClass"
                                 >
-                                    <option value="">
+                                    <option value="" disabled>
                                         Select Previous Class
                                     </option>
-
                                     <option value="1st">1st</option>
                                     <option value="2nd">2nd</option>
                                     <option value="3rd">3rd</option>
@@ -271,143 +298,168 @@ function AdmissionForm() {
                                     <option value="11th">11th</option>
                                     <option value="12th">12th</option>
                                 </select>
+                                {renderError("previousClass")}
                             </div>
-
                         </div>
                     </div>
 
+                    {/* Parent / Guardian Details */}
                     <div className="flex flex-col gap-6">
-
-                        <h2 className="text-2xl border-b-2 border-purple-200 pb-2">Parent / Guardian Details
+                        <h2 className="text-2xl border-b-2 border-purple-200 pb-2">
+                            Parent / Guardian Details
                         </h2>
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-
                             <div className="flex flex-col gap-2">
-                                <label htmlFor="fatherName">Father's Name: </label>
-
+                                <label htmlFor="fatherName">Father's Name:</label>
                                 <input
-                                    required value={formData.fatherName}
-                                    onChange={handleChange} className="border-2 border-gray-500 rounded-sm p-2
-                                    focus:outline-none focus:border-gray-900
-                                    transition-colors duration-300 ease-in-out"
-                                    type="text" id="fatherName"
-                                    name="fatherName" placeholder="Enter Father's Name"
+                                    required
+                                    value={formData.fatherName}
+                                    onChange={handleChange}
+                                    className="border-2 border-gray-500 rounded-sm p-2 focus:outline-none focus:border-gray-900 transition-colors duration-300 ease-in-out"
+                                    type="text"
+                                    id="fatherName"
+                                    name="fatherName"
+                                    placeholder="Enter Father's Name"
                                 />
+                                {renderError("fatherName")}
                             </div>
 
                             <div className="flex flex-col gap-2">
-                                <label htmlFor="motherName"> Mother's Name: </label>
-
+                                <label htmlFor="motherName">Mother's Name:</label>
                                 <input
-                                    required value={formData.motherName}
-                                    onChange={handleChange} className="border-2 border-gray-500 rounded-sm p-2
-                                    focus:outline-none focus:border-gray-900
-                                    transition-colors duration-300 ease-in-out"
-                                    type="text" id="motherName"
-                                    name="motherName" placeholder="Enter Mother's Name"
+                                    required
+                                    value={formData.motherName}
+                                    onChange={handleChange}
+                                    className="border-2 border-gray-500 rounded-sm p-2 focus:outline-none focus:border-gray-900 transition-colors duration-300 ease-in-out"
+                                    type="text"
+                                    id="motherName"
+                                    name="motherName"
+                                    placeholder="Enter Mother's Name"
                                 />
+                                {renderError("motherName")}
                             </div>
 
                             <div className="flex flex-col gap-2">
-                                <label htmlFor="phone"> Parent / Guardian Phone: </label>
-
+                                <label htmlFor="phone">Parent / Guardian Phone:</label>
                                 <input
-                                    required value={formData.phone} onChange={handleChange}
-                                    className="border-2 border-gray-500 rounded-sm p-2
-                                    focus:outline-none focus:border-gray-900
-                                    transition-colors duration-300 ease-in-out"
-                                    type="tel" id="phone" name="phone" placeholder="Enter Phone Number"
+                                    required
+                                    value={formData.phone}
+                                    onChange={handleChange}
+                                    className="border-2 border-gray-500 rounded-sm p-2 focus:outline-none focus:border-gray-900 transition-colors duration-300 ease-in-out"
+                                    type="tel"
+                                    id="phone"
+                                    name="phone"
+                                    placeholder="Enter Phone Number"
                                 />
+                                {renderError("phone")}
                             </div>
 
                             <div className="flex flex-col gap-2">
-                                <label htmlFor="email"> Email Address: </label>
-
+                                <label htmlFor="email">Email Address:</label>
                                 <input
-                                    value={formData.email} onChange={handleChange}
-                                    className="border-2 border-gray-500 rounded-sm p-2
-                                    focus:outline-none focus:border-gray-900
-                                    transition-colors duration-300 ease-in-out"
-                                    type="email" id="email" name="email" placeholder="Enter Email Address"
+                                    value={formData.email}
+                                    onChange={handleChange}
+                                    className="border-2 border-gray-500 rounded-sm p-2 focus:outline-none focus:border-gray-900 transition-colors duration-300 ease-in-out"
+                                    type="email"
+                                    id="email"
+                                    name="email"
+                                    placeholder="Enter Email Address"
                                 />
                             </div>
                         </div>
                     </div>
 
+                    {/* Address Details */}
                     <div className="flex flex-col gap-6">
-                        <h2 className="text-2xl border-b-2 border-purple-200 pb-2"> Address Details </h2>
+                        <h2 className="text-2xl border-b-2 border-purple-200 pb-2">
+                            Address Details
+                        </h2>
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <div className="flex flex-col gap-2 md:col-span-2">
-                                <label htmlFor="address"> Address: </label>
+                                <label htmlFor="address">Address:</label>
                                 <textarea
-                                    required value={formData.address} onChange={handleChange}
-                                    className="border-2 border-gray-500 rounded-sm p-2
-                                    focus:outline-none focus:border-gray-900
-                                    transition-colors duration-300 ease-in-out resize-none"
-                                    id="address" name="address"
-                                    placeholder="Enter Address" rows={3}
+                                    required
+                                    value={formData.address}
+                                    onChange={handleChange}
+                                    className="border-2 border-gray-500 rounded-sm p-2 focus:outline-none focus:border-gray-900 transition-colors duration-300 ease-in-out resize-none"
+                                    id="address"
+                                    name="address"
+                                    placeholder="Enter Address"
+                                    rows={3}
                                 />
+                                {renderError("address")}
                             </div>
 
                             <div className="flex flex-col gap-2">
-                                <label htmlFor="city"> City: </label>
-
+                                <label htmlFor="city">City:</label>
                                 <input
-                                    required value={formData.city}
-                                    onChange={handleChange} className="border-2 border-gray-500 rounded-sm p-2
-                                    focus:outline-none focus:border-gray-900
-                                    transition-colors duration-300 ease-in-out"
-                                    type="text" id="city" name="city" placeholder="Enter City"
+                                    required
+                                    value={formData.city}
+                                    onChange={handleChange}
+                                    className="border-2 border-gray-500 rounded-sm p-2 focus:outline-none focus:border-gray-900 transition-colors duration-300 ease-in-out"
+                                    type="text"
+                                    id="city"
+                                    name="city"
+                                    placeholder="Enter City"
                                 />
+                                {renderError("city")}
                             </div>
 
                             <div className="flex flex-col gap-2">
-                                <label htmlFor="state"> State: </label>
-
+                                <label htmlFor="state">State:</label>
                                 <input
-                                    required value={formData.state} onChange={handleChange}
-                                    className="border-2 border-gray-500 rounded-sm p-2
-                                    focus:outline-none focus:border-gray-900
-                                    transition-colors duration-300 ease-in-out" type="text"
-                                    id="state" name="state" placeholder="Enter State" />
+                                    required
+                                    value={formData.state}
+                                    onChange={handleChange}
+                                    className="border-2 border-gray-500 rounded-sm p-2 focus:outline-none focus:border-gray-900 transition-colors duration-300 ease-in-out"
+                                    type="text"
+                                    id="state"
+                                    name="state"
+                                    placeholder="Enter State"
+                                />
+                                {renderError("state")}
                             </div>
 
                             <div className="flex flex-col gap-2">
-                                <label htmlFor="pinCode"> PIN Code: </label>
-
+                                <label htmlFor="pinCode">PIN Code:</label>
                                 <input
-                                    required value={formData.pinCode} onChange={handleChange}
-                                    className="border-2 border-gray-500 rounded-sm p-2
-                                    focus:outline-none focus:border-gray-900
-                                    transition-colors duration-300 ease-in-out"
-                                    type="text" id="pinCode" name="pinCode"
-                                    placeholder="Enter PIN Code" maxLength={6} />
+                                    required
+                                    value={formData.pinCode}
+                                    onChange={handleChange}
+                                    className="border-2 border-gray-500 rounded-sm p-2 focus:outline-none focus:border-gray-900 transition-colors duration-300 ease-in-out"
+                                    type="text"
+                                    id="pinCode"
+                                    name="pinCode"
+                                    placeholder="Enter PIN Code"
+                                    maxLength={6}
+                                />
+                                {renderError("pinCode")}
                             </div>
-
                         </div>
                     </div>
 
+                    {/* Additional Information */}
                     <div className="flex flex-col gap-6">
-
-                        <h2 className="text-2xl border-b-2 border-purple-200 pb-2"> Additional Information </h2>
+                        <h2 className="text-2xl border-b-2 border-purple-200 pb-2">
+                            Additional Information
+                        </h2>
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-
                             <div className="flex flex-col gap-2">
-                                <label htmlFor="bloodGroup"> Blood Group: </label>
-
+                                <label htmlFor="bloodGroup">Blood Group:</label>
                                 <select
-                                    value={formData.bloodGroup} onChange={handleChange}
-                                    className="border-2 border-gray-500 rounded-sm p-2
-                                    focus:outline-none focus:border-gray-900
-                                    transition-colors duration-300 ease-in-out" id="bloodGroup"
-                                    name="bloodGroup" >
-                                    <option value="Select an option">
+                                    required
+                                    value={formData.bloodGroup}
+                                    onChange={handleChange}
+                                    className="border-2 border-gray-500 rounded-sm p-2 focus:outline-none focus:border-gray-900 transition-colors duration-300 ease-in-out"
+                                    id="bloodGroup"
+                                    name="bloodGroup"
+                                >
+                                    <option value="" disabled>
                                         Select an option
                                     </option>
-
                                     <option value="A+">A+</option>
                                     <option value="A-">A-</option>
                                     <option value="B+">B+</option>
@@ -417,81 +469,97 @@ function AdmissionForm() {
                                     <option value="O+">O+</option>
                                     <option value="O-">O-</option>
                                 </select>
+                                {renderError("bloodGroup")}
                             </div>
 
                             <div className="flex flex-col gap-2">
-                                <label htmlFor="aadhaarNumber">
-                                    Aadhaar Number:</label>
+                                <label htmlFor="aadhaarNumber">Aadhaar Number:</label>
                                 <input
+                                    required
                                     value={formData.aadhaarNumber}
                                     onChange={handleChange}
-                                    className="border-2 border-gray-500 rounded-sm p-2 focus:outline-none focus:border-gray-900
-                                    transition-colors duration-300 ease-in-out" type="text"
-                                    id="aadhaarNumber" name="aadhaarNumber" placeholder="Enter Aadhaar Number" maxLength={12}
+                                    className="border-2 border-gray-500 rounded-sm p-2 focus:outline-none focus:border-gray-900 transition-colors duration-300 ease-in-out"
+                                    type="text"
+                                    id="aadhaarNumber"
+                                    name="aadhaarNumber"
+                                    placeholder="Enter Aadhaar Number"
+                                    maxLength={12}
                                 />
+                                {renderError("aadhaarNumber")}
                             </div>
 
                             <div className="flex flex-col gap-2">
-                                <label htmlFor="academicYear">
-                                    Academic Year:
-                                </label>
-
+                                <label htmlFor="academicYear">Academic Year:</label>
                                 <select
                                     required
                                     value={formData.academicYear}
                                     onChange={handleChange}
-                                    className="border-2 border-gray-500 rounded-sm p-2
-                                    focus:outline-none focus:border-gray-900
-                                    transition-colors duration-300 ease-in-out"
+                                    className="border-2 border-gray-500 rounded-sm p-2 focus:outline-none focus:border-gray-900 transition-colors duration-300 ease-in-out"
                                     id="academicYear"
                                     name="academicYear"
                                 >
-                                    <option value="2026-27">
-                                        2026-27
-                                    </option>
-
-                                    <option value="2027-28">
-                                        2027-28
-                                    </option>
-
-                                    <option value="2028-29">
-                                        2028-29
-                                    </option>
+                                    <option value="2026-27">2026-27</option>
+                                    <option value="2027-28">2027-28</option>
+                                    <option value="2028-29">2028-29</option>
                                 </select>
+                                {renderError("academicYear")}
                             </div>
                         </div>
                     </div>
 
+                    {/* Declaration */}
                     <div className="flex flex-col gap-4">
-
                         <h2 className="text-2xl border-b-2 border-purple-200 pb-2">
                             Declaration
                         </h2>
 
                         <label className="flex items-start gap-3 cursor-pointer">
-
                             <input
                                 required
                                 type="checkbox"
-                                className="mt-1 w-4 h-4 cursor-pointer" />
+                                checked={declaration}
+                                onChange={(e) => {
+                                    const checked = e.target.checked;
+                                    setDeclaration(checked);
 
-                            <span>I confirm that the information provided in this
+                                    if (checked) {
+                                        setErrors((prev) => ({
+                                            ...prev,
+                                            declaration: "",
+                                        }));
+                                    }
+                                }}
+                                className="mt-1 w-4 h-4 cursor-pointer"
+                            />
+                            <span>
+                                I confirm that the information provided in this
                                 application is correct and complete to the best
-                                of my knowledge.</span>
+                                of my knowledge.
+                            </span>
                         </label>
+
+                        {errors.declaration && (
+                            <p className="text-xs text-red-600">
+                                {errors.declaration}
+                            </p>
+                        )}
                     </div>
 
                     <div className="flex justify-center gap-5 pt-3">
                         <button
                             type="submit"
                             className="rounded-lg bg-purple-300 px-6 py-3 font-medium text-purple-950 shadow-[0_2px_3px] transition-colors hover:bg-violet-300 cursor-pointer"
-                        >Submit Admission Application</button>
+                        >
+                            Submit Admission Application
+                        </button>
 
                         <button
                             onClick={() => navigate("/")}
                             type="button"
                             className="rounded-lg bg-purple-300 px-6 py-3 font-medium text-purple-950 shadow-[0_2px_3px] transition-colors hover:bg-violet-300 cursor-pointer"
-                        >Cancel</button>
+                        >
+                            Cancel
+                        </button>
                     </div>
                 </form>
             </div>
