@@ -37,6 +37,12 @@ type FormData = {
     totalMarks: string;
 };
 
+const examMaxMarks: Record<string, number> = {
+    "class test": 40,
+    "mid term": 80,
+    "final": 100
+};
+
 function MarksForm() {
     const [searchParams] = useSearchParams();
     const mode = searchParams.get("mode");
@@ -47,6 +53,7 @@ function MarksForm() {
 
     const [students, setStudents] = useState<Student[]>([]);
     const [teacherSubjects, setTeacherSubjects] = useState<TeacherSubject[]>([]);
+    const [selectedStudentClass, setSelectedStudentClass] = useState("");
     const [loadingStudents, setLoadingStudents] = useState(false);
     const [loadingSubjects, setLoadingSubjects] = useState(true);
 
@@ -62,7 +69,32 @@ function MarksForm() {
     const [modalTitle, setModalTitle] = useState("");
     const [modalMessage, setModalMessage] = useState("");
 
-    // Fetch only subjects assigned to the logged-in teacher.
+    const currentStudentClass = isAdding
+        ? students.find(student => student._id === formData.studentId)?.class ?? ""
+        : selectedStudentClass;
+
+    const availableSubjects = teacherSubjects.filter(
+        subject => subject.class === currentStudentClass
+    );
+
+    // Automatically synchronize maximum marks with the exam type.
+    useEffect(() => {
+        const maxMarks = examMaxMarks[formData.exam];
+
+        if (maxMarks === undefined) return;
+
+        setFormData(previous => ({
+            ...previous,
+            totalMarks: String(maxMarks),
+            marksObtained:
+                previous.marksObtained !== "" &&
+                    Number(previous.marksObtained) > maxMarks
+                    ? ""
+                    : previous.marksObtained
+        }));
+    }, [formData.exam]);
+
+    // Fetch subjects assigned to the logged-in teacher.
     useEffect(() => {
         let cancelled = false;
 
@@ -74,16 +106,10 @@ function MarksForm() {
 
                 if (cancelled) return;
 
-                const subjects: TeacherSubject[] = response.data.subjects;
-                setTeacherSubjects(subjects);
+                const subjects: TeacherSubject[] =
+                    response.data.subjects ?? [];
 
-                // Select the teacher's assigned subject by default.
-                if (isAdding && subjects.length > 0) {
-                    setFormData(previous => ({
-                        ...previous,
-                        subjectName: subjects[0].name
-                    }));
-                }
+                setTeacherSubjects(subjects);
             } catch (error) {
                 if (!cancelled) {
                     console.error("Failed to fetch assigned subjects:", error);
@@ -101,10 +127,9 @@ function MarksForm() {
         return () => {
             cancelled = true;
         };
-    }, [isAdding]);
+    }, []);
 
     // Fetch students only when adding marks.
-    // The API returns students from the teacher's assigned class.
     useEffect(() => {
         if (!isAdding) return;
 
@@ -119,12 +144,14 @@ function MarksForm() {
                     "",
                     "asc",
                     1,
-                    1000
+                    1000,
+                    false,
+                    "All"
                 );
 
                 if (cancelled) return;
 
-                setStudents(response.data.students);
+                setStudents(response.data.students ?? []);
             } catch (error) {
                 if (!cancelled) {
                     console.error("Failed to fetch students:", error);
@@ -144,7 +171,7 @@ function MarksForm() {
         };
     }, [isAdding]);
 
-    // Fetch existing mark details only when editing.
+    // Fetch the existing mark when editing.
     useEffect(() => {
         if (isAdding || !id) return;
 
@@ -157,13 +184,19 @@ function MarksForm() {
                 if (cancelled) return;
 
                 const mark = response.data;
+                const studentClass = mark.studentId?.class ?? "";
+                const exam = mark.exam ?? "";
+
+                setSelectedStudentClass(studentClass);
 
                 setFormData({
                     studentId: mark.studentId?._id ?? "",
                     subjectName: mark.subjectId?.name ?? "",
-                    exam: mark.exam ?? "",
+                    exam,
                     marksObtained: String(mark.marksObtained ?? ""),
-                    totalMarks: String(mark.totalMarks ?? "")
+                    totalMarks: String(
+                        examMaxMarks[exam] ?? mark.totalMarks ?? ""
+                    )
                 });
             } catch (error) {
                 if (!cancelled) {
@@ -179,6 +212,65 @@ function MarksForm() {
         };
     }, [id, isAdding]);
 
+    // Clear an invalid subject when the student's class changes.
+    useEffect(() => {
+        if (loadingSubjects || !currentStudentClass) return;
+
+        const subjectIsAvailable = availableSubjects.some(
+            subject => subject.name === formData.subjectName
+        );
+
+        if (formData.subjectName && !subjectIsAvailable) {
+            setFormData(previous => ({
+                ...previous,
+                subjectName: ""
+            }));
+        }
+    }, [
+        currentStudentClass,
+        loadingSubjects,
+        teacherSubjects,
+        formData.subjectName
+    ]);
+
+    const handleStudentChange = (studentId: string) => {
+        const newStudent = students.find(
+            student => student._id === studentId
+        );
+
+        const newClass = newStudent?.class ?? "";
+
+        const currentSubjectIsAvailable = teacherSubjects.some(
+            subject =>
+                subject.class === newClass &&
+                subject.name === formData.subjectName
+        );
+
+        setFormData(previous => ({
+            ...previous,
+            studentId,
+            subjectName: currentSubjectIsAvailable
+                ? previous.subjectName
+                : ""
+        }));
+    };
+
+    const handleExamChange = (exam: string) => {
+        const maxMarks = examMaxMarks[exam];
+
+        setFormData(previous => ({
+            ...previous,
+            exam,
+            totalMarks: maxMarks === undefined ? "" : String(maxMarks),
+            marksObtained:
+                maxMarks !== undefined &&
+                    previous.marksObtained !== "" &&
+                    Number(previous.marksObtained) > maxMarks
+                    ? ""
+                    : previous.marksObtained
+        }));
+    };
+
     const handleSubmit = async (
         e: React.FormEvent<HTMLFormElement>
     ) => {
@@ -192,34 +284,76 @@ function MarksForm() {
                 return;
             }
 
-            // Prevent selecting a subject outside the teacher's assignment.
-            if (
-                !teacherSubjects.some(
-                    subject => subject.name === formData.subjectName
-                )
-            ) {
+            if (isAdding && !formData.studentId) {
                 setModalTitle("Validation Error");
-                setModalMessage("Please select one of your assigned subjects.");
+                setModalMessage("Please select a student.");
                 setModalOpen(true);
                 return;
             }
 
-            if (isAdding) {
-                if (!formData.studentId) {
-                    setModalTitle("Validation Error");
-                    setModalMessage("Please select a student.");
-                    setModalOpen(true);
-                    return;
-                }
+            if (!currentStudentClass) {
+                setModalTitle("Validation Error");
+                setModalMessage(
+                    "Unable to determine the student's class. Please check the student details."
+                );
+                setModalOpen(true);
+                return;
+            }
 
-                await addMark(formData);
+            const validSubject = teacherSubjects.some(
+                subject =>
+                    subject.name === formData.subjectName &&
+                    subject.class === currentStudentClass
+            );
+
+            if (!validSubject) {
+                setModalTitle("Validation Error");
+                setModalMessage(
+                    "Please select a subject assigned to you for this student's class."
+                );
+                setModalOpen(true);
+                return;
+            }
+
+            const maxMarks = examMaxMarks[formData.exam];
+            const obtainedMarks = Number(formData.marksObtained);
+
+            if (maxMarks === undefined) {
+                setModalTitle("Validation Error");
+                setModalMessage("Please select a valid exam type.");
+                setModalOpen(true);
+                return;
+            }
+
+            if (
+                formData.marksObtained.trim() === "" ||
+                !Number.isFinite(obtainedMarks) ||
+                obtainedMarks < 0 ||
+                obtainedMarks > maxMarks
+            ) {
+                setModalTitle("Validation Error");
+                setModalMessage(
+                    `Marks obtained must be between 0 and ${maxMarks}.`
+                );
+                setModalOpen(true);
+                return;
+            }
+
+            // Always send the correct maximum for the selected exam.
+            const payload = {
+                ...formData,
+                totalMarks: String(maxMarks)
+            };
+
+            if (isAdding) {
+                await addMark(payload);
 
                 setModalTitle("Success");
                 setModalMessage("Marks Added");
             } else {
                 if (!id) return;
 
-                await updateMark(id, formData);
+                await updateMark(id, payload);
 
                 setModalTitle("Success");
                 setModalMessage("Marks Updated");
@@ -233,6 +367,7 @@ function MarksForm() {
             setModalMessage(
                 error.response?.data?.message || "Failed to save marks."
             );
+
             setModalOpen(true);
         }
     };
@@ -265,7 +400,6 @@ function MarksForm() {
                         onSubmit={handleSubmit}
                         className="flex flex-col gap-7 p-15"
                     >
-                        {/* Student appears only when adding marks. */}
                         {isAdding && (
                             <div className="flex flex-col gap-2">
                                 <label htmlFor="student">Student:</label>
@@ -276,10 +410,7 @@ function MarksForm() {
                                     value={formData.studentId}
                                     disabled={loadingStudents}
                                     onChange={e =>
-                                        setFormData(previous => ({
-                                            ...previous,
-                                            studentId: e.target.value
-                                        }))
+                                        handleStudentChange(e.target.value)
                                     }
                                     className={`${inputClass} disabled:cursor-not-allowed disabled:bg-gray-200`}
                                 >
@@ -295,16 +426,26 @@ function MarksForm() {
                                             value={student._id}
                                         >
                                             {student.userId.name} -{" "}
-                                            {student.userId.uid.toUpperCase()}
+                                            {student.userId.uid.toUpperCase()}{" "}
+                                            — Class {student.class}
                                         </option>
                                     ))}
                                 </select>
 
                                 {!loadingStudents && students.length === 0 && (
                                     <p className="text-sm text-gray-600">
-                                        No students found in your assigned class.
+                                        No students found in your assigned classes.
                                     </p>
                                 )}
+                            </div>
+                        )}
+
+                        {!isAdding && selectedStudentClass && (
+                            <div className="flex flex-col gap-2">
+                                <label>Student's Class:</label>
+                                <p className="text-gray-700">
+                                    Class {selectedStudentClass}
+                                </p>
                             </div>
                         )}
 
@@ -316,7 +457,8 @@ function MarksForm() {
                                 required
                                 disabled={
                                     loadingSubjects ||
-                                    teacherSubjects.length === 0
+                                    !currentStudentClass ||
+                                    availableSubjects.length === 0
                                 }
                                 value={formData.subjectName}
                                 onChange={e =>
@@ -330,17 +472,19 @@ function MarksForm() {
                                 <option value="" disabled>
                                     {loadingSubjects
                                         ? "Loading assigned subjects..."
-                                        : teacherSubjects.length === 0
-                                            ? "No assigned subjects available"
-                                            : "Select a subject"}
+                                        : !currentStudentClass
+                                            ? "Select a student first"
+                                            : availableSubjects.length === 0
+                                                ? "No assigned subjects for this class"
+                                                : "Select a subject"}
                                 </option>
 
-                                {teacherSubjects.map(subject => (
+                                {availableSubjects.map(subject => (
                                     <option
-                                        key={subject._id}
+                                        key={`${subject._id}-${subject.class}`}
                                         value={subject.name}
                                     >
-                                        {subject.name}
+                                        {subject.name} — Class {subject.class}
                                     </option>
                                 ))}
                             </select>
@@ -354,10 +498,7 @@ function MarksForm() {
                                 required
                                 value={formData.exam}
                                 onChange={e =>
-                                    setFormData(previous => ({
-                                        ...previous,
-                                        exam: e.target.value
-                                    }))
+                                    handleExamChange(e.target.value)
                                 }
                                 className={inputClass}
                             >
@@ -379,6 +520,10 @@ function MarksForm() {
                                 type="number"
                                 required
                                 min="0"
+                                max={
+                                    examMaxMarks[formData.exam] ?? undefined
+                                }
+                                step="1"
                                 value={formData.marksObtained}
                                 onChange={e =>
                                     setFormData(previous => ({
@@ -398,17 +543,12 @@ function MarksForm() {
                                 id="max"
                                 name="max"
                                 type="number"
+                                readOnly
                                 required
                                 min="1"
                                 value={formData.totalMarks}
-                                onChange={e =>
-                                    setFormData(previous => ({
-                                        ...previous,
-                                        totalMarks: e.target.value
-                                    }))
-                                }
-                                className={inputClass}
-                                placeholder="Enter Max Marks"
+                                className={`${inputClass} cursor-not-allowed bg-gray-200`}
+                                placeholder="Select an exam first"
                             />
                         </div>
 

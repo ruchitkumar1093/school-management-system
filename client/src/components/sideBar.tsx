@@ -66,7 +66,7 @@ function SideBar() {
                     icon: BookOpen
                 },
                 {
-                    label: "Student Marks",
+                    label: "Marks & Results",
                     path: "/principal/viewMarks",
                     icon: GraduationCap
                 },
@@ -106,7 +106,7 @@ function SideBar() {
                     icon: CalendarClock
                 },
                 {
-                    label: "Admission Requests",
+                    label: "Admissions",
                     path: "/principal/admissionRequests",
                     icon: UserRoundPlus
                 },
@@ -116,7 +116,7 @@ function SideBar() {
                     icon: CalendarDays
                 },
                 {
-                    label: "Leaves",
+                    label: "Leaves Management",
                     path: "/principal/viewLeaves",
                     icon: CalendarClock
                 }
@@ -143,12 +143,12 @@ function SideBar() {
                     icon: Users
                 },
                 {
-                    label: "Class Subjects",
+                    label: "Subjects Assigned",
                     path: "/teacher/viewSubjects",
                     icon: BookOpen
                 },
                 {
-                    label: "My Student Marks",
+                    label: "Marks & Results",
                     path: "/teacher/viewMarks",
                     icon: GraduationCap
                 },
@@ -210,7 +210,7 @@ function SideBar() {
                     icon: BookOpen
                 },
                 {
-                    label: "My Marks",
+                    label: "Marks & Results",
                     path: "/student/viewMarks",
                     icon: GraduationCap
                 }
@@ -220,7 +220,7 @@ function SideBar() {
             title: "Attendance & Leave",
             links: [
                 {
-                    label: "Attendance",
+                    label: "My Attendance",
                     path: "/student/attendance",
                     icon: ClipboardCheck
                 },
@@ -266,7 +266,7 @@ function SideBar() {
                                 const Icon = link.icon;
 
                                 const isAdmissions =
-                                    link.label === "Admission Requests";
+                                    link.path === "/principal/admissionRequests";
 
                                 return (
                                     <NavLink
@@ -278,10 +278,9 @@ function SideBar() {
                                             link.path === "/student"
                                         }
                                         className={({ isActive }) =>
-                                            `group relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition-colors duration-150 ${
-                                                isActive
-                                                    ? "bg-purple-300 font-semibold text-purple-950 shadow-sm"
-                                                    : "text-purple-950/80 hover:bg-purple-300/60 hover:text-purple-950"
+                                            `group relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition-colors duration-150 ${isActive
+                                                ? "bg-purple-300 font-semibold text-purple-950 shadow-sm"
+                                                : "text-purple-950/80 hover:bg-purple-300/60 hover:text-purple-950"
                                             }`
                                         }
                                     >
@@ -296,11 +295,10 @@ function SideBar() {
                                                     strokeWidth={
                                                         isActive ? 2.3 : 1.8
                                                     }
-                                                    className={`shrink-0 ${
-                                                        isActive
-                                                            ? "text-purple-800"
-                                                            : "text-purple-800/75 group-hover:text-purple-900"
-                                                    }`}
+                                                    className={`shrink-0 ${isActive
+                                                        ? "text-purple-800"
+                                                        : "text-purple-800/75 group-hover:text-purple-900"
+                                                        }`}
                                                 />
 
                                                 <span className="flex-1">
@@ -316,11 +314,10 @@ function SideBar() {
 
                                                 <ChevronRight
                                                     size={15}
-                                                    className={`shrink-0 transition-opacity ${
-                                                        isActive
-                                                            ? "opacity-70"
-                                                            : "opacity-0 group-hover:opacity-50"
-                                                    }`}
+                                                    className={`shrink-0 transition-opacity ${isActive
+                                                        ? "opacity-70"
+                                                        : "opacity-0 group-hover:opacity-50"
+                                                        }`}
                                                 />
                                             </>
                                         )}

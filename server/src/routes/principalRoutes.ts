@@ -14,7 +14,8 @@ import {
     deleteTeachers, deleteStudents, getStudentAttendanceDetails, getStudentMonthlyAttendance,
     getTeachersForAttendance, createTeacherAttendance, getTeacherAttendance, getTeacherAttendanceDetails,
     getTeacherMonthlyAttendance, updateStudentProfile, updateTeacherProfile, getMarkFormOptions,
-    getTeachersForArrangement, createArrangement, getMarkSubjects
+    getTeachersForArrangement, createArrangement, getMarkSubjects, getSubjectNames, getClasses,
+    getAllSubjects
 } from "../controllers/principalController";
 
 //home
@@ -84,6 +85,9 @@ router.put("/updateSubject/:id", updateSubject);
 router.delete("/deleteSubject/:id", deleteSubject);
 router.get("/subjects", getSubjects);
 router.get("/marks/subjects/all", getMarkSubjects);
+router.get("/subject-names", getSubjectNames);
+router.get("/classes", getClasses);
+router.get("/all-subjects", getAllSubjects);
 
 //Marks
 router.get("/marks", getMarks);

@@ -6,6 +6,7 @@ import { jwtDecode } from "jwt-decode";
 
 type TokenPayload = {
     role: "principal" | "teacher" | "student";
+    exp?: number;
 };
 
 function Hero() {
@@ -15,28 +16,47 @@ function Hero() {
         useState<string | null>(null);
 
     useEffect(() => {
-        const token = localStorage.getItem("token");
+        const updateDashboardPath = () => {
+            const token = localStorage.getItem("token");
 
-        if (!token) {
-            setDashboardPath(null);
-            return;
-        }
+            if (!token) {
+                setDashboardPath(null);
+                return;
+            }
 
-        try {
-            const decoded = jwtDecode<TokenPayload>(token);
+            try {
+                const decoded = jwtDecode<TokenPayload>(token);
 
-            const routes: Record<string, string> = {
-                principal: "/principal",
-                teacher: "/teacher",
-                student: "/student",
-            };
+                if (decoded.exp && decoded.exp * 1000 <= Date.now()) {
+                    localStorage.removeItem("token");
+                    localStorage.removeItem("user");
+                    setDashboardPath(null);
+                    return;
+                }
 
-            setDashboardPath(
-                routes[decoded.role] ?? null
-            );
-        } catch {
-            setDashboardPath(null);
-        }
+                const routes: Record<string, string> = {
+                    principal: "/principal",
+                    teacher: "/teacher",
+                    student: "/student",
+                };
+
+                setDashboardPath(routes[decoded.role] ?? null);
+            } catch {
+                localStorage.removeItem("token");
+                localStorage.removeItem("user");
+                setDashboardPath(null);
+            }
+        };
+
+        updateDashboardPath();
+
+        window.addEventListener("login", updateDashboardPath);
+        window.addEventListener("logout", updateDashboardPath);
+
+        return () => {
+            window.removeEventListener("login", updateDashboardPath);
+            window.removeEventListener("logout", updateDashboardPath);
+        };
     }, []);
 
     return (
@@ -46,18 +66,18 @@ function Hero() {
             <nav className="z-10 flex items-center justify-between bg-purple-300 px-8 py-4 shadow-sm">
                 <Link to="/" className="flex cursor-pointer items-center">
                     <div className="flex items-center gap-3">
-                    <img
-                        src={logo}
-                        alt="school logo"
-                        className="h-10 w-auto"
-                    />
+                        <img
+                            src={logo}
+                            alt="school logo"
+                            className="h-10 w-auto"
+                        />
 
-                    <h1 className="text-3xl font-medium text-gray-900">
-                        GPS
-                    </h1>
-                </div>
+                        <h1 className="text-3xl font-medium text-gray-900">
+                            GPS
+                        </h1>
+                    </div>
                 </Link>
-                
+
 
                 <div className="flex items-center gap-3">
                     {dashboardPath && (

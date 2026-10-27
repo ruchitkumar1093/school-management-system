@@ -1,9 +1,14 @@
 import React, { useEffect } from "react";
 
+type SubjectOption = {
+    value: string;
+    label: string;
+};
+
 type Props = {
     subjectFilter: string;
     setSubjectFilter: React.Dispatch<React.SetStateAction<string>>;
-    subjects: string[];
+    subjects: SubjectOption[];
     disabled?: boolean;
 };
 
@@ -18,11 +23,7 @@ function SubjectFilter({
             return;
         }
 
-        if (subjects.length === 0) {
-            return;
-        }
-
-        if (!subjects.includes(subjectFilter)) {
+        if (!subjects.some((subject) => subject.value === subjectFilter)) {
             setSubjectFilter("All");
         }
     }, [subjects, subjectFilter, setSubjectFilter]);
@@ -46,8 +47,11 @@ function SubjectFilter({
                 <option value="All">All</option>
 
                 {subjects.map((subject) => (
-                    <option key={subject} value={subject}>
-                        {subject}
+                    <option
+                        key={subject.value}
+                        value={subject.value}
+                    >
+                        {subject.label}
                     </option>
                 ))}
             </select>

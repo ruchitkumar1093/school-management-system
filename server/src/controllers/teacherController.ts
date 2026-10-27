@@ -12,6 +12,7 @@ import Holiday from "../models/Holiday";
 import TeacherAttendance from "../models/TeacherAttendance";
 import Class from "../models/Class";
 import Arrangement from "../models/Arrangement";
+import TeacherAssignment from "../models/TeacherAssignment";
 
 export const applyLeave = async (
     req: Request,
@@ -143,6 +144,7 @@ export const getMyLeaves = async (
     }
 };
 
+
 export const getLeaveApplications = async (
     req: Request,
     res: Response
@@ -152,8 +154,8 @@ export const getLeaveApplications = async (
 
         const teacher = await Teacher.findOne({
             userId,
-            isDeleted: false
-        });
+            isDeleted: { $ne: true }
+        }).select("_id");
 
         if (!teacher) {
             return res.status(404).json({
@@ -161,8 +163,8 @@ export const getLeaveApplications = async (
             });
         }
 
-        const status =
-            req.query.status?.toString() || "All";
+        const status = req.query.status?.toString() || "All";
+        const selectedClass = req.query.class?.toString().trim();
 
         const currentPage = Math.max(
             Number(req.query.page) || 1,
@@ -175,58 +177,113 @@ export const getLeaveApplications = async (
         );
 
         if (
-            status !== "All" &&
-            status !== "Pending" &&
-            status !== "Approved" &&
-            status !== "Rejected"
+            !["All", "Pending", "Approved", "Rejected"].includes(status)
         ) {
             return res.status(400).json({
                 message: "Invalid leave status"
             });
         }
 
-        // Find the class this teacher currently manages.
-        const assignedClass = await Class.findOne({
+        if (!selectedClass) {
+            return res.status(400).json({
+                message: "Please select a class"
+            });
+        }
+
+        // Validate the selected class against existing classes.
+        const availableClasses = await Class.distinct("class");
+
+        if (
+            !availableClasses.includes(
+                selectedClass as (typeof availableClasses)[number]
+            )
+        ) {
+            return res.status(400).json({
+                message: "Invalid class selected"
+            });
+        }
+
+        // Find regular classes assigned through TeacherAssignment.
+        const assignments = await TeacherAssignment.find({
             teacherId: teacher._id
+        })
+            .populate({
+                path: "classId",
+                select: "class"
+            })
+            .lean();
+
+        const regularClasses = assignments.flatMap(assignment => {
+            const classDoc = assignment.classId as unknown as
+                | { class: string }
+                | null;
+
+            return classDoc ? [classDoc.class] : [];
+        });
+
+        // Find classes where the teacher has a temporary arrangement.
+        const arrangements = await Arrangement.find({
+            arrangedTeacherId: teacher._id
         })
             .select("class")
             .lean();
 
-        const isClassTeacher = Boolean(assignedClass);
-
-        // Use the temporary class when assigned; otherwise use the usual class.
-        const currentClass =
-            assignedClass?.class ?? teacher.classAssigned;
-
-        const students = await Student.find({
-            class: currentClass,
-            isDeleted: { $ne: true }
-        }).select("_id");
-
-        const studentIds = students.map(
-            student => student._id
+        const temporaryClasses = arrangements.map(
+            arrangement => arrangement.class
         );
 
-        const filter: any = {
-            studentId: {
-                $in: studentIds
-            }
+        // Combine and deduplicate regular and temporary classes.
+        const assignedClasses = new Set([
+            ...regularClasses,
+            ...temporaryClasses
+        ]);
+
+        // Verify that the teacher is allowed to view this class.
+        if (!assignedClasses.has(selectedClass)) {
+            return res.status(403).json({
+                message: "You are not assigned to or arranged for this class"
+            });
+        }
+
+        // Only the actual class teacher can approve or reject leave.
+        const classTeacher = await Class.findOne({
+            class: selectedClass as (typeof availableClasses)[number],
+            teacherId: teacher._id
+        })
+            .select("_id")
+            .lean();
+
+        const isClassTeacher = Boolean(classTeacher);
+
+        const students = await Student.find({
+            class: selectedClass as (typeof availableClasses)[number],
+            isDeleted: { $ne: true }
+        })
+            .select("_id")
+            .lean();
+
+        const studentIds = students.map(student => student._id);
+
+        const filter: Record<string, any> = {
+            studentId: { $in: studentIds }
         };
 
         if (status !== "All") {
             filter.status = status;
         }
 
-        const totalLeaves =
-            await Leave.countDocuments(filter);
+        const totalLeaves = await Leave.countDocuments(filter);
+        const totalPages = Math.ceil(totalLeaves / pageLimit);
 
-        const skip =
-            (currentPage - 1) * pageLimit;
+        const validPage =
+            totalPages > 0
+                ? Math.min(currentPage, totalPages)
+                : 1;
+
+        const skip = (validPage - 1) * pageLimit;
 
         const leaves = await Leave.find(filter)
-            .sort({
-                createdAt: -1
-            })
+            .sort({ createdAt: -1 })
             .skip(skip)
             .limit(pageLimit)
             .populate({
@@ -236,42 +293,45 @@ export const getLeaveApplications = async (
                     path: "userId",
                     select: "name uid"
                 }
-            });
+            })
+            .lean();
 
-        const formattedLeaves = leaves.map(leave => {
-            const student = leave.studentId as any;
+        const formattedLeaves = leaves.flatMap(leave => {
+            const student = leave.studentId as unknown as {
+                _id: { toString(): string };
+                userId: { name?: string; uid?: string } | null;
+            } | null;
 
-            return {
-                _id: leave._id,
+            // Safely ignore missing references.
+            if (!student) {
+                return [];
+            }
+
+            return [{
+                _id: leave._id.toString(),
                 student: {
-                    _id: student._id,
-                    name: student.userId.name,
-                    uid: student.userId.uid
+                    _id: student._id.toString(),
+                    name: student.userId?.name ?? "",
+                    uid: student.userId?.uid ?? ""
                 },
                 startDate: leave.startDate,
                 endDate: leave.endDate,
                 reason: leave.reason,
                 status: leave.status
-            };
+            }];
         });
-
-        const totalPages = Math.ceil(
-            totalLeaves / pageLimit
-        );
 
         return res.status(200).json({
             leaves: formattedLeaves,
             totalLeaves,
             totalPages,
-            currentPage,
+            currentPage: validPage,
             limit: pageLimit,
+            selectedClass,
             isClassTeacher
         });
     } catch (error) {
-        console.error(
-            "Get teacher leave applications error:",
-            error
-        );
+        console.error("Get teacher leave applications error:", error);
 
         return res.status(500).json({
             message: "Failed to get leave applications"
@@ -284,16 +344,13 @@ export const approveLeave = async (
     res: Response
 ) => {
     try {
-
         const userId = req.user?.userId;
-
         const { id } = req.params;
 
-
-        // Find logged-in teacher
         const teacher = await Teacher.findOne({
-            userId
-        });
+            userId,
+            isDeleted: { $ne: true }
+        }).select("_id");
 
         if (!teacher) {
             return res.status(404).json({
@@ -301,8 +358,6 @@ export const approveLeave = async (
             });
         }
 
-
-        // Find leave
         const leave = await Leave.findById(id);
 
         if (!leave) {
@@ -311,64 +366,77 @@ export const approveLeave = async (
             });
         }
 
+        if (leave.status !== "Pending") {
+            return res.status(400).json({
+                message: "Only pending leave applications can be approved"
+            });
+        }
 
-        // Find student who applied
-        const student = await Student.findById(
-            leave.studentId
-        );
+        const student = await Student.findById(leave.studentId)
+            .select("_id class isDeleted")
+            .lean();
 
-        if (!student) {
+        if (!student || student.isDeleted === true) {
             return res.status(404).json({
                 message: "Student not found"
             });
         }
 
+        // Check whether the teacher is the permanent class teacher.
+        const classDoc = await Class.findOne({
+            class: student.class,
+            teacherId: teacher._id
+        })
+            .select("_id")
+            .lean();
 
-        // Make sure student belongs to teacher's class
-        if (
-            student.class !==
-            teacher.classAssigned
-        ) {
+        let isAuthorized = false;
+
+        if (classDoc) {
+            // Preserve the existing authorization for permanent class teachers.
+            const assignment = await TeacherAssignment.exists({
+                teacherId: teacher._id,
+                classId: classDoc._id
+            });
+
+            if (assignment) {
+                isAuthorized = true;
+            }
+        }
+
+        // If not authorized through a regular assignment,
+        // check whether the teacher is temporarily assigned to this class.
+        if (!isAuthorized) {
+            const arrangement = await Arrangement.exists({
+                arrangedTeacherId: teacher._id,
+                class: student.class
+            });
+
+            if (arrangement) {
+                isAuthorized = true;
+            }
+        }
+
+        if (!isAuthorized) {
             return res.status(403).json({
                 message:
-                    "You are not authorized to manage this leave application"
+                    "Only the class teacher or a teacher temporarily assigned to this class can approve this leave"
             });
         }
-
-
-        // Only pending leaves can be approved
-        if (leave.status !== "Pending") {
-            return res.status(400).json({
-                message:
-                    "Only pending leave applications can be approved"
-            });
-        }
-
 
         leave.status = "Approved";
-
         await leave.save();
 
-
         return res.status(200).json({
-            message:
-                "Leave application approved successfully",
+            message: "Leave application approved successfully",
             leave
         });
-
-    }
-    catch (error) {
-
-        console.error(
-            "Approve leave error:",
-            error
-        );
+    } catch (error) {
+        console.error("Approve leave error:", error);
 
         return res.status(500).json({
-            message:
-                "Failed to approve leave application"
+            message: "Failed to approve leave application"
         });
-
     }
 };
 
@@ -377,16 +445,13 @@ export const rejectLeave = async (
     res: Response
 ) => {
     try {
-
         const userId = req.user?.userId;
-
         const { id } = req.params;
 
-
-        // Find logged-in teacher
         const teacher = await Teacher.findOne({
-            userId
-        });
+            userId,
+            isDeleted: { $ne: true }
+        }).select("_id");
 
         if (!teacher) {
             return res.status(404).json({
@@ -394,8 +459,6 @@ export const rejectLeave = async (
             });
         }
 
-
-        // Find leave
         const leave = await Leave.findById(id);
 
         if (!leave) {
@@ -404,32 +467,6 @@ export const rejectLeave = async (
             });
         }
 
-
-        // Find student who applied
-        const student = await Student.findById(
-            leave.studentId
-        );
-
-        if (!student) {
-            return res.status(404).json({
-                message: "Student not found"
-            });
-        }
-
-
-        // Make sure student belongs to teacher's class
-        if (
-            student.class !==
-            teacher.classAssigned
-        ) {
-            return res.status(403).json({
-                message:
-                    "You are not authorized to manage this leave application"
-            });
-        }
-
-
-        // Only pending leaves can be rejected
         if (leave.status !== "Pending") {
             return res.status(400).json({
                 message:
@@ -437,34 +474,73 @@ export const rejectLeave = async (
             });
         }
 
+        const student = await Student.findById(leave.studentId)
+            .select("_id class isDeleted")
+            .lean();
+
+        if (!student || student.isDeleted === true) {
+            return res.status(404).json({
+                message: "Student not found"
+            });
+        }
+
+        // Check whether the teacher is the permanent class teacher.
+        const classDoc = await Class.findOne({
+            class: student.class,
+            teacherId: teacher._id
+        })
+            .select("_id")
+            .lean();
+
+        let isAuthorized = false;
+
+        if (classDoc) {
+            // Preserve the existing authorization for permanent class teachers.
+            const assignment = await TeacherAssignment.exists({
+                teacherId: teacher._id,
+                classId: classDoc._id
+            });
+
+            if (assignment) {
+                isAuthorized = true;
+            }
+        }
+
+        // If not authorized through a regular assignment,
+        // check whether the teacher is temporarily assigned to this class.
+        if (!isAuthorized) {
+            const arrangement = await Arrangement.exists({
+                arrangedTeacherId: teacher._id,
+                class: student.class
+            });
+
+            if (arrangement) {
+                isAuthorized = true;
+            }
+        }
+
+        if (!isAuthorized) {
+            return res.status(403).json({
+                message:
+                    "Only the class teacher or a teacher temporarily assigned to this class can reject this leave"
+            });
+        }
 
         leave.status = "Rejected";
-
         await leave.save();
 
-
         return res.status(200).json({
-            message:
-                "Leave application rejected successfully",
+            message: "Leave application rejected successfully",
             leave
         });
-
-    }
-    catch (error) {
-
-        console.error(
-            "Reject leave error:",
-            error
-        );
+    } catch (error) {
+        console.error("Reject leave error:", error);
 
         return res.status(500).json({
-            message:
-                "Failed to reject leave application"
+            message: "Failed to reject leave application"
         });
-
     }
 };
-
 
 export const getTeacherHome = async (
     req: Request,
@@ -484,38 +560,101 @@ export const getTeacherHome = async (
             });
         }
 
+        // Check whether this teacher is a class teacher.
         const classTeacher = await Class.exists({
             teacherId: teacher._id
         });
 
-        // Check whether this teacher is temporarily covering another position.
-        const arrangement = await Arrangement.findOne({
+        // Get all teaching assignments from TeacherAssignment.
+        const teacherAssignments = await TeacherAssignment.find({
+            teacherId: teacher._id
+        })
+            .populate("subjectId", "name subjectCode")
+            .populate("classId", "class")
+            .lean();
+
+        // Convert populated documents into frontend-friendly data.
+        const assignments = teacherAssignments.flatMap((assignment) => {
+            const subject = assignment.subjectId as unknown as {
+                _id: mongoose.Types.ObjectId;
+                name: string;
+                subjectCode: string;
+            } | null;
+
+            const schoolClass = assignment.classId as unknown as {
+                _id: mongoose.Types.ObjectId;
+                class: string;
+            } | null;
+
+            // Ignore assignments with missing references.
+            if (!subject || !schoolClass) {
+                return [];
+            }
+
+            return [{
+                _id: assignment._id,
+                subjectId: subject._id,
+                subject: subject.name,
+                subjectCode: subject.subjectCode,
+                classId: schoolClass._id,
+                class: schoolClass.class
+            }];
+        });
+
+        // Count unique subjects and classes across all assignments.
+        const uniqueSubjects = [
+            ...new Set(assignments.map(assignment => assignment.subject))
+        ];
+
+        const uniqueClasses = [
+            ...new Set(assignments.map(assignment => assignment.class))
+        ];
+
+        // Count students in classes assigned to this teacher.
+        // The assertion aligns the values with the Student schema's class enum.
+        const students = uniqueClasses.length > 0
+            ? await Student.countDocuments({
+                class: {
+                    $in: uniqueClasses as Array<
+                        | "1st" | "2nd" | "3rd" | "4th"
+                        | "5th" | "6th" | "7th" | "8th"
+                        | "9th" | "10th" | "11th" | "12th"
+                    >
+                }
+            })
+            : 0;
+
+        // Get temporary teaching arrangements for this teacher.
+        const arrangements = await Arrangement.find({
             arrangedTeacherId: teacher._id
-        }).select("class department");
+        })
+            .populate("subjectId", "name")
+            .select("class subjectId")
+            .lean();
+
+        const temporaryArrangement = arrangements.map((arrangement: any) => ({
+            class: arrangement.class,
+            subject: arrangement.subjectId?.name ?? "Unknown Subject"
+        }));
 
         return res.status(200).json({
             employeeID: teacher.employeeID,
-            department: teacher.department,
-            classAssigned: teacher.classAssigned,
+            assignments,
+            subjects: uniqueSubjects.length,
+            classes: uniqueClasses.length,
+            students,
             isClassTeacher: Boolean(classTeacher),
-            temporaryArrangement: arrangement
-                ? {
-                    class: arrangement.class,
-                    department: arrangement.department
-                }
-                : null
+            temporaryArrangement
         });
     } catch (error) {
-        console.error(
-            "Get teacher home error:",
-            error
-        );
+        console.error("Get teacher home error:", error);
 
         return res.status(500).json({
             message: "Failed to get teacher home information"
         });
     }
 };
+
 
 // GET all:
 export const getSubjects = async (
@@ -541,47 +680,136 @@ export const getSubjects = async (
         );
 
         const teacher = await Teacher.findOne({
-            userId: req.user?.userId
+            userId: req.user?.userId,
+            isDeleted: false
         });
 
         if (!teacher) {
             return res.status(404).json({
-                message: "teacher not found"
+                message: "Teacher not found"
             });
         }
 
-        const match: any = {
-            class: teacher.classAssigned
-        };
+        // Fetch regular subject assignments.
+        const assignments = await TeacherAssignment.find({
+            teacherId: teacher._id
+        })
+            .populate({
+                path: "subjectId",
+                select: "name subjectCode"
+            })
+            .populate({
+                path: "classId",
+                select: "class"
+            })
+            .lean();
 
-        if (search !== "") {
-            match.name = {
-                $regex: search,
-                $options: "i"
-            };
-        }
+        // Fetch subjects temporarily assigned through arrangements.
+        const arrangements = await Arrangement.find({
+            arrangedTeacherId: teacher._id
+        })
+            .populate({
+                path: "subjectId",
+                select: "name subjectCode"
+            })
+            .lean();
 
-        const sortOrder =
-            order === "desc" ? -1 : 1;
+        // Convert regular assignments into the frontend structure.
+        const regularSubjects = assignments.flatMap(
+            (assignment) => {
+                const subject = assignment.subjectId as unknown as {
+                    _id: { toString: () => string };
+                    name: string;
+                    subjectCode: string;
+                } | null;
 
-        const skip =
-            (currentPage - 1) * pageLimit;
+                const classDoc = assignment.classId as unknown as {
+                    class: string;
+                } | null;
 
-        const totalSubjects =
-            await Subject.countDocuments(match);
+                if (!subject || !classDoc) {
+                    return [];
+                }
 
-        const subjects =
-            await Subject.find(match)
-                .sort({
-                    name: sortOrder
-                })
-                .skip(skip)
-                .limit(pageLimit);
+                return [{
+                    _id: subject._id.toString(),
+                    name: subject.name,
+                    subjectCode: subject.subjectCode,
+                    class: classDoc.class
+                }];
+            }
+        );
 
-        const totalPages =
-            Math.ceil(
-                totalSubjects / pageLimit
-            );
+        // Convert temporary arrangements into the same structure.
+        const temporarySubjects = arrangements.flatMap(
+            (arrangement) => {
+                const subject = arrangement.subjectId as unknown as {
+                    _id: { toString: () => string };
+                    name: string;
+                    subjectCode: string;
+                } | null;
+
+                if (!subject) {
+                    return [];
+                }
+
+                return [{
+                    _id: subject._id.toString(),
+                    name: subject.name,
+                    subjectCode: subject.subjectCode,
+                    class: arrangement.class
+                }];
+            }
+        );
+
+        // Combine regular and temporary subjects.
+        const allSubjects = [
+            ...regularSubjects,
+            ...temporarySubjects
+        ];
+
+        // Remove duplicate subject/class combinations.
+        const uniqueSubjects = Array.from(
+            new Map(
+                allSubjects.map((subject) => [
+                    `${subject._id}-${subject.class}`,
+                    subject
+                ])
+            ).values()
+        );
+
+        // Apply search.
+        const filteredSubjects = uniqueSubjects.filter(
+            (subject) =>
+                search === "" ||
+                subject.name.toLowerCase().includes(
+                    search.toLowerCase()
+                ) ||
+                subject.subjectCode.toLowerCase().includes(
+                    search.toLowerCase()
+                )
+        );
+
+        // Sort by subject name.
+        const sortOrder = order === "desc" ? -1 : 1;
+
+        filteredSubjects.sort((a, b) =>
+            a.name.localeCompare(b.name) * sortOrder
+        );
+
+        // Apply pagination after filtering and sorting.
+        const totalSubjects = filteredSubjects.length;
+
+        const totalPages = Math.ceil(
+            totalSubjects / pageLimit
+        );
+
+        const skip = (currentPage - 1) * pageLimit;
+
+        const subjects = filteredSubjects.slice(
+            skip,
+            skip + pageLimit
+        );
 
         return res.status(200).json({
             subjects,
@@ -590,8 +818,7 @@ export const getSubjects = async (
             currentPage,
             limit: pageLimit
         });
-    }
-    catch (error) {
+    } catch (error) {
         next(error);
     }
 };
@@ -654,14 +881,153 @@ export const getMarks = async (
             1
         );
 
-        // Find the subject assigned to this teacher's
-        // department and assigned class.
-        const subject = await Subject.findOne({
-            name: teacher.department,
-            class: teacher.classAssigned
-        }).select("_id");
+        const selectedSubjectId =
+            req.query.subject?.toString() || "All";
 
-        if (!subject) {
+        const selectedClass =
+            req.query.class?.toString() || "All";
+
+        // 1. Get regular subject-class assignments.
+        const assignments = await TeacherAssignment.find({
+            teacherId: teacher._id
+        })
+            .populate({
+                path: "subjectId",
+                select: "name subjectCode"
+            })
+            .populate({
+                path: "classId",
+                select: "class"
+            })
+            .lean();
+
+        // Normalize regular assignments into subject-class pairs.
+        const regularPairs = assignments.flatMap(
+            (assignment) => {
+                const subject = assignment.subjectId as unknown as {
+                    _id: {
+                        toString: () => string;
+                    };
+                } | null;
+
+                const classDoc = assignment.classId as unknown as {
+                    class: string;
+                } | null;
+
+                if (!subject || !classDoc) {
+                    return [];
+                }
+
+                return [{
+                    subjectId: subject._id,
+                    subjectIdString: subject._id.toString(),
+                    class: classDoc.class
+                }];
+            }
+        );
+
+        // 2. Find temporary assignments for this teacher.
+        const arrangements = await Arrangement.find({
+            arrangedTeacherId: teacher._id
+        })
+            .populate({
+                path: "subjectId",
+                select: "name subjectCode"
+            })
+            .lean();
+
+        // Normalize temporary arrangements into subject-class pairs.
+        const temporaryPairs = arrangements.flatMap(
+            (arrangement) => {
+                const subject = arrangement.subjectId as unknown as {
+                    _id: {
+                        toString: () => string;
+                    };
+                } | null;
+
+                if (!subject || !arrangement.class) {
+                    return [];
+                }
+
+                return [{
+                    subjectId: subject._id,
+                    subjectIdString: subject._id.toString(),
+                    class: arrangement.class
+                }];
+            }
+        );
+
+        // 3. Combine regular and temporary assignments.
+        // Remove duplicates when the same subject-class pair
+        // appears in both sources.
+        const pairMap = new Map<
+            string,
+            {
+                subjectId: any;
+                subjectIdString: string;
+                class: string;
+            }
+        >();
+
+        [...regularPairs, ...temporaryPairs].forEach(
+            (assignment) => {
+                const key =
+                    `${assignment.subjectIdString}-${assignment.class}`;
+
+                pairMap.set(key, assignment);
+            }
+        );
+
+        const allAllowedPairs = Array.from(pairMap.values());
+
+        // 4. Validate the selected subject against all assignments.
+        if (
+            selectedSubjectId !== "All" &&
+            !allAllowedPairs.some(
+                (assignment) =>
+                    assignment.subjectIdString === selectedSubjectId
+            )
+        ) {
+            return res.status(400).json({
+                message: "You are not assigned to this subject."
+            });
+        }
+
+        // 5. Validate the selected class against all assignments.
+        const availableClasses = [
+            ...new Set(
+                allAllowedPairs.map(
+                    (assignment) => assignment.class
+                )
+            )
+        ];
+
+        if (
+            selectedClass !== "All" &&
+            !availableClasses.includes(selectedClass)
+        ) {
+            return res.status(400).json({
+                message: "You are not assigned to this class."
+            });
+        }
+
+        // 6. Apply the selected subject and class filters together.
+        const allowedPairs = allAllowedPairs.filter(
+            (assignment) => {
+                const matchesSubject =
+                    selectedSubjectId === "All" ||
+                    assignment.subjectIdString === selectedSubjectId;
+
+                const matchesClass =
+                    selectedClass === "All" ||
+                    assignment.class === selectedClass;
+
+                return matchesSubject && matchesClass;
+            }
+        );
+
+        // No matching assignments means there are no marks to show.
+        if (allowedPairs.length === 0) {
             return res.status(200).json({
                 marks: [],
                 totalMarks: 0,
@@ -671,8 +1037,23 @@ export const getMarks = async (
             });
         }
 
+        // 7. Find students belonging to the allowed classes.
+        const assignedClasses = [
+            ...new Set(
+                allowedPairs.map(
+                    (assignment) => assignment.class
+                )
+            )
+        ];
+
         const students = await Student.find({
-            class: teacher.classAssigned
+            class: {
+                $in: assignedClasses as Array<
+                    | "1st" | "2nd" | "3rd" | "4th"
+                    | "5th" | "6th" | "7th" | "8th"
+                    | "9th" | "10th" | "11th" | "12th"
+                >
+            }
         }).select("_id");
 
         const studentIds = students.map(
@@ -689,13 +1070,26 @@ export const getMarks = async (
             });
         }
 
+        // 8. Get unique subject IDs from the allowed assignments.
+        const subjectIds = [
+            ...new Map(
+                allowedPairs.map((assignment) => [
+                    assignment.subjectIdString,
+                    assignment.subjectId
+                ])
+            ).values()
+        ];
+
+        // 9. Build the marks aggregation pipeline.
         const pipeline: any[] = [
             {
                 $match: {
                     studentId: {
                         $in: studentIds
                     },
-                    subjectId: subject._id
+                    subjectId: {
+                        $in: subjectIds
+                    }
                 }
             },
             {
@@ -730,9 +1124,20 @@ export const getMarks = async (
             },
             {
                 $unwind: "$subjectId"
+            },
+            {
+                // Only allow the exact subject-class combinations
+                // assigned regularly or temporarily to this teacher.
+                $match: {
+                    $or: allowedPairs.map((assignment) => ({
+                        "studentId.class": assignment.class,
+                        "subjectId._id": assignment.subjectId
+                    }))
+                }
             }
         ];
 
+        // 10. Filter by exam type.
         if (exam !== "All") {
             pipeline.push({
                 $match: {
@@ -741,17 +1146,22 @@ export const getMarks = async (
             });
         }
 
+        // 11. Search by student name.
         if (search) {
             pipeline.push({
                 $match: {
                     "studentUser.name": {
-                        $regex: search,
+                        $regex: search.replace(
+                            /[.*+?^${}()|[\]\\]/g,
+                            "\\$&"
+                        ),
                         $options: "i"
                     }
                 }
             });
         }
 
+        // 12. Sort results.
         if (sortBy === "Student Name") {
             pipeline.push({
                 $sort: {
@@ -783,6 +1193,7 @@ export const getMarks = async (
 
         const skip = (currentPage - 1) * pageLimit;
 
+        // 13. Paginate results and count all matching marks.
         pipeline.push({
             $facet: {
                 marks: [
@@ -812,9 +1223,10 @@ export const getMarks = async (
             totalMarks / pageLimit
         );
 
+        // 14. Format the response for the frontend.
         const formattedMarks = marks.map(
             (mark: any) => ({
-                _id: mark._id,
+                _id: mark._id.toString(),
                 studentId: {
                     _id: mark.studentId._id.toString(),
                     class: mark.studentId.class,
@@ -850,8 +1262,6 @@ export const getStudents = async (
     next: NextFunction
 ) => {
     try {
-        console.log(req.user);
-
         const teacher = await Teacher.findOne({
             userId: req.user?.userId,
             isDeleted: false
@@ -859,50 +1269,117 @@ export const getStudents = async (
 
         if (!teacher) {
             return res.status(404).json({
-                message: "Teacher not found"
+                message: "Teacher not found."
             });
         }
 
-        const search =
-            req.query.search?.toString().trim() || "";
+        const search = req.query.search?.toString().trim() || "";
+        const sortBy = req.query.sortBy?.toString() || "None";
+        const order = req.query.order?.toString() || "asc";
+        const showDeleted = req.query.showDeleted?.toString() === "true";
+        const classFilter = req.query.classFilter?.toString() || "All";
 
-        const sortBy =
-            req.query.sortBy?.toString() || "None";
-
-        const order =
-            req.query.order?.toString() || "asc";
-
-        const showDeleted =
-            req.query.showDeleted?.toString() === "true";
-
-        const currentPage = Math.max(
-            Number(req.query.page) || 1,
-            1
-        );
-
-        const pageLimit = Math.max(
-            Number(req.query.limit) || 5,
-            1
-        );
-
+        const currentPage = Math.max(Number(req.query.page) || 1, 1);
+        const pageLimit = Math.max(Number(req.query.limit) || 5, 1);
         const skip = (currentPage - 1) * pageLimit;
 
-        // Find the class where this teacher is currently the class teacher.
-        const assignedClass = await Class.findOne({
+        const validClasses = [
+            "1st", "2nd", "3rd", "4th", "5th", "6th",
+            "7th", "8th", "9th", "10th", "11th", "12th"
+        ] as const;
+
+        type ClassName = (typeof validClasses)[number];
+
+        // 1. Find classes assigned through regular subject assignments.
+        const assignments = await TeacherAssignment.find({
             teacherId: teacher._id
+        })
+            .select("classId")
+            .lean();
+
+        const classIds = [
+            ...new Set(
+                assignments.map(assignment =>
+                    assignment.classId.toString()
+                )
+            )
+        ];
+
+        const regularClasses = classIds.length > 0
+            ? await Class.find({
+                _id: { $in: classIds }
+            })
+                .select("class")
+                .lean()
+            : [];
+
+        // 2. Find classes where this teacher is the temporary replacement.
+        const temporaryArrangements = await Arrangement.find({
+            arrangedTeacherId: teacher._id
         })
             .select("class")
             .lean();
 
-        // Determine whether this teacher is currently a class teacher.
-        const classTeacher = Boolean(assignedClass);
+        // 3. Combine regular and temporary classes without duplicates.
+        const assignedClasses = [
+            ...new Set([
+                ...regularClasses.map(item => item.class),
+                ...temporaryArrangements.map(item => item.class)
+            ])
+        ].filter(
+            (className): className is ClassName =>
+                validClasses.some(validClass => validClass === className)
+        );
 
-        const match: any = {
-            class: assignedClass?.class ?? teacher.classAssigned
+        // 4. Determine whether the teacher is a class teacher.
+        const isClassTeacher = Boolean(
+            await Class.exists({
+                teacherId: teacher._id
+            })
+        );
+
+        // 5. Return empty data if the teacher has no assigned classes.
+        if (assignedClasses.length === 0) {
+            return res.status(200).json({
+                students: [],
+                totalStudents: 0,
+                totalPages: 0,
+                currentPage,
+                limit: pageLimit,
+                isClassTeacher,
+                assignedClasses: []
+            });
+        }
+
+        // 6. Validate the selected class.
+        if (classFilter !== "All") {
+            const isValidClass = validClasses.some(
+                validClass => validClass === classFilter
+            );
+
+            if (!isValidClass) {
+                return res.status(400).json({
+                    message: "Invalid class selected."
+                });
+            }
+
+            if (!assignedClasses.includes(classFilter as ClassName)) {
+                return res.status(400).json({
+                    message: "You are not assigned to this class."
+                });
+            }
+        }
+
+        // 7. Apply the selected class filter.
+        const classesToFetch: ClassName[] =
+            classFilter === "All"
+                ? assignedClasses
+                : [classFilter as ClassName];
+
+        const match: Record<string, any> = {
+            class: { $in: classesToFetch }
         };
 
-        // Default: show active students only.
-        // When enabled: show both active and deleted students.
         if (!showDeleted) {
             match.isDeleted = { $ne: true };
         }
@@ -924,17 +1401,22 @@ export const getStudents = async (
             }
         ];
 
-        if (search !== "") {
+        // 8. Search by student name.
+        if (search) {
             pipeline.push({
                 $match: {
                     "userId.name": {
-                        $regex: search,
+                        $regex: search.replace(
+                            /[.*+?^${}()|[\]\\]/g,
+                            "\\$&"
+                        ),
                         $options: "i"
                     }
                 }
             });
         }
 
+        // 9. Apply sorting.
         if (sortBy === "Student Name") {
             pipeline.push({
                 $sort: {
@@ -942,30 +1424,33 @@ export const getStudents = async (
                 }
             });
         } else if (sortBy === "Class") {
-            pipeline.push({
-                $addFields: {
-                    classNumber: {
-                        $toInt: {
-                            $getField: {
-                                field: "match",
-                                input: {
-                                    $regexFind: {
-                                        input: "$class",
-                                        regex: "\\d+"
+            pipeline.push(
+                {
+                    $addFields: {
+                        classNumber: {
+                            $toInt: {
+                                $getField: {
+                                    field: "match",
+                                    input: {
+                                        $regexFind: {
+                                            input: {
+                                                $ifNull: ["$class", ""]
+                                            },
+                                            regex: "\\d+"
+                                        }
                                     }
                                 }
                             }
                         }
                     }
+                },
+                {
+                    $sort: {
+                        classNumber: order === "desc" ? -1 : 1,
+                        "userId.name": 1
+                    }
                 }
-            });
-
-            pipeline.push({
-                $sort: {
-                    classNumber: order === "desc" ? -1 : 1,
-                    "userId.name": 1
-                }
-            });
+            );
         } else if (sortBy === "Roll no") {
             pipeline.push({
                 $sort: {
@@ -980,6 +1465,7 @@ export const getStudents = async (
             });
         }
 
+        // 10. Paginate the results and count matching students.
         pipeline.push({
             $facet: {
                 students: [
@@ -994,8 +1480,8 @@ export const getStudents = async (
 
         const result = await Student.aggregate(pipeline);
 
-        const students = result[0]?.students || [];
-        const totalStudents = result[0]?.total[0]?.count || 0;
+        const students = result[0]?.students ?? [];
+        const totalStudents = result[0]?.total[0]?.count ?? 0;
         const totalPages = Math.ceil(totalStudents / pageLimit);
 
         return res.status(200).json({
@@ -1004,7 +1490,8 @@ export const getStudents = async (
             totalPages,
             currentPage,
             limit: pageLimit,
-            isClassTeacher: classTeacher
+            isClassTeacher,
+            assignedClasses
         });
     } catch (error) {
         next(error);
@@ -1018,8 +1505,9 @@ export const deleteStudents = async (
 ) => {
     try {
         const teacher = await Teacher.findOne({
-            userId: req.user?.userId
-        });
+            userId: req.user?.userId,
+            isDeleted: { $ne: true }
+        }).select("_id").lean();
 
         if (!teacher) {
             return res.status(404).json({
@@ -1032,17 +1520,64 @@ export const deleteStudents = async (
         if (
             !Array.isArray(ids) ||
             ids.length === 0 ||
-            !ids.every((id) => typeof id === "string")
+            !ids.every(
+                (id: unknown) =>
+                    typeof id === "string" &&
+                    mongoose.isValidObjectId(id)
+            )
         ) {
             return res.status(400).json({
-                message: "A non-empty array of student IDs is required"
+                message: "A non-empty array of valid student IDs is required"
             });
         }
 
+        // 1. Find regular classes assigned through TeacherAssignment.
+        const assignments = await TeacherAssignment.find({
+            teacherId: teacher._id
+        })
+            .select("classId")
+            .lean();
+
+        const classIds = [
+            ...new Set(
+                assignments.map(
+                    assignment => assignment.classId.toString()
+                )
+            )
+        ];
+
+        const regularClasses = classIds.length > 0
+            ? await Class.find({
+                _id: { $in: classIds }
+            })
+                .distinct("class")
+            : [];
+
+        // 2. Find classes where this teacher is a temporary replacement.
+        const arrangements = await Arrangement.find({
+            arrangedTeacherId: teacher._id
+        })
+            .distinct("class");
+
+        // 3. Combine regular and temporary classes.
+        const assignedClasses = [
+            ...new Set([
+                ...regularClasses,
+                ...arrangements
+            ])
+        ];
+
+        if (assignedClasses.length === 0) {
+            return res.status(403).json({
+                message: "You are not assigned to any class"
+            });
+        }
+
+        // 4. Soft-delete only students belonging to the teacher's classes.
         const result = await Student.updateMany(
             {
                 _id: { $in: ids },
-                class: teacher.classAssigned,
+                class: { $in: assignedClasses },
                 isDeleted: { $ne: true }
             },
             {
@@ -1055,11 +1590,11 @@ export const deleteStudents = async (
 
         if (result.matchedCount === 0) {
             return res.status(404).json({
-                message: "No active students found in your assigned class"
+                message: "No active students found in your assigned classes"
             });
         }
 
-        res.status(200).json({
+        return res.status(200).json({
             message: "Students soft-deleted successfully",
             deletedCount: result.modifiedCount
         });
@@ -1075,8 +1610,11 @@ export const restoreStudent = async (
 ) => {
     try {
         const teacher = await Teacher.findOne({
-            userId: req.user?.userId
-        });
+            userId: req.user?.userId,
+            isDeleted: { $ne: true }
+        })
+            .select("_id")
+            .lean();
 
         if (!teacher) {
             return res.status(404).json({
@@ -1084,24 +1622,66 @@ export const restoreStudent = async (
             });
         }
 
+        // 1. Get regular classes through TeacherAssignment.
+        const assignments = await TeacherAssignment.find({
+            teacherId: teacher._id
+        })
+            .select("classId")
+            .lean();
+
+        const classIds = [
+            ...new Set(
+                assignments.map(
+                    assignment => assignment.classId.toString()
+                )
+            )
+        ];
+
+        const regularClasses = classIds.length > 0
+            ? await Class.find({
+                _id: { $in: classIds }
+            }).distinct("class")
+            : [];
+
+        // 2. Get temporary classes through Arrangement.
+        const temporaryClasses = await Arrangement.find({
+            arrangedTeacherId: teacher._id
+        }).distinct("class");
+
+        // 3. Combine and deduplicate the teacher's classes.
+        const assignedClasses = [
+            ...new Set([
+                ...regularClasses,
+                ...temporaryClasses
+            ])
+        ];
+
+        if (assignedClasses.length === 0) {
+            return res.status(403).json({
+                message: "You are not assigned to any class"
+            });
+        }
+
+        // 4. Find the deleted student in an assigned class.
         const student = await Student.findOne({
             _id: req.params.id,
-            class: teacher.classAssigned,
+            class: { $in: assignedClasses },
             isDeleted: true
         });
 
         if (!student) {
             return res.status(404).json({
-                message: "Deleted student not found in your assigned class"
+                message: "Deleted student not found in your assigned classes"
             });
         }
 
+        // 5. Restore the student.
         student.isDeleted = false;
         student.deletedAt = null;
 
         await student.save();
 
-        res.status(200).json({
+        return res.status(200).json({
             message: "Student restored successfully"
         });
     } catch (error) {
@@ -1116,8 +1696,11 @@ export const permanentlyDeleteStudent = async (
 ) => {
     try {
         const teacher = await Teacher.findOne({
-            userId: req.user?.userId
-        });
+            userId: req.user?.userId,
+            isDeleted: { $ne: true }
+        })
+            .select("_id")
+            .lean();
 
         if (!teacher) {
             return res.status(404).json({
@@ -1125,22 +1708,64 @@ export const permanentlyDeleteStudent = async (
             });
         }
 
+        // 1. Get regular classes through TeacherAssignment.
+        const assignments = await TeacherAssignment.find({
+            teacherId: teacher._id
+        })
+            .select("classId")
+            .lean();
+
+        const classIds = [
+            ...new Set(
+                assignments.map(
+                    assignment => assignment.classId.toString()
+                )
+            )
+        ];
+
+        const regularClasses = classIds.length > 0
+            ? await Class.find({
+                _id: { $in: classIds }
+            }).distinct("class")
+            : [];
+
+        // 2. Get temporary classes through Arrangement.
+        const temporaryClasses = await Arrangement.find({
+            arrangedTeacherId: teacher._id
+        }).distinct("class");
+
+        // 3. Combine and deduplicate assigned classes.
+        const assignedClasses = [
+            ...new Set([
+                ...regularClasses,
+                ...temporaryClasses
+            ])
+        ];
+
+        if (assignedClasses.length === 0) {
+            return res.status(403).json({
+                message: "You are not assigned to any class"
+            });
+        }
+
+        // 4. Find the deleted student in an assigned class.
         const student = await Student.findOne({
             _id: req.params.id,
-            class: teacher.classAssigned,
+            class: { $in: assignedClasses },
             isDeleted: true
         });
 
         if (!student) {
             return res.status(404).json({
-                message: "Deleted student not found in your assigned class"
+                message: "Deleted student not found in your assigned classes"
             });
         }
 
+        // 5. Permanently delete the associated user and student.
         await User.findByIdAndDelete(student.userId);
         await Student.findByIdAndDelete(student._id);
 
-        res.status(200).json({
+        return res.status(200).json({
             message: "Student permanently deleted"
         });
     } catch (error) {
@@ -1148,99 +1773,301 @@ export const permanentlyDeleteStudent = async (
     }
 };
 
-
 //Student CRUD
-
-export const updateStudent = async (req: Request, res: Response, next: NextFunction) => {
+export const updateStudent = async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+) => {
     try {
         const { id } = req.params;
-
-        const {
-            name,
-            uid,
-            rollNumber
-        } = req.body;
-
-        const student = await Student.findById(id);
+        const { name, uid, rollNumber } = req.body;
 
         const teacher = await Teacher.findOne({
-            userId: req.user?.userId
+            userId: req.user?.userId,
+            isDeleted: { $ne: true }
+        })
+            .select("_id")
+            .lean();
+
+        if (!teacher) {
+            return res.status(404).json({
+                message: "Teacher not found"
+            });
+        }
+
+        // Find the active student.
+        const student = await Student.findOne({
+            _id: id,
+            isDeleted: { $ne: true }
         });
 
         if (!student) {
             return res.status(404).json({
-                message: "Student not found"
+                message: "Active student not found"
             });
         }
 
-        await User.findByIdAndUpdate(
-            student.userId,
-            {
-                name,
-                uid
-            }
-        );
+        // Find the teacher's regular class assignments.
+        const assignments = await TeacherAssignment.find({
+            teacherId: teacher._id
+        })
+            .select("classId")
+            .lean();
 
-        await Student.findByIdAndUpdate(
-            id,
-            {
-                class: teacher?.classAssigned,
-                rollNumber
-            }
-        );
+        const classIds = [
+            ...new Set(
+                assignments.map(assignment =>
+                    assignment.classId.toString()
+                )
+            )
+        ];
 
-        res.status(200).json({
+        const regularClasses = classIds.length > 0
+            ? await Class.find({
+                _id: { $in: classIds }
+            }).distinct("class")
+            : [];
+
+        // Find temporary class assignments.
+        const temporaryClasses = await Arrangement.find({
+            arrangedTeacherId: teacher._id
+        }).distinct("class");
+
+        const assignedClasses = [
+            ...new Set([
+                ...regularClasses,
+                ...temporaryClasses
+            ])
+        ];
+
+        // Ensure the student belongs to one of the teacher's classes.
+        if (!assignedClasses.includes(student.class)) {
+            return res.status(403).json({
+                message: "You are not authorized to update this student"
+            });
+        }
+
+        // Update user details only when provided.
+        const userUpdates: Record<string, string> = {};
+
+        if (name !== undefined) {
+            if (typeof name !== "string" || !name.trim()) {
+                return res.status(400).json({
+                    message: "Name cannot be empty"
+                });
+            }
+
+            userUpdates.name = name.trim();
+        }
+
+        if (uid !== undefined) {
+            if (typeof uid !== "string" || !uid.trim()) {
+                return res.status(400).json({
+                    message: "UID cannot be empty"
+                });
+            }
+
+            userUpdates.uid = uid.trim().toLowerCase();
+        }
+
+        if (Object.keys(userUpdates).length > 0) {
+            await User.findByIdAndUpdate(
+                student.userId,
+                { $set: userUpdates },
+                { runValidators: true }
+            );
+        }
+
+        // Update roll number only if provided.
+        if (rollNumber !== undefined) {
+            const parsedRollNumber = Number(rollNumber);
+
+            if (
+                !Number.isInteger(parsedRollNumber) ||
+                parsedRollNumber < 1
+            ) {
+                return res.status(400).json({
+                    message: "Roll number must be a positive integer"
+                });
+            }
+
+            student.rollNumber = parsedRollNumber;
+            await student.save();
+        }
+
+        return res.status(200).json({
             message: "Student updated successfully"
         });
-    }
-    catch (error) {
+    } catch (error) {
         next(error);
     }
 };
 
-export const createStudent = async (req: Request, res: Response, next: NextFunction) => {
+const teacherValidClasses = [
+    "1st", "2nd", "3rd", "4th", "5th", "6th",
+    "7th", "8th", "9th", "10th", "11th", "12th"
+] as const;
+
+type TeacherClassName = typeof teacherValidClasses[number];
+
+export const createStudent = async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+) => {
     const session = await mongoose.startSession();
+
     try {
         session.startTransaction();
+
         const {
             name,
             uid,
             password,
-            rollNumber
+            rollNumber,
+            class: selectedClass
         } = req.body;
 
+        // Validate required fields.
+        if (
+            typeof name !== "string" ||
+            !name.trim() ||
+            typeof uid !== "string" ||
+            !uid.trim() ||
+            typeof password !== "string" ||
+            !password ||
+            typeof selectedClass !== "string" ||
+            !selectedClass.trim()
+        ) {
+            await session.abortTransaction();
+
+            return res.status(400).json({
+                message: "Name, UID, password, and class are required"
+            });
+        }
+
+        // Validate and narrow the class type.
+        if (
+            !teacherValidClasses.includes(
+                selectedClass as TeacherClassName
+            )
+        ) {
+            await session.abortTransaction();
+
+            return res.status(400).json({
+                message: "Invalid class selected"
+            });
+        }
+
+        const validatedClass = selectedClass as TeacherClassName;
+
+        // Validate roll number.
+        const parsedRollNumber = Number(rollNumber);
+
+        if (
+            !Number.isInteger(parsedRollNumber) ||
+            parsedRollNumber < 1
+        ) {
+            await session.abortTransaction();
+
+            return res.status(400).json({
+                message: "Roll number must be a positive integer"
+            });
+        }
+
+        // Find the logged-in teacher.
         const teacher = await Teacher.findOne({
-            userId: req.user?.userId
-        });
+            userId: req.user?.userId,
+            isDeleted: { $ne: true }
+        })
+            .select("_id")
+            .session(session)
+            .lean();
 
-        const user = await User.create([{
-            name,
-            uid,
-            password,
-            role: "student"
-        }], { session });
+        if (!teacher) {
+            await session.abortTransaction();
 
-        await Student.create([{
-            userId: user[0]._id,
-            class: teacher?.classAssigned,
-            rollNumber
-        }], { session });
+            return res.status(404).json({
+                message: "Teacher not found"
+            });
+        }
+
+        // Find the selected class.
+        const classDocument = await Class.findOne({
+            class: validatedClass
+        })
+            .select("_id")
+            .session(session)
+            .lean();
+
+        if (!classDocument) {
+            await session.abortTransaction();
+
+            return res.status(400).json({
+                message: "Invalid class selected"
+            });
+        }
+
+        // Check whether the teacher has a regular assignment.
+        const regularAssignment = await TeacherAssignment.exists({
+            teacherId: teacher._id,
+            classId: classDocument._id
+        }).session(session);
+
+        // Check whether the teacher has a temporary arrangement.
+        const temporaryAssignment = await Arrangement.exists({
+            arrangedTeacherId: teacher._id,
+            class: validatedClass
+        }).session(session);
+
+        // Only teachers assigned or temporarily arranged to the
+        // selected class can create students in that class.
+        if (!regularAssignment && !temporaryAssignment) {
+            await session.abortTransaction();
+
+            return res.status(403).json({
+                message: "You are not assigned to or arranged for this class"
+            });
+        }
+
+        // Create the user.
+        const [user] = await User.create(
+            [
+                {
+                    name: name.trim(),
+                    uid: uid.trim().toLowerCase(),
+                    password,
+                    role: "student"
+                }
+            ],
+            { session }
+        );
+
+        // Create the student.
+        await Student.create(
+            [
+                {
+                    userId: user._id,
+                    class: validatedClass,
+                    rollNumber: parsedRollNumber
+                }
+            ],
+            { session }
+        );
 
         await session.commitTransaction();
 
-        res.status(200).json({
-            message: "student created successfully"
+        return res.status(201).json({
+            message: "Student created successfully"
         });
-    }
-    catch (error) {
+    } catch (error) {
         await session.abortTransaction();
-        console.log(error);
-        next(error);
+        return next(error);
+    } finally {
+        await session.endSession();
     }
-    finally {
-        session.endSession();
-    }
-}
+};
 
 export const deleteStudent = async (
     req: Request,
@@ -1249,8 +2076,11 @@ export const deleteStudent = async (
 ) => {
     try {
         const teacher = await Teacher.findOne({
-            userId: req.user?.userId
-        });
+            userId: req.user?.userId,
+            isDeleted: { $ne: true }
+        })
+            .select("_id")
+            .lean();
 
         if (!teacher) {
             return res.status(404).json({
@@ -1258,15 +2088,55 @@ export const deleteStudent = async (
             });
         }
 
+        // Find regular classes assigned to the teacher.
+        const assignments = await TeacherAssignment.find({
+            teacherId: teacher._id
+        })
+            .select("classId")
+            .lean();
+
+        const classIds = [
+            ...new Set(
+                assignments.map(assignment =>
+                    assignment.classId.toString()
+                )
+            )
+        ];
+
+        const regularClasses = classIds.length > 0
+            ? await Class.find({
+                _id: { $in: classIds }
+            }).distinct("class")
+            : [];
+
+        // Find temporary class assignments.
+        const temporaryClasses = await Arrangement.find({
+            arrangedTeacherId: teacher._id
+        }).distinct("class");
+
+        const assignedClasses = [
+            ...new Set([
+                ...regularClasses,
+                ...temporaryClasses
+            ])
+        ];
+
+        if (assignedClasses.length === 0) {
+            return res.status(403).json({
+                message: "You are not assigned to any class"
+            });
+        }
+
+        // Find the active student in an assigned class.
         const student = await Student.findOne({
             _id: req.params.id,
-            class: teacher.classAssigned,
+            class: { $in: assignedClasses },
             isDeleted: { $ne: true }
         });
 
         if (!student) {
             return res.status(404).json({
-                message: "Active student not found in your assigned class"
+                message: "Active student not found in your assigned classes"
             });
         }
 
@@ -1275,7 +2145,7 @@ export const deleteStudent = async (
 
         await student.save();
 
-        res.status(200).json({
+        return res.status(200).json({
             message: "Student soft-deleted successfully"
         });
     } catch (error) {
@@ -1310,7 +2180,11 @@ export const getStudentById = async (req: Request, res: Response, next: NextFunc
 }
 
 //MARKS CRUD:
-export const updateMark = async (req: Request, res: Response, next: NextFunction) => {
+export const updateMark = async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+) => {
     try {
         const { id } = req.params;
 
@@ -1322,9 +2196,9 @@ export const updateMark = async (req: Request, res: Response, next: NextFunction
             totalMarks
         } = req.body;
 
-
         const teacher = await Teacher.findOne({
-            userId: req.user?.userId
+            userId: req.user?.userId,
+            isDeleted: { $ne: true }
         });
 
         if (!teacher) {
@@ -1333,58 +2207,114 @@ export const updateMark = async (req: Request, res: Response, next: NextFunction
             });
         }
 
+        const markToUpdate = await Mark.findById(id);
+
+        if (!markToUpdate) {
+            return res.status(404).json({
+                message: "Mark not found"
+            });
+        }
 
         const student = await Student.findById(studentId);
 
-        if (!student) {
+        if (!student || student.isDeleted === true) {
             return res.status(404).json({
                 message: "Student not found"
             });
         }
 
-
-        if (student.class !== teacher.classAssigned) {
-            return res.status(400).json({
-                message: "Student does not belong to your assigned class"
-            });
-        }
-
-
+        // Find the subject belonging to the student's class.
         const subject = await Subject.findOne({
             name: subjectName,
-            class: teacher.classAssigned
+            class: student.class
         });
 
         if (!subject) {
             return res.status(404).json({
-                message: "Subject not found for your assigned class"
+                message: "Subject not found for this student's class"
             });
         }
 
+        const classDocument = await Class.findOne({
+            class: student.class
+        }).select("_id");
 
+        let isAuthorized = false;
+
+        // Check the regular subject-class assignment.
+        if (classDocument) {
+            const assignment = await TeacherAssignment.exists({
+                teacherId: teacher._id,
+                subjectId: subject._id,
+                classId: classDocument._id
+            });
+
+            if (assignment) {
+                isAuthorized = true;
+            }
+        }
+
+        // Check the temporary subject-class assignment if necessary.
+        if (!isAuthorized) {
+            const arrangement = await Arrangement.exists({
+                arrangedTeacherId: teacher._id,
+                subjectId: subject._id,
+                class: student.class
+            });
+
+            if (arrangement) {
+                isAuthorized = true;
+            }
+        }
+
+        if (!isAuthorized) {
+            return res.status(403).json({
+                message:
+                    "You are not assigned to teach this subject in this class"
+            });
+        }
+
+        // Validate marks.
+        const obtained = Number(marksObtained);
+        const total = Number(totalMarks);
+
+        if (
+            !Number.isFinite(obtained) ||
+            !Number.isFinite(total) ||
+            obtained < 0 ||
+            total <= 0 ||
+            obtained > total
+        ) {
+            return res.status(400).json({
+                message:
+                    "Marks obtained must be between 0 and the maximum marks"
+            });
+        }
+
+        // Prevent duplicates, excluding the mark being updated.
         const existingMark = await Mark.findOne({
             studentId: student._id,
             subjectId: subject._id,
             exam,
-            _id: { $ne: id }
+            _id: { $ne: markToUpdate._id }
         });
 
         if (existingMark) {
             return res.status(400).json({
-                message: "Marks for this student, subject and exam already exist"
+                message:
+                    "Marks for this student, subject and exam already exist"
             });
         }
 
-
         const mark = await Mark.findByIdAndUpdate(
-            id,
+            markToUpdate._id,
             {
                 studentId: student._id,
                 teacherId: teacher._id,
                 subjectId: subject._id,
                 exam,
-                marksObtained,
-                totalMarks
+                marksObtained: obtained,
+                totalMarks: total
             },
             {
                 new: true,
@@ -1392,27 +2322,21 @@ export const updateMark = async (req: Request, res: Response, next: NextFunction
             }
         );
 
-
-        if (!mark) {
-            return res.status(404).json({
-                message: "Mark not found"
-            });
-        }
-
-
-        res.status(200).json({
+        return res.status(200).json({
             message: "Mark updated successfully",
             mark
         });
-
-    }
-    catch (error) {
-        console.log(error);
+    } catch (error) {
+        console.error("Error updating mark:", error);
         next(error);
     }
 };
 
-export const createMark = async (req: Request, res: Response, next: NextFunction) => {
+export const createMark = async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+) => {
     try {
         const {
             studentId,
@@ -1422,9 +2346,9 @@ export const createMark = async (req: Request, res: Response, next: NextFunction
             totalMarks
         } = req.body;
 
-
         const teacher = await Teacher.findOne({
-            userId: req.user?.userId
+            userId: req.user?.userId,
+            isDeleted: { $ne: true }
         });
 
         if (!teacher) {
@@ -1433,35 +2357,83 @@ export const createMark = async (req: Request, res: Response, next: NextFunction
             });
         }
 
-
         const student = await Student.findById(studentId);
 
-        if (!student) {
+        if (!student || student.isDeleted === true) {
             return res.status(404).json({
                 message: "Student not found"
             });
         }
 
-
-        if (student.class !== teacher.classAssigned) {
-            return res.status(400).json({
-                message: "Student does not belong to your assigned class"
-            });
-        }
-
-
+        // Find the subject belonging to the student's class.
         const subject = await Subject.findOne({
             name: subjectName,
-            class: teacher.classAssigned
+            class: student.class
         });
 
         if (!subject) {
             return res.status(404).json({
-                message: "Subject not found for your assigned class"
+                message: "Subject not found for this student's class"
             });
         }
 
+        // Check for a regular subject-class assignment.
+        const classDocument = await Class.findOne({
+            class: student.class
+        }).select("_id");
 
+        let isAuthorized = false;
+
+        if (classDocument) {
+            const assignment = await TeacherAssignment.exists({
+                teacherId: teacher._id,
+                subjectId: subject._id,
+                classId: classDocument._id
+            });
+
+            if (assignment) {
+                isAuthorized = true;
+            }
+        }
+
+        // If no regular assignment exists, check the temporary arrangement.
+        if (!isAuthorized) {
+            const arrangement = await Arrangement.exists({
+                arrangedTeacherId: teacher._id,
+                subjectId: subject._id,
+                class: student.class
+            });
+
+            if (arrangement) {
+                isAuthorized = true;
+            }
+        }
+
+        if (!isAuthorized) {
+            return res.status(403).json({
+                message:
+                    "You are not assigned to teach this subject in this class"
+            });
+        }
+
+        // Validate marks.
+        const obtained = Number(marksObtained);
+        const total = Number(totalMarks);
+
+        if (
+            !Number.isFinite(obtained) ||
+            !Number.isFinite(total) ||
+            obtained < 0 ||
+            total <= 0 ||
+            obtained > total
+        ) {
+            return res.status(400).json({
+                message:
+                    "Marks obtained must be between 0 and the maximum marks"
+            });
+        }
+
+        // Prevent duplicate marks for the same student, subject, and exam.
         const existingMark = await Mark.findOne({
             studentId: student._id,
             subjectId: subject._id,
@@ -1470,27 +2442,25 @@ export const createMark = async (req: Request, res: Response, next: NextFunction
 
         if (existingMark) {
             return res.status(400).json({
-                message: "Marks for this student, subject and exam already exist"
+                message:
+                    "Marks for this student, subject and exam already exist"
             });
         }
-
 
         await Mark.create({
             studentId: student._id,
             teacherId: teacher._id,
             subjectId: subject._id,
             exam,
-            marksObtained,
-            totalMarks
+            marksObtained: obtained,
+            totalMarks: total
         });
 
-
-        res.status(201).json({
-            message: "mark created successfully"
+        return res.status(201).json({
+            message: "Mark created successfully"
         });
-    }
-    catch (error) {
-        console.log(error);
+    } catch (error) {
+        console.error("Error creating mark:", error);
         next(error);
     }
 };
@@ -1556,6 +2526,15 @@ type ExamType =
     | "mid term"
     | "final";
 
+type SubjectMarks = {
+    obtained: number;
+    total: number;
+};
+
+type ClassName =
+    | "1st" | "2nd" | "3rd" | "4th"
+    | "5th" | "6th" | "7th" | "8th"
+    | "9th" | "10th" | "11th" | "12th";
 
 export const getExamResults = async (
     req: Request,
@@ -1564,7 +2543,8 @@ export const getExamResults = async (
 ) => {
     try {
         const teacher = await Teacher.findOne({
-            userId: req.user?.userId
+            userId: req.user?.userId,
+            isDeleted: false
         });
 
         if (!teacher) {
@@ -1573,10 +2553,7 @@ export const getExamResults = async (
             });
         }
 
-        const studentClass = teacher.classAssigned;
-
-        const examValue =
-            req.query.exam?.toString() || "";
+        const examValue = req.query.exam?.toString() || "";
 
         if (
             examValue !== "class test" &&
@@ -1609,84 +2586,230 @@ export const getExamResults = async (
             1
         );
 
-        if (!studentClass || !exam) {
+        const selectedClass =
+            req.query.class?.toString() || "All";
+
+        // 1. Find classes assigned through regular subject assignments.
+        const assignments = await TeacherAssignment.find({
+            teacherId: teacher._id
+        })
+            .populate({
+                path: "classId",
+                select: "class"
+            })
+            .lean();
+
+        const regularClasses = assignments.flatMap(
+            (assignment) => {
+                const classDoc =
+                    assignment.classId as unknown as {
+                        class: string;
+                    } | null;
+
+                return classDoc ? [classDoc.class] : [];
+            }
+        );
+
+        // 2. Find classes where this teacher is temporarily assigned.
+        const arrangements = await Arrangement.find({
+            arrangedTeacherId: teacher._id
+        })
+            .select("class")
+            .lean();
+
+        const temporaryClasses = arrangements.map(
+            (arrangement) => arrangement.class
+        );
+
+        // 3. Combine regular and temporary classes without duplicates.
+        const assignedClasses = [
+            ...new Set([
+                ...regularClasses,
+                ...temporaryClasses
+            ])
+        ];
+
+        // 4. Validate the selected class.
+        if (
+            selectedClass !== "All" &&
+            !assignedClasses.includes(selectedClass)
+        ) {
             return res.status(400).json({
-                message: "Class and exam are required"
+                message: "You are not assigned to this class."
             });
         }
 
+        // 5. Determine which classes to include in the results.
+        const allowedClasses: ClassName[] =
+            selectedClass === "All"
+                ? assignedClasses as ClassName[]
+                : [selectedClass as ClassName];
+
+        // 6. Fetch students from the allowed classes.
         const students = await Student.find({
-            class: studentClass
-        }).populate({
-            path: "userId",
-            select: "name uid"
+            class: {
+                $in: allowedClasses
+            }
+        })
+            .populate({
+                path: "userId",
+                select: "name uid"
+            })
+            .lean();
+
+        if (students.length === 0) {
+            return res.status(200).json({
+                subjects: [],
+                results: [],
+                totalResults: 0,
+                totalPages: 0,
+                currentPage,
+                limit: pageLimit
+            });
+        }
+
+        const studentIds = students.map(
+            (student) => student._id
+        );
+
+        // 7. Fetch all subjects belonging to the allowed classes.
+        // Preserve the existing behavior of showing all class subjects.
+        const classSubjects = await Subject.find({
+            class: {
+                $in: allowedClasses
+            }
+        })
+            .select("name subjectCode class")
+            .sort({
+                name: 1
+            })
+            .lean();
+
+        // 8. Group required subjects by class.
+        const subjectsByClass = new Map<
+            string,
+            string[]
+        >();
+
+        classSubjects.forEach((subject) => {
+            const existingSubjects =
+                subjectsByClass.get(subject.class) ?? [];
+
+            if (!existingSubjects.includes(subject.name)) {
+                existingSubjects.push(subject.name);
+            }
+
+            subjectsByClass.set(
+                subject.class,
+                existingSubjects
+            );
         });
 
-        const subjects = await Subject.find({
-            class: studentClass
-        }).select("name subjectCode");
+        // 9. Build the complete subject list for the frontend.
+        // Deduplicate subject names across classes.
+        const uniqueSubjects = new Map<
+            string,
+            {
+                name: string;
+                subjectCode: string;
+            }
+        >();
 
+        classSubjects.forEach((subject) => {
+            if (!uniqueSubjects.has(subject.name)) {
+                uniqueSubjects.set(subject.name, {
+                    name: subject.name,
+                    subjectCode: subject.subjectCode
+                });
+            }
+        });
+
+        const subjects = Array.from(
+            uniqueSubjects.values()
+        ).sort((a, b) =>
+            a.name.localeCompare(b.name)
+        );
+
+        // 10. Fetch marks for all students in the selected exam.
         const marks = await Mark.find({
             studentId: {
-                $in: students.map(
-                    student => student._id
-                )
+                $in: studentIds
             },
             exam
-        }).populate({
-            path: "subjectId",
-            select: "name subjectCode"
+        })
+            .populate({
+                path: "subjectId",
+                select: "name subjectCode class"
+            })
+            .lean();
+
+        // 11. Group marks by student ID.
+        const marksByStudent = new Map<
+            string,
+            typeof marks
+        >();
+
+        marks.forEach((mark) => {
+            const studentId = mark.studentId.toString();
+
+            const studentMarks =
+                marksByStudent.get(studentId) ?? [];
+
+            studentMarks.push(mark);
+
+            marksByStudent.set(
+                studentId,
+                studentMarks
+            );
         });
 
-        const results = students.map(student => {
-
-            const studentMarks = marks.filter(
-                mark =>
-                    mark.studentId.toString() ===
+        // 12. Calculate results using every subject in each student's class.
+        const results = students.map((student) => {
+            const studentMarks =
+                marksByStudent.get(
                     student._id.toString()
-            );
+                ) ?? [];
+
+            const requiredSubjects =
+                subjectsByClass.get(student.class) ?? [];
 
             const subjectMarks: Record<
                 string,
-                {
-                    obtained: number;
-                    total: number;
-                }
+                SubjectMarks | null
             > = {};
 
-            studentMarks.forEach(mark => {
+            // Initialize every required subject as unassessed.
+            requiredSubjects.forEach((subjectName) => {
+                subjectMarks[subjectName] = null;
+            });
+
+            // Add marks belonging to the student's own class.
+            studentMarks.forEach((mark) => {
                 if (!mark.subjectId) {
                     return;
                 }
 
                 const subject =
-                    mark.subjectId as any;
+                    mark.subjectId as unknown as {
+                        name: string;
+                        class: string;
+                    };
+
+                if (subject.class !== student.class) {
+                    return;
+                }
+
+                if (
+                    !requiredSubjects.includes(subject.name)
+                ) {
+                    return;
+                }
 
                 subjectMarks[subject.name] = {
                     obtained: mark.marksObtained,
                     total: mark.totalMarks
                 };
             });
-
-            const science =
-                subjectMarks["Science"] ?? null;
-
-            const mathematics =
-                subjectMarks["Mathematics"] ?? null;
-
-            const english =
-                subjectMarks["English"] ?? null;
-
-            const socialScience =
-                subjectMarks["Social Science"] ?? null;
-
-            const hindi =
-                subjectMarks["Hindi"] ?? null;
-
-            const requiredSubjects =
-                subjects.map(
-                    subject => subject.name
-                );
 
             let obtainedMarks = 0;
             let totalMarks = 0;
@@ -1695,132 +2818,114 @@ export const getExamResults = async (
             let hasFailedSubject = false;
             let hasAnyMarks = false;
 
-            requiredSubjects.forEach(
-                subjectName => {
+            // Calculate the overall result.
+            requiredSubjects.forEach((subjectName) => {
+                const mark = subjectMarks[subjectName];
 
-                    const mark =
-                        subjectMarks[subjectName];
-
-                    if (!mark) {
-                        hasMissingMarks = true;
-                        return;
-                    }
-
-                    hasAnyMarks = true;
-
-                    obtainedMarks +=
-                        mark.obtained;
-
-                    totalMarks +=
-                        mark.total;
-
-                    const percentage =
-                        mark.total > 0
-                            ? (mark.obtained / mark.total) * 100
-                            : 0;
-
-                    if (percentage < 33) {
-                        hasFailedSubject = true;
-                    }
+                if (!mark) {
+                    hasMissingMarks = true;
+                    return;
                 }
-            );
+
+                hasAnyMarks = true;
+
+                obtainedMarks += mark.obtained;
+                totalMarks += mark.total;
+
+                const subjectPercentage =
+                    mark.total > 0
+                        ? (mark.obtained / mark.total) * 100
+                        : 0;
+
+                if (subjectPercentage < 33) {
+                    hasFailedSubject = true;
+                }
+            });
 
             let percentage: number | null = null;
             let result: string;
 
             if (!hasAnyMarks) {
                 result = "Not Assessed";
-            }
-            else if (hasMissingMarks) {
+            } else if (hasMissingMarks) {
                 result = "Incomplete";
-            }
-            else {
+            } else {
                 percentage =
                     totalMarks > 0
                         ? Number(
                             (
-                                (obtainedMarks /
-                                    totalMarks) *
+                                (obtainedMarks / totalMarks) *
                                 100
                             ).toFixed(2)
                         )
                         : null;
 
-                result = hasFailedSubject
-                    ? "Fail"
-                    : "Pass";
+                result =
+                    hasFailedSubject || totalMarks <= 0
+                        ? "Fail"
+                        : "Pass";
             }
+
+            const user = student.userId as unknown as {
+                name?: string;
+                uid?: string;
+            } | null;
 
             return {
                 studentName:
-                    (student.userId as any)?.name ??
-                    "Student Deleted",
+                    user?.name ?? "Student Deleted",
 
-                uid:
-                    (student.userId as any)?.uid ??
-                    "",
+                uid: user?.uid ?? "",
 
                 class: student.class,
 
-                science,
-                mathematics,
-                english,
-                socialScience,
-                hindi,
+                subjects: subjectMarks,
 
-                total:
-                    hasAnyMarks
-                        ? {
-                            obtained: obtainedMarks,
-                            total: totalMarks
-                        }
-                        : null,
+                total: hasAnyMarks
+                    ? {
+                        obtained: obtainedMarks,
+                        total: totalMarks
+                    }
+                    : null,
 
                 percentage,
                 result
             };
         });
 
+        // 13. Search by student name or UID.
         let filteredResults = results;
 
         if (search !== "") {
-            const searchValue =
-                search.toLowerCase();
+            const searchValue = search.toLowerCase();
 
-            filteredResults =
-                filteredResults.filter(
-                    student =>
-                        student.studentName
-                            .toLowerCase()
-                            .includes(searchValue) ||
-                        student.uid
-                            .toLowerCase()
-                            .includes(searchValue)
-                );
+            filteredResults = filteredResults.filter(
+                (student) =>
+                    student.studentName
+                        .toLowerCase()
+                        .includes(searchValue) ||
+                    student.uid
+                        .toLowerCase()
+                        .includes(searchValue)
+            );
         }
 
+        // 14. Sort the results.
         if (sortBy === "Student Name") {
-            filteredResults.sort(
-                (a, b) =>
-                    a.studentName.localeCompare(
-                        b.studentName
-                    )
+            filteredResults.sort((a, b) =>
+                a.studentName.localeCompare(b.studentName)
             );
-        }
-        else if (sortBy === "UID") {
-            filteredResults.sort(
-                (a, b) =>
-                    a.uid.localeCompare(b.uid)
+        } else if (sortBy === "UID") {
+            filteredResults.sort((a, b) =>
+                a.uid.localeCompare(b.uid)
             );
-        }
-        else if (sortBy === "Total Marks") {
+        } else if (sortBy === "Total Marks") {
             filteredResults.sort(
                 (a, b) =>
                     (a.total?.obtained ?? 0) -
                     (b.total?.obtained ?? 0)
             );
-        }
-        else if (sortBy === "Percentage") {
+        } else if (sortBy === "Percentage") {
             filteredResults.sort(
                 (a, b) =>
                     (a.percentage ?? -1) -
@@ -1835,32 +2940,29 @@ export const getExamResults = async (
             filteredResults.reverse();
         }
 
-        const totalResults =
-            filteredResults.length;
+        // 15. Paginate after filtering and sorting.
+        const totalResults = filteredResults.length;
 
-        const totalPages =
-            Math.ceil(
-                totalResults / pageLimit
-            );
+        const totalPages = Math.ceil(
+            totalResults / pageLimit
+        );
 
-        const skip =
-            (currentPage - 1) * pageLimit;
+        const skip = (currentPage - 1) * pageLimit;
 
-        const paginatedResults =
-            filteredResults.slice(
-                skip,
-                skip + pageLimit
-            );
+        const paginatedResults = filteredResults.slice(
+            skip,
+            skip + pageLimit
+        );
 
         return res.status(200).json({
+            subjects,
             results: paginatedResults,
             totalResults,
             totalPages,
             currentPage,
             limit: pageLimit
         });
-    }
-    catch (error) {
+    } catch (error) {
         console.log(error);
         next(error);
     }
@@ -1875,6 +2977,7 @@ export const getStudentsForAttendance = async (
     try {
         const date = req.query.date?.toString() || "";
         const search = req.query.search?.toString().trim() || "";
+        const selectedClass = req.query.class?.toString() || "";
 
         const currentPage = Math.max(
             Number(req.query.page) || 1,
@@ -1892,6 +2995,12 @@ export const getStudentsForAttendance = async (
             });
         }
 
+        if (!selectedClass) {
+            return res.status(400).json({
+                message: "Class is required"
+            });
+        }
+
         const selectedDate = new Date(date);
 
         if (isNaN(selectedDate.getTime())) {
@@ -1899,6 +3008,26 @@ export const getStudentsForAttendance = async (
                 message: "Invalid date"
             });
         }
+
+        // Validate the selected class.
+        const validClasses = [
+            "1st", "2nd", "3rd", "4th",
+            "5th", "6th", "7th", "8th",
+            "9th", "10th", "11th", "12th"
+        ] as const;
+
+        if (
+            !validClasses.includes(
+                selectedClass as (typeof validClasses)[number]
+            )
+        ) {
+            return res.status(400).json({
+                message: "Invalid class selected"
+            });
+        }
+
+        const className =
+            selectedClass as (typeof validClasses)[number];
 
         const teacher = await Teacher.findOne({
             userId: req.user?.userId,
@@ -1911,80 +3040,146 @@ export const getStudentsForAttendance = async (
             });
         }
 
-        // Find the class this teacher currently manages.
-        const assignedClass = await Class.findOne({
+        // 1. Find regular class assignments.
+        const assignments = await TeacherAssignment.find({
             teacherId: teacher._id
+        })
+            .populate({
+                path: "classId",
+                select: "class"
+            })
+            .lean();
+
+        const regularClasses = assignments
+            .map((assignment) => {
+                const classDoc = assignment.classId as unknown as
+                    | { class: string }
+                    | null;
+
+                return classDoc?.class;
+            })
+            .filter(
+                (name): name is string =>
+                    typeof name === "string"
+            );
+
+        // 2. Find temporary class arrangements.
+        const arrangements = await Arrangement.find({
+            arrangedTeacherId: teacher._id
         })
             .select("class")
             .lean();
 
-        const isClassTeacher = Boolean(assignedClass);
+        const temporaryClasses = arrangements.map(
+            (arrangement) => arrangement.class
+        );
 
-        // Use the temporary class when assigned; otherwise use the usual class.
-        const currentClass = assignedClass?.class ?? teacher.classAssigned;
+        // 3. Combine and deduplicate assigned classes.
+        const assignedClasses = [
+            ...new Set([
+                ...regularClasses,
+                ...temporaryClasses
+            ])
+        ];
 
-        const classStudentIds = await Student.find({
-            class: currentClass,
-            isDeleted: { $ne: true }
-        }).distinct("_id");
+        // 4. Verify that the teacher is assigned to this class
+        // or is temporarily arranged for it.
+        if (!assignedClasses.includes(className)) {
+            return res.status(403).json({
+                message:
+                    "You are not assigned to or arranged for this class"
+            });
+        }
 
-        const attendanceMarked = await Attendance.exists({
-            studentId: { $in: classStudentIds },
-            date: selectedDate
-        });
+        // 5. Check whether the teacher is the actual class teacher.
+        const classTeacherRecord = await Class.findOne({
+            class: className,
+            teacherId: teacher._id
+        })
+            .select("_id")
+            .lean();
 
-        const studentFilter: any = {
-            class: currentClass,
+        const isClassTeacher = Boolean(classTeacherRecord);
+
+        // 6. Build the student filter.
+        const studentFilter: Record<string, any> = {
+            class: className,
             isDeleted: { $ne: true }
         };
 
-        // Search by student name or UID.
+        // 7. Apply search by student name or UID.
         if (search) {
-            const searchRegex = {
-                $regex: search,
-                $options: "i"
-            };
+            const escapedSearch = search.replace(
+                /[.*+?^${}()|[\]\\]/g,
+                "\\$&"
+            );
 
             const matchingUsers = await User.find({
                 $or: [
-                    { name: searchRegex },
-                    { uid: searchRegex }
+                    {
+                        name: {
+                            $regex: escapedSearch,
+                            $options: "i"
+                        }
+                    },
+                    {
+                        uid: {
+                            $regex: escapedSearch,
+                            $options: "i"
+                        }
+                    }
                 ]
             }).select("_id");
 
             studentFilter.userId = {
-                $in: matchingUsers.map(user => user._id)
+                $in: matchingUsers.map((user) => user._id)
             };
         }
 
+        // 8. Count students and calculate pagination.
         const totalStudents =
             await Student.countDocuments(studentFilter);
 
-        const totalPages =
-            Math.ceil(totalStudents / pageLimit);
+        const totalPages = Math.ceil(
+            totalStudents / pageLimit
+        );
 
         const validPage =
             totalPages > 0
                 ? Math.min(currentPage, totalPages)
                 : 1;
 
-        const skip =
-            (validPage - 1) * pageLimit;
+        const skip = (validPage - 1) * pageLimit;
 
+        // 9. Fetch paginated students.
         const students = await Student.find(studentFilter)
-            .select("_id userId")
+            .select("_id userId rollNumber")
             .populate({
                 path: "userId",
                 select: "name uid"
             })
             .sort({ rollNumber: 1 })
             .skip(skip)
-            .limit(pageLimit);
+            .limit(pageLimit)
+            .lean();
 
         const studentIds = students.map(
-            student => student._id
+            (student) => student._id
         );
 
+        // 10. Check whether attendance has been marked
+        // for any active student in this class on this date.
+        const allClassStudentIds = await Student.find({
+            class: className,
+            isDeleted: { $ne: true }
+        }).distinct("_id");
+
+        const attendanceMarked = await Attendance.exists({
+            studentId: { $in: allClassStudentIds },
+            date: selectedDate
+        });
+
+        // 11. Find approved leaves for the displayed students.
         const approvedLeaves = await Leave.find({
             status: "Approved",
             startDate: { $lte: selectedDate },
@@ -1994,32 +3189,36 @@ export const getStudentsForAttendance = async (
 
         const studentsOnLeave = new Set(
             approvedLeaves
-                .filter(leave => leave.studentId)
-                .map(leave => leave.studentId!.toString())
+                .filter((leave) => leave.studentId)
+                .map((leave) => leave.studentId!.toString())
         );
 
+        // 12. Fetch existing attendance records.
         const existingAttendance = await Attendance.find({
             date: selectedDate,
             studentId: { $in: studentIds }
         }).select("studentId status");
 
         const attendanceMap = new Map(
-            existingAttendance.map(record => [
+            existingAttendance.map((record) => [
                 record.studentId.toString(),
                 record.status
             ])
         );
 
-        const paginatedStudents = students.map(student => ({
+        // 13. Prepare the response data.
+        const paginatedStudents = students.map((student) => ({
             _id: student._id,
             userId: student.userId,
-            onLeave: studentsOnLeave.has(student._id.toString()),
+            onLeave: studentsOnLeave.has(
+                student._id.toString()
+            ),
             attendanceStatus:
                 attendanceMap.get(student._id.toString()) ?? null
         }));
 
         return res.status(200).json({
-            class: currentClass,
+            class: className,
             isClassTeacher,
             students: paginatedStudents,
             attendanceMarked: Boolean(attendanceMarked),
@@ -2029,7 +3228,11 @@ export const getStudentsForAttendance = async (
             limit: pageLimit
         });
     } catch (error) {
-        console.log(error);
+        console.error(
+            "Error fetching students for attendance:",
+            error
+        );
+
         return next(error);
     }
 };
@@ -2042,13 +3245,42 @@ export const createAttendance = async (
     try {
         const {
             date,
+            class: selectedClass,
             attendance = [],
             markAll = null
         } = req.body;
 
+        // Allowed class values from the Student schema.
+        const validClasses = [
+            "1st", "2nd", "3rd", "4th", "5th", "6th",
+            "7th", "8th", "9th", "10th", "11th", "12th"
+        ] as const;
+
+        type ClassName = (typeof validClasses)[number];
+
+        // Validate date.
         if (!date) {
             return res.status(400).json({
                 message: "Date is required"
+            });
+        }
+
+        // Validate class and narrow its type.
+        if (
+            typeof selectedClass !== "string" ||
+            !validClasses.includes(selectedClass as ClassName)
+        ) {
+            return res.status(400).json({
+                message: "A valid class is required"
+            });
+        }
+
+        const className = selectedClass as ClassName;
+
+        // Validate attendance payload.
+        if (!Array.isArray(attendance)) {
+            return res.status(400).json({
+                message: "Attendance must be an array"
             });
         }
 
@@ -2060,13 +3292,14 @@ export const createAttendance = async (
             });
         }
 
+        // Prevent attendance on Sundays.
         if (selectedDate.getDay() === 0) {
             return res.status(400).json({
-                message:
-                    "Attendance cannot be marked on Sunday"
+                message: "Attendance cannot be marked on Sunday"
             });
         }
 
+        // Prevent attendance on holidays.
         const holiday = await Holiday.findOne({
             date: selectedDate
         });
@@ -2078,8 +3311,10 @@ export const createAttendance = async (
             });
         }
 
+        // Find the logged-in teacher.
         const teacher = await Teacher.findOne({
-            userId: req.user?.userId
+            userId: req.user?.userId,
+            isDeleted: false
         });
 
         if (!teacher) {
@@ -2088,10 +3323,20 @@ export const createAttendance = async (
             });
         }
 
-        /*
-         * markAll can only be:
-         * "Present", "Absent", or null.
-         */
+        // Only the actual class teacher may mark attendance.
+        const classTeacherRecord = await Class.findOne({
+            class: className,
+            teacherId: teacher._id
+        }).select("_id");
+
+        if (!classTeacherRecord) {
+            return res.status(403).json({
+                message:
+                    "Only the class teacher can mark attendance for this class"
+            });
+        }
+
+        // Validate markAll.
         if (
             markAll !== null &&
             markAll !== "Present" &&
@@ -2102,45 +3347,36 @@ export const createAttendance = async (
             });
         }
 
-        /*
-         * Get all students belonging to the
-         * teacher's assigned class.
-         */
+        // Fetch active students in this class.
         const students = await Student.find({
-            class: teacher.classAssigned
+            class: className,
+            isDeleted: { $ne: true }
         }).select("_id");
 
-        const studentIds = students.map(
-            student => student._id.toString()
+        const studentIds = students.map(student =>
+            student._id.toString()
         );
 
-        /*
-         * Make a Set for faster ID lookup.
-         */
         const studentIdSet = new Set(studentIds);
 
-        /*
-         * Validate every student ID sent by
-         * the frontend.
-         */
+        // Validate submitted student IDs.
         const invalidStudent = attendance.some(
             (record: {
-                studentId: string;
-                status: string;
+                studentId?: string;
+                status?: string;
             }) =>
+                !record.studentId ||
                 !studentIdSet.has(record.studentId)
         );
 
         if (invalidStudent) {
             return res.status(403).json({
                 message:
-                    "You can only mark attendance for students in your assigned class"
+                    "You can only mark attendance for students in the selected class"
             });
         }
 
-        /*
-         * Validate attendance status values.
-         */
+        // Validate attendance statuses.
         const invalidStatus = attendance.some(
             (record: {
                 studentId: string;
@@ -2156,17 +3392,26 @@ export const createAttendance = async (
             });
         }
 
-        /*
-         * Check whether attendance already exists
-         * for this class/date.
-         */
-        const existingAttendance =
-            await Attendance.findOne({
-                studentId: {
-                    $in: studentIds
-                },
-                date: selectedDate
+        // Reject duplicate student IDs.
+        const submittedIds = attendance.map(
+            (record: { studentId: string }) =>
+                record.studentId
+        );
+
+        if (
+            new Set(submittedIds).size !== submittedIds.length
+        ) {
+            return res.status(400).json({
+                message:
+                    "Duplicate student attendance entries are not allowed"
             });
+        }
+
+        // Prevent marking attendance more than once for this class and date.
+        const existingAttendance = await Attendance.findOne({
+            studentId: { $in: studentIds },
+            date: selectedDate
+        });
 
         if (existingAttendance) {
             return res.status(400).json({
@@ -2175,39 +3420,25 @@ export const createAttendance = async (
             });
         }
 
-        /*
-         * Find students who have an approved leave
-         * on the selected date.
-         */
+        // Find students with approved leave.
         const approvedLeaves = await Leave.find({
             status: "Approved",
             startDate: { $lte: selectedDate },
             endDate: { $gte: selectedDate },
-            studentId: {
-                $in: studentIds
-            }
+            studentId: { $in: studentIds }
         }).select("studentId");
 
         const leaveStudentIds = new Set(
             approvedLeaves
                 .filter(leave => leave.studentId)
-                .map(leave =>
-                    leave.studentId!.toString()
-                )
+                .map(leave => leave.studentId!.toString())
         );
 
-        /*
-         * Store individual attendance records
-         * in a Map.
-         *
-         * If a student appears more than once,
-         * the last value will be used.
-         */
-        const individualAttendance =
-            new Map<
-                string,
-                "Present" | "Absent"
-            >();
+        // Store individually selected attendance statuses.
+        const individualAttendance = new Map<
+            string,
+            "Present" | "Absent"
+        >();
 
         attendance.forEach(
             (record: {
@@ -2221,18 +3452,8 @@ export const createAttendance = async (
             }
         );
 
-        /*
-         * Create attendance for every student
-         * who is NOT on approved leave.
-         *
-         * Priority:
-         *
-         * 1. Individual attendance
-         * 2. markAll
-         * 3. No attendance
-         */
         const attendanceRecords: {
-            studentId: string;
+            studentId: typeof students[number]["_id"];
             teacherId: typeof teacher._id;
             date: Date;
             status: "Present" | "Absent";
@@ -2240,12 +3461,11 @@ export const createAttendance = async (
 
         const missingStudentIds: string[] = [];
 
-        for (const studentId of studentIds) {
+        // Build attendance records for all active students.
+        for (const student of students) {
+            const studentId = student._id.toString();
 
-            /*
-             * Students on approved leave do not
-             * need attendance.
-             */
+            // Do not mark students who are on approved leave.
             if (leaveStudentIds.has(studentId)) {
                 continue;
             }
@@ -2253,29 +3473,24 @@ export const createAttendance = async (
             const individualStatus =
                 individualAttendance.get(studentId);
 
-            const finalStatus =
-                individualStatus ?? markAll;
+            const finalStatus = individualStatus ?? markAll;
 
-            /*
-             * If neither an individual status nor
-             * markAll exists, attendance is missing.
-             */
-            if (!finalStatus) {
+            if (
+                finalStatus !== "Present" &&
+                finalStatus !== "Absent"
+            ) {
                 missingStudentIds.push(studentId);
                 continue;
             }
 
             attendanceRecords.push({
-                studentId,
+                studentId: student._id,
                 teacherId: teacher._id,
                 date: selectedDate,
                 status: finalStatus
             });
         }
 
-        /*
-         * Every non-leave student must have a status.
-         */
         if (missingStudentIds.length > 0) {
             return res.status(400).json({
                 message:
@@ -2283,30 +3498,21 @@ export const createAttendance = async (
             });
         }
 
-        /*
-         * There should normally be at least one
-         * attendance record unless every student
-         * is on leave.
-         */
         if (attendanceRecords.length === 0) {
             return res.status(400).json({
-                message:
-                    "No attendance records to submit."
+                message: "No attendance records to submit."
             });
         }
 
-        await Attendance.insertMany(
-            attendanceRecords
-        );
+        // Save attendance records.
+        await Attendance.insertMany(attendanceRecords);
 
         return res.status(201).json({
-            message:
-                "Attendance marked successfully"
+            message: "Attendance marked successfully"
         });
-    }
-    catch (error) {
+    } catch (error) {
         console.log(error);
-        next(error);
+        return next(error);
     }
 };
 
@@ -2316,11 +3522,9 @@ export const getAttendance = async (
     next: NextFunction
 ) => {
     try {
-        const date =
-            req.query.date?.toString() || "";
-
-        const search =
-            req.query.search?.toString().trim() || "";
+        const date = req.query.date?.toString() || "";
+        const search = req.query.search?.toString().trim() || "";
+        const selectedClass = req.query.class?.toString() || "";
 
         const currentPage = Math.max(
             Number(req.query.page) || 1,
@@ -2332,11 +3536,29 @@ export const getAttendance = async (
             1
         );
 
+        const validClasses = [
+            "1st", "2nd", "3rd", "4th", "5th", "6th",
+            "7th", "8th", "9th", "10th", "11th", "12th"
+        ] as const;
+
+        type ClassName = (typeof validClasses)[number];
+
         if (!date) {
             return res.status(400).json({
                 message: "Date is required"
             });
         }
+
+        if (
+            !selectedClass ||
+            !validClasses.includes(selectedClass as ClassName)
+        ) {
+            return res.status(400).json({
+                message: "A valid class is required"
+            });
+        }
+
+        const className = selectedClass as ClassName;
 
         const selectedDate = new Date(date);
 
@@ -2346,8 +3568,10 @@ export const getAttendance = async (
             });
         }
 
+        // Find the logged-in teacher.
         const teacher = await Teacher.findOne({
-            userId: req.user?.userId
+            userId: req.user?.userId,
+            isDeleted: false
         }).lean();
 
         if (!teacher) {
@@ -2356,9 +3580,63 @@ export const getAttendance = async (
             });
         }
 
-        const studentFilter: any = {
-            class: teacher.classAssigned
+        // Find regular class assignments.
+        const assignments = await TeacherAssignment.find({
+            teacherId: teacher._id
+        })
+            .populate({
+                path: "classId",
+                select: "class"
+            })
+            .lean();
+
+        const regularClasses = assignments
+            .map(assignment => {
+                const classDoc = assignment.classId as unknown as {
+                    class: string;
+                } | null;
+
+                return classDoc?.class;
+            })
+            .filter(
+                (classValue): classValue is string =>
+                    Boolean(classValue)
+            );
+
+        // Find temporary class arrangements.
+        const arrangements = await Arrangement.find({
+            arrangedTeacherId: teacher._id
+        })
+            .select("class")
+            .lean();
+
+        const temporaryClasses = arrangements.map(
+            arrangement => arrangement.class
+        );
+
+        // Combine and deduplicate regular and temporary classes.
+        const assignedClasses = [
+            ...new Set([
+                ...regularClasses,
+                ...temporaryClasses
+            ])
+        ];
+
+        // Ensure the teacher can access the selected class.
+        if (!assignedClasses.includes(className)) {
+            return res.status(403).json({
+                message:
+                    "You are not assigned to or arranged for this class"
+            });
+        }
+
+        // Build the student query.
+        const studentFilter = {
+            class: className,
+            isDeleted: { $ne: true } as const
         };
+
+        let studentQuery = Student.find(studentFilter);
 
         if (search) {
             const searchRegex = {
@@ -2375,34 +3653,33 @@ export const getAttendance = async (
                 .select("_id")
                 .lean();
 
-            studentFilter.userId = {
-                $in: matchingUsers.map(
-                    user => user._id
-                )
-            };
+            const matchingUserIds = matchingUsers.map(
+                user => user._id
+            );
+
+            studentQuery = Student.find({
+                ...studentFilter,
+                userId: { $in: matchingUserIds }
+            });
         }
 
-        const students = await Student.find(
-            studentFilter
-        )
+        // Fetch students and retain their roll numbers for sorting.
+        const students = await studentQuery
             .select("_id class rollNumber userId")
             .populate({
                 path: "userId",
                 select: "name uid"
             })
-            .sort({
-                rollNumber: 1
-            })
+            .sort({ rollNumber: 1 })
             .lean();
 
         const studentIds = students.map(
             student => student._id
         );
 
+        // Fetch attendance records for these students on the selected date.
         const attendance = await Attendance.find({
-            studentId: {
-                $in: studentIds
-            },
+            studentId: { $in: studentIds },
             date: selectedDate
         })
             .populate({
@@ -2415,17 +3692,12 @@ export const getAttendance = async (
             })
             .lean();
 
+        // Find students with approved leave.
         const approvedLeaves = await Leave.find({
-            studentId: {
-                $in: studentIds
-            },
+            studentId: { $in: studentIds },
             status: "Approved",
-            startDate: {
-                $lte: selectedDate
-            },
-            endDate: {
-                $gte: selectedDate
-            }
+            startDate: { $lte: selectedDate },
+            endDate: { $gte: selectedDate }
         })
             .select("_id studentId")
             .lean();
@@ -2433,16 +3705,7 @@ export const getAttendance = async (
         const leaveStudentIds = new Set(
             approvedLeaves
                 .filter(leave => leave.studentId)
-                .map(leave =>
-                    leave.studentId!.toString()
-                )
-        );
-
-        const attendanceMap = new Map(
-            attendance.map(record => [
-                record.studentId._id.toString(),
-                record
-            ])
+                .map(leave => leave.studentId!.toString())
         );
 
         const leaveMap = new Map(
@@ -2454,6 +3717,38 @@ export const getAttendance = async (
                 ])
         );
 
+        // Map attendance records by student ID.
+        const attendanceMap = new Map(
+            attendance
+                .filter(record => record.studentId)
+                .map(record => {
+                    const populatedStudent =
+                        record.studentId as unknown as {
+                            _id: typeof students[number]["_id"];
+                            class: ClassName;
+                            rollNumber: number;
+                            userId: {
+                                name?: string;
+                                uid?: string;
+                            } | null;
+                        };
+
+                    return [
+                        populatedStudent._id.toString(),
+                        record
+                    ];
+                })
+        );
+
+        // Create a lookup for student details.
+        const studentMap = new Map(
+            students.map(student => [
+                student._id.toString(),
+                student
+            ])
+        );
+
+        // Build the final attendance result.
         const result = students.map(student => {
             const studentId = student._id.toString();
 
@@ -2464,7 +3759,7 @@ export const getAttendance = async (
                     _id: `${leave?._id}-${date}`,
                     studentId: student,
                     date: selectedDate,
-                    status: "Leave"
+                    status: "Leave" as const
                 };
             }
 
@@ -2474,7 +3769,8 @@ export const getAttendance = async (
             if (attendanceRecord) {
                 return {
                     _id: attendanceRecord._id,
-                    studentId: attendanceRecord.studentId,
+                    studentId:
+                        studentMap.get(studentId) ?? student,
                     date: attendanceRecord.date,
                     status: attendanceRecord.status
                 };
@@ -2484,12 +3780,13 @@ export const getAttendance = async (
                 _id: `unmarked-${studentId}-${date}`,
                 studentId: student,
                 date: selectedDate,
-                status: "Not Marked"
+                status: "Not Marked" as const
             };
         });
 
+        // Sort by roll number using the student documents.
         result.sort(
-            (a: any, b: any) =>
+            (a, b) =>
                 Number(a.studentId.rollNumber) -
                 Number(b.studentId.rollNumber)
         );
@@ -2512,28 +3809,21 @@ export const getAttendance = async (
             skip + pageLimit
         );
 
+        // Calculate counts across all filtered students.
         const presentCount = result.filter(
-            (record: any) =>
-                record.status === "Present" &&
-                !leaveStudentIds.has(
-                    record.studentId._id.toString()
-                )
+            record => record.status === "Present"
         ).length;
 
         const absentCount = result.filter(
-            (record: any) =>
-                record.status === "Absent" &&
-                !leaveStudentIds.has(
-                    record.studentId._id.toString()
-                )
+            record => record.status === "Absent"
         ).length;
 
         const leaveCount = result.filter(
-            (record: any) =>
-                record.status === "Leave"
+            record => record.status === "Leave"
         ).length;
 
         return res.status(200).json({
+            class: className,
             attendance: paginatedResult,
             totalRecords,
             totalPages,
@@ -2545,7 +3835,7 @@ export const getAttendance = async (
         });
     } catch (error) {
         console.log(error);
-        next(error);
+        return next(error);
     }
 };
 
@@ -2589,10 +3879,8 @@ export const getStudentAttendance = async (
          * Get the student and make sure the student
          * belongs to the teacher's assigned class.
          */
-        const student = await Student.findOne({
-            _id: studentId,
-            class: teacher.classAssigned
-        })
+        // Find the student and populate their user details.
+        const student = await Student.findById(studentId)
             .select("_id class rollNumber userId")
             .populate({
                 path: "userId",
@@ -2603,6 +3891,31 @@ export const getStudentAttendance = async (
         if (!student) {
             return res.status(404).json({
                 message: "Student not found"
+            });
+        }
+
+        // Find the Class document corresponding to the student's class.
+        const classDocument = await Class.findOne({
+            class: student.class
+        })
+            .select("_id")
+            .lean();
+
+        if (!classDocument) {
+            return res.status(404).json({
+                message: "Class not found"
+            });
+        }
+
+        // Check whether the logged-in teacher has an assignment in this class.
+        const assignment = await TeacherAssignment.exists({
+            teacherId: teacher._id,
+            classId: classDocument._id
+        });
+
+        if (!assignment) {
+            return res.status(403).json({
+                message: "You are not assigned to teach in this student's class"
             });
         }
 
@@ -2840,10 +4153,8 @@ export const getStudentMonthlyAttendance = async (
         }
 
         // Ensure the student belongs to the teacher's assigned class
-        const student = await Student.findOne({
-            _id: studentId,
-            class: teacher.classAssigned
-        })
+        // Find the student and populate their user details.
+        const student = await Student.findById(studentId)
             .select("_id class rollNumber userId")
             .populate({
                 path: "userId",
@@ -2854,6 +4165,31 @@ export const getStudentMonthlyAttendance = async (
         if (!student) {
             return res.status(404).json({
                 message: "Student not found"
+            });
+        }
+
+        // Find the Class document corresponding to the student's class.
+        const classDocument = await Class.findOne({
+            class: student.class
+        })
+            .select("_id")
+            .lean();
+
+        if (!classDocument) {
+            return res.status(404).json({
+                message: "Class not found"
+            });
+        }
+
+        // Verify that the teacher has an assignment in this class.
+        const assignment = await TeacherAssignment.exists({
+            teacherId: teacher._id,
+            classId: classDocument._id
+        });
+
+        if (!assignment) {
+            return res.status(403).json({
+                message: "You are not assigned to teach in this student's class"
             });
         }
 
@@ -3123,8 +4459,7 @@ export const getMyAttendance = async (
             teacher: {
                 name: user?.name ?? "",
                 uid: user?.uid ?? "",
-                employeeID: teacher.employeeID,
-                department: teacher.department
+                employeeID: teacher.employeeID
             },
             attendance: paginatedAttendance,
             totalRecords,
@@ -3169,7 +4504,7 @@ export const getMyMonthlyAttendance = async (
             userId: req.user?.userId,
             isDeleted: { $ne: true }
         })
-            .select("_id employeeID department userId")
+            .select("_id employeeID userId")
             .populate({
                 path: "userId",
                 select: "name uid"
@@ -3282,8 +4617,7 @@ export const getMyMonthlyAttendance = async (
             teacher: {
                 name: user?.name ?? "",
                 uid: user?.uid ?? "",
-                employeeID: teacher.employeeID,
-                department: teacher.department
+                employeeID: teacher.employeeID
             },
             attendance: Array.from(
                 attendanceByDate.values()
@@ -3314,10 +4648,105 @@ export const getTeacherSubjects = async (
             });
         }
 
-        const subjects = await Subject.find({
-            name: teacher.department,
-            class: teacher.classAssigned
-        }).select("_id name class subjectCode");
+        // Fetch regular subject assignments
+        const assignments = await TeacherAssignment.find({
+            teacherId: teacher._id
+        })
+            .populate({
+                path: "subjectId",
+                select: "name subjectCode"
+            })
+            .populate({
+                path: "classId",
+                select: "class"
+            })
+            .lean();
+
+        const regularSubjects = assignments.flatMap((assignment) => {
+            const subject = assignment.subjectId as unknown as {
+                _id: { toString: () => string };
+                name: string;
+                subjectCode: string;
+            } | null;
+
+            const classDoc = assignment.classId as unknown as {
+                class: string;
+            } | null;
+
+            if (!subject || !classDoc) {
+                return [];
+            }
+
+            return [{
+                _id: subject._id.toString(),
+                name: subject.name,
+                subjectCode: subject.subjectCode,
+                class: classDoc.class
+            }];
+        });
+
+        // Fetch temporary subject assignments
+        const arrangements = await Arrangement.find({
+            arrangedTeacherId: teacher._id
+        })
+            .populate({
+                path: "subjectId",
+                select: "name subjectCode"
+            })
+            .lean();
+
+        const temporarySubjects = arrangements.flatMap((arrangement) => {
+            const subject = arrangement.subjectId as unknown as {
+                _id: { toString: () => string };
+                name: string;
+                subjectCode: string;
+            } | null;
+
+            if (!subject) {
+                return [];
+            }
+
+            return [{
+                _id: subject._id.toString(),
+                name: subject.name,
+                subjectCode: subject.subjectCode,
+                class: arrangement.class
+            }];
+        });
+
+        // Combine regular and temporary assignments.
+        // A subject assigned through both sources should appear only once
+        // for the same class.
+        const uniqueSubjects = new Map<
+            string,
+            {
+                _id: string;
+                name: string;
+                subjectCode: string;
+                class: string;
+            }
+        >();
+
+        [...regularSubjects, ...temporarySubjects].forEach((subject) => {
+            const key = `${subject._id}-${subject.class}`;
+
+            if (!uniqueSubjects.has(key)) {
+                uniqueSubjects.set(key, subject);
+            }
+        });
+
+        const subjects = Array.from(uniqueSubjects.values());
+
+        // Sort by subject name, then class
+        subjects.sort((a, b) => {
+            const nameComparison = a.name.localeCompare(b.name);
+
+            if (nameComparison !== 0) {
+                return nameComparison;
+            }
+
+            return a.class.localeCompare(b.class);
+        });
 
         return res.status(200).json({
             subjects

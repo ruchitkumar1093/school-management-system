@@ -146,7 +146,8 @@ function PrincipalViewClass() {
                 "asc",
                 1,
                 1000,
-                false
+                false,
+                true
             );
 
             setTeachers(response.data.teachers ?? []);
@@ -185,7 +186,7 @@ function PrincipalViewClass() {
             showMessage(
                 "Error",
                 error.response?.data?.message ||
-                    "Failed to assign class teacher."
+                "Failed to assign class teacher."
             );
         } finally {
             setTeacherLoading(false);

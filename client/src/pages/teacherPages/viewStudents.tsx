@@ -5,6 +5,7 @@ import OrderBy from "../../components/orderBy";
 import SearchBar from "../../components/searchBar";
 import Pagination from "../../components/pagination";
 import Limit from "../../components/limit";
+import ClassFilter from "../../components/classFilter";
 
 import { useState, useEffect } from "react";
 import {
@@ -39,8 +40,11 @@ function TeacherViewStudents() {
 
     const [studentsData, setStudentsData] = useState<Student[]>([]);
 
+    const [classFilter, setClassFilter] = useState("All");
+    const [assignedClasses, setAssignedClasses] = useState<string[]>([]);
+
     const [currentPage, setCurrentPage] = useState(1);
-    const [limit, setLimit] = useState(5);
+    const [limit, setLimit] = useState(10);
     const [totalPages, setTotalPages] = useState(1);
 
     const [search, setSearch] = useState("");
@@ -69,10 +73,9 @@ function TeacherViewStudents() {
                 orderBy,
                 currentPage,
                 limit,
-                showDeleted
+                showDeleted,
+                classFilter
             );
-
-            console.log("Students response:", response.data);
 
             setStudentsData(response.data.students);
             setTotalPages(response.data.totalPages);
@@ -80,12 +83,21 @@ function TeacherViewStudents() {
             setIsClassTeacher(
                 response.data.isClassTeacher === true
             );
-        } catch (error) {
+
+            setAssignedClasses(
+                response.data.assignedClasses ?? []
+            );
+        } catch (error: any) {
             console.error(error);
 
             setStudentsData([]);
             setTotalPages(1);
             setIsClassTeacher(false);
+
+            console.error(
+                error.response?.data?.message ||
+                "Failed to fetch students."
+            );
         } finally {
             setLoadingTeacherStatus(false);
         }
@@ -103,17 +115,25 @@ function TeacherViewStudents() {
 
     useEffect(() => {
         setCurrentPage(1);
-    }, [debouncedSearch, sortBy, orderBy, limit, showDeleted]);
+    }, [
+        debouncedSearch,
+        sortBy,
+        orderBy,
+        limit,
+        showDeleted,
+        classFilter
+    ]);
 
     useEffect(() => {
-        fetchStudents();
+        void fetchStudents();
     }, [
         debouncedSearch,
         sortBy,
         orderBy,
         currentPage,
         limit,
-        showDeleted
+        showDeleted,
+        classFilter
     ]);
 
     useEffect(() => {
@@ -124,7 +144,8 @@ function TeacherViewStudents() {
         orderBy,
         currentPage,
         limit,
-        showDeleted
+        showDeleted,
+        classFilter
     ]);
 
     function handleSelectStudent(id: string) {
@@ -422,8 +443,8 @@ function TeacherViewStudents() {
                             </div>
                         </div>
 
-                        <div className="flex justify-between items-center mb-3">
-                            <div className="flex gap-8 mb-3">
+                        <div className="mb-3 flex flex-wrap items-center justify-between gap-4">
+                            <div className="mb-3 flex flex-wrap items-center gap-5">
                                 <SortBy
                                     sortOptions={sortOptions}
                                     sortBy={sortBy}
@@ -434,6 +455,13 @@ function TeacherViewStudents() {
                                     orderBy={orderBy}
                                     setOrderBy={setOrderBy}
                                     disabled={sortBy === "None"}
+                                />
+
+                                <ClassFilter
+                                    classFilter={classFilter}
+                                    setClassFilter={setClassFilter}
+                                    classes={assignedClasses}
+                                    showAll={true}
                                 />
                             </div>
 

@@ -43,6 +43,12 @@ type Teacher = {
     classAssigned: string;
 };
 
+const examMaxMarks: Record<string, number> = {
+    "class test": 40,
+    "mid term": 80,
+    "final": 100
+};
+
 function MarksForm() {
     const [searchParams] = useSearchParams();
     const mode = searchParams.get("mode");
@@ -70,6 +76,23 @@ function MarksForm() {
     const [modalOpen, setModalOpen] = useState(false);
     const [modalTitle, setModalTitle] = useState("");
     const [modalMessage, setModalMessage] = useState("");
+
+    // Keep maximum marks synchronized with the selected exam type.
+    useEffect(() => {
+        const maxMarks = examMaxMarks[formData.exam];
+
+        if (maxMarks === undefined) return;
+
+        setFormData(previous => ({
+            ...previous,
+            totalMarks: String(maxMarks),
+            marksObtained:
+                previous.marksObtained !== "" &&
+                    Number(previous.marksObtained) > maxMarks
+                    ? ""
+                    : previous.marksObtained
+        }));
+    }, [formData.exam]);
 
     // Fetch current subjects from the database.
     useEffect(() => {
@@ -117,9 +140,7 @@ function MarksForm() {
             setLoadingOptions(true);
 
             try {
-                const response = await getMarkFormOptions(
-                    formData.class
-                );
+                const response = await getMarkFormOptions(formData.class);
 
                 if (cancelled) return;
 
@@ -170,7 +191,9 @@ function MarksForm() {
                     subjectName: mark.subjectId?.name ?? "",
                     exam: mark.exam ?? "",
                     marksObtained: String(mark.marksObtained ?? ""),
-                    totalMarks: String(mark.totalMarks ?? "")
+                    totalMarks: String(
+                        examMaxMarks[mark.exam] ?? mark.totalMarks ?? ""
+                    )
                 });
             } catch (error) {
                 if (!cancelled) {
@@ -198,21 +221,66 @@ function MarksForm() {
         setTeachers([]);
     };
 
+    const handleExamChange = (exam: string) => {
+        const maxMarks = examMaxMarks[exam];
+
+        setFormData(previous => ({
+            ...previous,
+            exam,
+            totalMarks: maxMarks === undefined ? "" : String(maxMarks),
+            marksObtained:
+                maxMarks !== undefined &&
+                    Number(previous.marksObtained) > maxMarks
+                    ? ""
+                    : previous.marksObtained
+        }));
+    };
+
     const handleSubmit = async (
         e: React.FormEvent<HTMLFormElement>
     ) => {
         e.preventDefault();
 
+        const maxMarks = examMaxMarks[formData.exam];
+        const obtainedMarks = Number(formData.marksObtained);
+
+        if (maxMarks === undefined) {
+            setModalTitle("Error");
+            setModalMessage("Please select a valid exam type.");
+            setModalOpen(true);
+            return;
+        }
+
+        if (
+            formData.marksObtained.trim() === "" ||
+            !Number.isFinite(obtainedMarks) ||
+            obtainedMarks < 0 ||
+            obtainedMarks > maxMarks
+        ) {
+            setModalTitle("Error");
+            setModalMessage(
+                `Marks obtained must be between 0 and ${maxMarks}.`
+            );
+            setModalOpen(true);
+            return;
+        }
+
+        // Always send the correct maximum marks, regardless of form state.
+        const payload = {
+            ...formData,
+            totalMarks: formData.totalMarks
+        };
+
         try {
             if (isAdding) {
-                await addMark(formData);
+                await addMark(payload);
 
                 setModalTitle("Success");
                 setModalMessage("Marks Added");
             } else {
                 if (!id) return;
 
-                await updateMark(id, formData);
+                await updateMark(id, payload);
 
                 setModalTitle("Success");
                 setModalMessage("Marks Updated");
@@ -300,8 +368,7 @@ function MarksForm() {
                                         id="student"
                                         required
                                         disabled={
-                                            !formData.class ||
-                                            loadingOptions
+                                            !formData.class || loadingOptions
                                         }
                                         value={formData.studentId}
                                         onChange={e =>
@@ -337,8 +404,7 @@ function MarksForm() {
                                         id="teacher"
                                         required
                                         disabled={
-                                            !formData.class ||
-                                            loadingOptions
+                                            !formData.class || loadingOptions
                                         }
                                         value={formData.teacherId}
                                         onChange={e =>
@@ -375,7 +441,9 @@ function MarksForm() {
                             <select
                                 id="subject"
                                 required
-                                disabled={loadingSubjects || subjects.length === 0}
+                                disabled={
+                                    loadingSubjects || subjects.length === 0
+                                }
                                 value={formData.subjectName}
                                 onChange={e =>
                                     setFormData(previous => ({
@@ -394,10 +462,7 @@ function MarksForm() {
                                 </option>
 
                                 {subjects.map(subject => (
-                                    <option
-                                        key={subject}
-                                        value={subject}
-                                    >
+                                    <option key={subject} value={subject}>
                                         {subject}
                                     </option>
                                 ))}
@@ -412,10 +477,7 @@ function MarksForm() {
                                 required
                                 value={formData.exam}
                                 onChange={e =>
-                                    setFormData(previous => ({
-                                        ...previous,
-                                        exam: e.target.value
-                                    }))
+                                    handleExamChange(e.target.value)
                                 }
                                 className={inputClass}
                             >
@@ -435,6 +497,10 @@ function MarksForm() {
                                 id="obt"
                                 type="number"
                                 min="0"
+                                max={
+                                    examMaxMarks[formData.exam] ?? undefined
+                                }
+                                step="1"
                                 required
                                 value={formData.marksObtained}
                                 onChange={e =>
@@ -456,6 +522,7 @@ function MarksForm() {
                                 type="number"
                                 min="1"
                                 required
+                                disabled={!formData.exam}
                                 value={formData.totalMarks}
                                 onChange={e =>
                                     setFormData(previous => ({
@@ -463,8 +530,8 @@ function MarksForm() {
                                         totalMarks: e.target.value
                                     }))
                                 }
-                                className={inputClass}
-                                placeholder="Enter Max Marks"
+                                className={`${inputClass} disabled:cursor-not-allowed disabled:bg-gray-200`}
+                                placeholder="Select an exam first"
                             />
                         </div>
 

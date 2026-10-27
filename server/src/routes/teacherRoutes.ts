@@ -24,7 +24,7 @@ router.patch("/leaves/:id/reject", rejectLeave);
 
 //Apply Leave:
 router.post("/leave", applyLeave);
-router.get("/leave", getMyLeaves);
+router.get("/getLeave", getMyLeaves);
 
 //Attendance:
 router.get("/getStudentsForAttendance", getStudentsForAttendance);

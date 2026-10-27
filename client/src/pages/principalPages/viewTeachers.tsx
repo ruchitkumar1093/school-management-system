@@ -1,4 +1,3 @@
-
 import NavBar from "../../components/navBar";
 import SideBar from "../../components/sideBar";
 import PrincipalTeachersTable from "../../components/principalComponents/teachersTable";
@@ -17,36 +16,37 @@ import {
     permanentlyDeleteTeacher
 } from "../../services/principalApi";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import Modal from "../../components/modal";
 import Breadcrumb from "../../components/breadcrumb";
 
-function PrincipalViewTeachers() {
-    type Teacher = {
-        _id: string;
-        userId: {
-            name: string;
-            isActive: boolean;
-        };
-        employeeID: string;
-        department: string;
-        classAssigned: string;
-        isDeleted: boolean;
-        deletedAt: string | null;
-        isClassTeacher: boolean;
+type Teacher = {
+    _id: string;
+    userId: {
+        name: string;
+        isActive: boolean;
     };
+    employeeID: string;
+    classes: string[];
+    subjects: string[];
+    isDeleted: boolean;
+    deletedAt: string | null;
+    isClassTeacher: boolean;
+};
 
+function PrincipalViewTeachers() {
     const navigate = useNavigate();
     const location = useLocation();
 
-    // Read the class selected on the Class Overview page.
     const selectedClassFromNavigation: string | undefined =
         location.state?.selectedClass;
 
     const [teachersData, setTeachersData] = useState<Teacher[]>([]);
+    const [availableClasses, setAvailableClasses] = useState<string[]>([]);
+
     const [currentPage, setCurrentPage] = useState(1);
-    const [limit, setLimit] = useState(5);
+    const [limit, setLimit] = useState(10);
     const [totalPages, setTotalPages] = useState(1);
 
     const [search, setSearch] = useState("");
@@ -54,10 +54,11 @@ function PrincipalViewTeachers() {
     const [sortBy, setSortBy] = useState("None");
     const [orderBy, setOrderBy] = useState("asc");
 
-    // Default to the received class, or "All" when opened directly.
     const [classFilter, setClassFilter] = useState<string>(
         selectedClassFromNavigation ?? "All"
     );
+
+    const [classTeacherOnly, setClassTeacherOnly] = useState(false);
 
     const [showDeleted, setShowDeleted] = useState(false);
     const [selectedTeachers, setSelectedTeachers] = useState<string[]>([]);
@@ -69,30 +70,44 @@ function PrincipalViewTeachers() {
     const [modalAction, setModalAction] =
         useState<(() => void) | null>(null);
 
-    const fetchTeachers = async () => {
+    const fetchTeachers = useCallback(async () => {
         try {
-            const teachers = await viewTeachers(
+            const response = await viewTeachers(
                 classFilter,
                 debouncedSearch,
                 sortBy,
                 orderBy,
                 currentPage,
                 limit,
-                showDeleted
+                showDeleted,
+                classTeacherOnly
             );
 
-            console.log("Teachers response:", teachers.data);
+            const data = response.data;
 
-            setTeachersData(teachers.data.teachers);
-            setTotalPages(teachers.data.totalPages);
+            setTeachersData(data.teachers ?? []);
+            setTotalPages(data.totalPages ?? 1);
+
+            // The controller will return all available classes.
+            if (Array.isArray(data.classes)) {
+                setAvailableClasses(data.classes);
+            }
         } catch (error) {
-            console.log(error);
+            console.error("Failed to fetch teachers:", error);
             setTeachersData([]);
             setTotalPages(1);
         }
-    };
+    }, [
+        classFilter,
+        debouncedSearch,
+        sortBy,
+        orderBy,
+        currentPage,
+        limit,
+        showDeleted,
+        classTeacherOnly
+    ]);
 
-    // Apply a new class if navigation state changes while mounted.
     useEffect(() => {
         if (
             typeof selectedClassFromNavigation === "string" &&
@@ -101,19 +116,15 @@ function PrincipalViewTeachers() {
             setClassFilter(selectedClassFromNavigation);
             setCurrentPage(1);
         }
-    }, [selectedClassFromNavigation]);
+    }, [selectedClassFromNavigation, classFilter]);
 
     useEffect(() => {
-        void fetchTeachers();
-    }, [
-        debouncedSearch,
-        sortBy,
-        orderBy,
-        classFilter,
-        currentPage,
-        limit,
-        showDeleted
-    ]);
+        const timer = setTimeout(() => {
+            setDebouncedSearch(search);
+        }, 500);
+
+        return () => clearTimeout(timer);
+    }, [search]);
 
     useEffect(() => {
         setCurrentPage(1);
@@ -122,19 +133,14 @@ function PrincipalViewTeachers() {
         sortBy,
         orderBy,
         classFilter,
+        classTeacherOnly,
         limit,
         showDeleted
     ]);
 
     useEffect(() => {
-        const timer = setTimeout(() => {
-            setDebouncedSearch(search);
-        }, 500);
-
-        return () => {
-            clearTimeout(timer);
-        };
-    }, [search]);
+        void fetchTeachers();
+    }, [fetchTeachers]);
 
     useEffect(() => {
         setSelectedTeachers([]);
@@ -143,37 +149,38 @@ function PrincipalViewTeachers() {
         sortBy,
         orderBy,
         classFilter,
+        classTeacherOnly,
         currentPage,
         limit,
         showDeleted
     ]);
 
     function handleSelectTeacher(id: string) {
-        setSelectedTeachers((prev) =>
-            prev.includes(id)
-                ? prev.filter((teacherId) => teacherId !== id)
-                : [...prev, id]
+        setSelectedTeachers(previous =>
+            previous.includes(id)
+                ? previous.filter(teacherId => teacherId !== id)
+                : [...previous, id]
         );
     }
 
     function handleSelectAllTeachers() {
         const activeTeacherIds = teachersData
-            .filter((teacher) => !teacher.isDeleted)
-            .map((teacher) => teacher._id);
+            .filter(teacher => !teacher.isDeleted)
+            .map(teacher => teacher._id);
 
         const allSelected =
             activeTeacherIds.length > 0 &&
-            activeTeacherIds.every((id) =>
+            activeTeacherIds.every(id =>
                 selectedTeachers.includes(id)
             );
 
         if (allSelected) {
-            setSelectedTeachers((prev) =>
-                prev.filter((id) => !activeTeacherIds.includes(id))
+            setSelectedTeachers(previous =>
+                previous.filter(id => !activeTeacherIds.includes(id))
             );
         } else {
-            setSelectedTeachers((prev) => [
-                ...new Set([...prev, ...activeTeacherIds])
+            setSelectedTeachers(previous => [
+                ...new Set([...previous, ...activeTeacherIds])
             ]);
         }
     }
@@ -202,7 +209,7 @@ function PrincipalViewTeachers() {
                 teachersData.length === selectedTeachers.length &&
                 currentPage > 1
             ) {
-                setCurrentPage(currentPage - 1);
+                setCurrentPage(previous => previous - 1);
             } else {
                 await fetchTeachers();
             }
@@ -213,7 +220,7 @@ function PrincipalViewTeachers() {
             setModalAction(null);
             setModalOpen(true);
         } catch (error: any) {
-            console.log(error);
+            console.error("Failed to delete teachers:", error);
 
             setModalTitle("Error");
             setModalMessage(
@@ -253,11 +260,13 @@ function PrincipalViewTeachers() {
             setModalAction(null);
 
             if (teachersData.length === 1 && currentPage > 1) {
-                setCurrentPage(currentPage - 1);
+                setCurrentPage(previous => previous - 1);
             } else {
                 await fetchTeachers();
             }
         } catch (error: any) {
+            console.error("Failed to delete teacher:", error);
+
             setModalTitle("Error");
             setModalMessage(
                 error.response?.data?.message ||
@@ -274,11 +283,13 @@ function PrincipalViewTeachers() {
             await restoreTeacher(id);
 
             if (teachersData.length === 1 && currentPage > 1) {
-                setCurrentPage(currentPage - 1);
+                setCurrentPage(previous => previous - 1);
             } else {
                 await fetchTeachers();
             }
         } catch (error: any) {
+            console.error("Failed to restore teacher:", error);
+
             setModalTitle("Error");
             setModalMessage(
                 error.response?.data?.message ||
@@ -307,7 +318,7 @@ function PrincipalViewTeachers() {
             await permanentlyDeleteTeacher(id);
 
             if (teachersData.length === 1 && currentPage > 1) {
-                setCurrentPage(currentPage - 1);
+                setCurrentPage(previous => previous - 1);
             } else {
                 await fetchTeachers();
             }
@@ -318,7 +329,7 @@ function PrincipalViewTeachers() {
             setModalAction(null);
             setModalOpen(true);
         } catch (error: any) {
-            console.log(error);
+            console.error("Failed to permanently delete teacher:", error);
 
             setModalTitle("Error");
             setModalMessage(
@@ -336,7 +347,6 @@ function PrincipalViewTeachers() {
     }
 
     function handleTeacherMarks(id: string) {
-        // Preserve the teacher filter and selected class.
         navigate(`../viewMarks?teacher=${id}`, {
             state: {
                 selectedClass:
@@ -349,12 +359,12 @@ function PrincipalViewTeachers() {
     const sortOptions = ["None", "Teacher Name", "Class Assigned"];
 
     const activeTeachers = teachersData.filter(
-        (teacher) => !teacher.isDeleted
+        teacher => !teacher.isDeleted
     );
 
     const allTeachersSelected =
         activeTeachers.length > 0 &&
-        activeTeachers.every((teacher) =>
+        activeTeachers.every(teacher =>
             selectedTeachers.includes(teacher._id)
         );
 
@@ -365,11 +375,11 @@ function PrincipalViewTeachers() {
             <div className="flex flex-1 bg-purple-100">
                 <SideBar />
 
-                <div>
+                <div className="min-w-0 flex-1">
                     <Breadcrumb />
 
-                    <div className="mb-10 flex flex-col pl-20 pt-12">
-                        <div className="mb-4 flex items-center justify-between">
+                    <div className="mb-10 mr-10 flex flex-col px-8 pt-12 lg:pl-20">
+                        <div className="mb-4 flex flex-wrap items-center justify-between gap-4">
                             <div>
                                 <h1 className="text-3xl font-medium text-gray-900">
                                     Teachers
@@ -380,7 +390,7 @@ function PrincipalViewTeachers() {
                                 </p>
                             </div>
 
-                            <div className="flex gap-10">
+                            <div className="flex flex-wrap items-center gap-4">
                                 {selectedTeachers.length > 0 && (
                                     <button
                                         onClick={handleDeleteAll}
@@ -396,8 +406,8 @@ function PrincipalViewTeachers() {
                                         <input
                                             type="checkbox"
                                             checked={showDeleted}
-                                            onChange={(e) => {
-                                                setShowDeleted(e.target.checked);
+                                            onChange={event => {
+                                                setShowDeleted(event.target.checked);
                                                 setCurrentPage(1);
                                             }}
                                             className="peer sr-only"
@@ -411,6 +421,26 @@ function PrincipalViewTeachers() {
                                     <span>Show deleted teachers</span>
                                 </label>
 
+                                <label className="flex w-fit cursor-pointer items-center gap-2 rounded-md border border-purple-200 bg-purple-50 px-5 py-3 text-sm font-medium text-purple-900 transition-all">
+                                    <div className="relative">
+                                        <input
+                                            type="checkbox"
+                                            checked={classTeacherOnly}
+                                            onChange={event => {
+                                                setClassTeacherOnly(event.target.checked);
+                                                setCurrentPage(1);
+                                            }}
+                                            className="peer sr-only"
+                                        />
+
+                                        <div className="h-4 w-7 rounded-full bg-gray-300 transition-colors peer-checked:bg-purple-700" />
+
+                                        <div className="absolute left-0.5 top-0.5 h-3 w-3 rounded-full bg-white shadow-sm transition-transform peer-checked:translate-x-3" />
+                                    </div>
+
+                                    <span>Class Teachers Only</span>
+                                </label>
+
                                 <button
                                     onClick={handleAddTeacher}
                                     type="button"
@@ -421,8 +451,8 @@ function PrincipalViewTeachers() {
                             </div>
                         </div>
 
-                        <div className="mb-3 flex items-center justify-between">
-                            <div className="mb-3 flex gap-8">
+                        <div className="mb-3 flex flex-wrap items-end justify-between gap-4">
+                            <div className="mb-3 flex flex-wrap gap-6">
                                 <SortBy
                                     sortOptions={sortOptions}
                                     sortBy={sortBy}
@@ -438,15 +468,14 @@ function PrincipalViewTeachers() {
                                 <ClassFilter
                                     classFilter={classFilter}
                                     setClassFilter={setClassFilter}
+                                    classes={availableClasses}
                                 />
                             </div>
 
-                            <div>
-                                <SearchBar
-                                    search={search}
-                                    setSearch={setSearch}
-                                />
-                            </div>
+                            <SearchBar
+                                search={search}
+                                setSearch={setSearch}
+                            />
                         </div>
 
                         <div className="flex flex-wrap gap-10">
@@ -466,7 +495,7 @@ function PrincipalViewTeachers() {
                             />
                         </div>
 
-                        <div className="mt-5 flex items-center justify-between">
+                        <div className="mt-5 flex items-center justify-between gap-4">
                             <div className="mt-1">
                                 <Pagination
                                     currentPage={currentPage}

@@ -3,227 +3,334 @@ import SideBar from "../../components/sideBar";
 import SortBy from "../../components/sortBy";
 import OrderBy from "../../components/orderBy";
 import ExamFilter from "../../components/examFilter";
+import ClassFilter from "../../components/classFilter";
 import SearchBar from "../../components/searchBar";
 import Pagination from "../../components/pagination";
 import Limit from "../../components/limit";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import TeacherExamTable from "../../components/teacherComponents/examTable";
-import { getExamResults } from "../../services/teacherApi";
+import {
+getExamResults,
+getTeacherSubjects,
+} from "../../services/teacherApi";
 import Breadcrumb from "../../components/breadcrumb";
 
-function TeacherViewExams() {
+type SubjectMarks = {
+obtained: number;
+total: number;
+};
 
-    type ExamResult = {
-        studentName: string;
-        uid: string;
-        class: string;
-        science: {
-            obtained: number;
-            total: number;
-        } | null;
-        mathematics: {
-            obtained: number;
-            total: number;
-        } | null;
-        english: {
-            obtained: number;
-            total: number;
-        } | null;
-        socialScience: {
-            obtained: number;
-            total: number;
-        } | null;
-        hindi: {
-            obtained: number;
-            total: number;
-        } | null;
-        total: {
-            obtained: number;
-            total: number;
-        } | null;
-        percentage: number | null;
-        result: string;
+type ExamResult = {
+studentName: string;
+uid: string;
+class: string;
+subjects: Record<string, SubjectMarks | null>;
+total: SubjectMarks | null;
+percentage: number | null;
+result: string;
+};
+
+type TeacherSubject = {
+_id: string;
+name: string;
+class: string;
+subjectCode: string;
+};
+
+type ExamType =
+| "All"
+| "class test"
+| "mid term"
+| "final";
+
+function TeacherViewExams() {
+const [examData, setExamData] = useState<ExamResult[]>([]);
+const [allSubjects, setAllSubjects] = useState<TeacherSubject[]>([]);
+
+const [search, setSearch] = useState("");
+const [debouncedSearch, setDebouncedSearch] = useState("");
+
+const [sortBy, setSortBy] = useState("None");
+const [orderBy, setOrderBy] = useState("asc");
+const [examType, setExamType] =
+    useState<ExamType>("class test");
+
+const [currentPage, setCurrentPage] = useState(1);
+const [limit, setLimit] = useState(10);
+const [totalPages, setTotalPages] = useState(1);
+
+// Used to determine the teacher's assigned classes.
+const [teacherSubjects, setTeacherSubjects] = useState<
+    TeacherSubject[]
+>([]);
+
+const [classFilter, setClassFilter] = useState("All");
+const [subjectsLoading, setSubjectsLoading] = useState(true);
+const [resultsLoading, setResultsLoading] = useState(false);
+
+const sortOptions = [
+    "None",
+    "Student Name",
+    "UID",
+    "Total Marks",
+    "Percentage",
+];
+
+// Fetch the teacher's assignments.
+useEffect(() => {
+    const fetchTeacherSubjects = async () => {
+        try {
+            setSubjectsLoading(true);
+
+            const response = await getTeacherSubjects();
+
+            const assignedSubjects: TeacherSubject[] =
+                response.data.subjects ?? [];
+
+            setTeacherSubjects(assignedSubjects);
+        } catch (error) {
+            console.error(
+                "Failed to load teacher assignments:",
+                error
+            );
+
+            setTeacherSubjects([]);
+            setClassFilter("All");
+        } finally {
+            setSubjectsLoading(false);
+        }
     };
 
-    type ExamType =
-        | "All"
-        | "class test"
-        | "mid term"
-        | "final";
+    void fetchTeacherSubjects();
+}, []);
 
-    const [examData, setExamData] =
-        useState<ExamResult[]>([]);
+// Determine which classes the teacher can access.
+const teacherClasses = useMemo(() => {
+    return Array.from(
+        new Set(
+            teacherSubjects.map((subject) => subject.class)
+        )
+    ).sort((a, b) => {
+        return (
+            Number.parseInt(a, 10) -
+            Number.parseInt(b, 10)
+        );
+    });
+}, [teacherSubjects]);
 
-    const [search, setSearch] =
-        useState("");
+// Fetch exam results and all subjects in the selected classes.
+useEffect(() => {
+    if (subjectsLoading) {
+        return;
+    }
 
-    const [debouncedSearch, setDebouncedSearch] =
-        useState("");
+    if (teacherClasses.length === 0) {
+        setExamData([]);
+        setAllSubjects([]);
+        setTotalPages(1);
+        setResultsLoading(false);
+        return;
+    }
 
-    const [sortBy, setSortBy] =
-        useState("None");
+    if (
+        classFilter !== "All" &&
+        !teacherClasses.includes(classFilter)
+    ) {
+        setExamData([]);
+        setAllSubjects([]);
+        setTotalPages(1);
+        setResultsLoading(false);
+        return;
+    }
 
-    const [orderBy, setOrderBy] =
-        useState("asc");
-
-    const [examType, setExamType] =
-        useState<ExamType>("class test");
-
-    const [currentPage, setCurrentPage] =
-        useState(1);
-
-    const [limit, setLimit] =
-        useState(5);
-
-    const [totalPages, setTotalPages] =
-        useState(1);
-
-    const sortOptions = [
-        "None",
-        "Student Name",
-        "UID",
-        "Total Marks",
-        "Percentage"
-    ];
+    let cancelled = false;
 
     const fetchExamResults = async () => {
         try {
+            setResultsLoading(true);
+
             const response = await getExamResults(
                 examType,
                 debouncedSearch,
                 sortBy,
                 orderBy,
                 currentPage,
-                limit
+                limit,
+                classFilter
             );
 
-            setExamData(
-                response.data.results
+            if (cancelled) {
+                return;
+            }
+
+            setExamData(response.data.results ?? []);
+            setAllSubjects(response.data.subjects ?? []);
+            setTotalPages(response.data.totalPages || 1);
+        } catch (error) {
+            if (cancelled) {
+                return;
+            }
+
+            console.error(
+                "Failed to load exam results:",
+                error
             );
 
-            setTotalPages(
-                response.data.totalPages
-            );
-        }
-        catch (error) {
-            console.log(error);
             setExamData([]);
+            setAllSubjects([]);
             setTotalPages(1);
+        } finally {
+            if (!cancelled) {
+                setResultsLoading(false);
+            }
         }
     };
 
-    useEffect(() => {
-        const timer = setTimeout(() => {
-            setDebouncedSearch(search);
-        }, 500);
+    void fetchExamResults();
 
-        return () => {
-            clearTimeout(timer);
-        };
-    }, [search]);
+    return () => {
+        cancelled = true;
+    };
+}, [
+    subjectsLoading,
+    teacherClasses,
+    classFilter,
+    examType,
+    debouncedSearch,
+    sortBy,
+    orderBy,
+    currentPage,
+    limit,
+]);
 
-    useEffect(() => {
-        fetchExamResults();
-    }, [
-        examType,
-        debouncedSearch,
-        sortBy,
-        orderBy,
-        currentPage,
-        limit
-    ]);
+// Debounce search input.
+useEffect(() => {
+    const timer = setTimeout(() => {
+        setDebouncedSearch(search);
+    }, 500);
 
-    useEffect(() => {
-        setCurrentPage(1);
-    }, [
-        examType,
-        debouncedSearch,
-        sortBy,
-        orderBy,
-        limit
-    ]);
+    return () => clearTimeout(timer);
+}, [search]);
 
-    const startIndex =
-        (currentPage - 1) * limit;
+// Reset pagination when filters change.
+useEffect(() => {
+    setCurrentPage(1);
+}, [
+    examType,
+    debouncedSearch,
+    sortBy,
+    orderBy,
+    limit,
+    classFilter,
+]);
 
-    return (
-        <div className="flex flex-col min-h-screen font-fredoka">
-            <NavBar />
+const startIndex = (currentPage - 1) * limit;
 
-            <div className="flex flex-1 bg-purple-100">
-                <SideBar />
+return (
+    <div className="flex min-h-screen flex-col font-fredoka">
+        <NavBar />
 
-                <div>
-                    <Breadcrumb />
+        <div className="flex min-w-0 flex-1 bg-purple-100">
+            <SideBar />
 
-                    <div className="flex flex-col pt-12 pl-20 mb-10 mr-10">
-                        <div className="flex justify-between items-center mb-4">
-                            <div>
-                                <h1 className="text-3xl font-medium text-gray-900">
-                                    Exams
-                                </h1>
+            {/* Main content must be allowed to shrink beside the sidebar. */}
+            <div className="min-w-0 flex-1">
+                <Breadcrumb />
 
-                                <p className="mt-1 text-sm text-gray-600">
-                                    View and Manage Class Exams
-                                </p>
-                            </div>
+                <div className="mb-10 mr-10 flex min-w-0 flex-col pt-12 pl-20">
+                    <div className="mb-4 flex items-center justify-between">
+                        <div>
+                            <h1 className="text-3xl font-medium text-gray-900">
+                                Exams
+                            </h1>
+
+                            <p className="mt-1 text-sm text-gray-600">
+                                View and Manage Class Exams
+                            </p>
                         </div>
+                    </div>
 
-                        <div className="flex justify-between items-center mb-3">
-                            <div className="flex gap-8 mb-3">
-                                <SortBy
-                                    sortOptions={sortOptions}
-                                    sortBy={sortBy}
-                                    setSortBy={setSortBy}
-                                />
+                    <div className="mb-3 flex min-w-0 flex-wrap items-end justify-between gap-4">
+                        <div className="mb-3 flex flex-wrap gap-8">
+                            <SortBy
+                                sortOptions={sortOptions}
+                                sortBy={sortBy}
+                                setSortBy={setSortBy}
+                            />
 
-                                <OrderBy
-                                    orderBy={orderBy}
-                                    setOrderBy={setOrderBy}
-                                    disabled={sortBy === "None"}
-                                />
+                            <OrderBy
+                                orderBy={orderBy}
+                                setOrderBy={setOrderBy}
+                                disabled={sortBy === "None"}
+                            />
 
-                                <ExamFilter
-                                    examType={examType}
-                                    setExamType={setExamType}
-                                    showAll={false}
-                                />
-                            </div>
+                            <ExamFilter
+                                examType={examType}
+                                setExamType={setExamType}
+                                showAll={false}
+                            />
 
-                            <div>
-                                <SearchBar
-                                    search={search}
-                                    setSearch={setSearch}
-                                />
-                            </div>
-                        </div>
-
-                        <div className="flex flex-wrap gap-10">
-                            <TeacherExamTable
-                                examData={examData}
-                                startIndex={startIndex}
+                            <ClassFilter
+                                classFilter={classFilter}
+                                setClassFilter={setClassFilter}
+                                classes={teacherClasses}
+                                disabled={subjectsLoading}
                             />
                         </div>
 
-                        <div className="flex justify-between mt-5 items-center">
-                            <div className="mt-1">
-                                <Pagination
-                                    currentPage={currentPage}
-                                    totalPages={totalPages}
-                                    setCurrentPage={setCurrentPage}
-                                />
-                            </div>
-
-                            <Limit
-                                setLimit={setLimit}
-                                limit={limit}
+                        <div className="min-w-0 max-w-full">
+                            <SearchBar
+                                search={search}
+                                setSearch={setSearch}
                             />
                         </div>
                     </div>
+
+                    {subjectsLoading ? (
+                        <p className="py-8 text-center text-gray-600">
+                            Loading your assigned classes...
+                        </p>
+                    ) : teacherClasses.length === 0 ? (
+                        <p className="py-8 text-center text-gray-600">
+                            No classes are assigned to you.
+                        </p>
+                    ) : resultsLoading && examData.length === 0 ? (
+                        <p className="py-8 text-center text-gray-600">
+                            Loading exam results...
+                        </p>
+                    ) : (
+                        <>
+                            {/* Keep the scrollable width inside the main content. */}
+                            <div className="w-full min-w-0">
+                                <TeacherExamTable
+                                    examData={examData}
+                                    startIndex={startIndex}
+                                    subjects={allSubjects}
+                                />
+                            </div>
+
+                            <div className="mt-5 flex items-center justify-between gap-4">
+                                <div className="mt-1">
+                                    <Pagination
+                                        currentPage={currentPage}
+                                        totalPages={totalPages}
+                                        setCurrentPage={setCurrentPage}
+                                    />
+                                </div>
+
+                                <Limit
+                                    setLimit={setLimit}
+                                    limit={limit}
+                                />
+                            </div>
+                        </>
+                    )}
                 </div>
             </div>
         </div>
-    );
+    </div>
+);
+
 }
 
 export default TeacherViewExams;

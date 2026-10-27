@@ -1,4 +1,3 @@
-
 import NavBar from "../../components/navBar";
 import SideBar from "../../components/sideBar";
 import SearchBar from "../../components/searchBar";
@@ -19,7 +18,7 @@ type TeacherAttendance = {
         _id: string;
         name: string;
         employeeID: string;
-        department: string;
+        classes?: string[];
     };
     date: string;
     status: "Present" | "Absent" | "Leave" | "Not Marked";
@@ -35,6 +34,7 @@ type AttendanceResponse = {
     absentCount: number;
     leaveCount: number;
     notMarkedCount: number;
+    classes?: string[];
 };
 
 function ViewTeacherAttendance() {
@@ -44,6 +44,7 @@ function ViewTeacherAttendance() {
     const [debouncedSearch, setDebouncedSearch] = useState("");
 
     const [classFilter, setClassFilter] = useState("1st");
+    const [availableClasses, setAvailableClasses] = useState<string[]>([]);
 
     const [date, setDate] = useState(
         new Date().toLocaleDateString("en-CA")
@@ -75,9 +76,6 @@ function ViewTeacherAttendance() {
         return () => clearTimeout(timer);
     }, [search]);
 
-    /*
-     * Reset pagination whenever a filter changes.
-     */
     useEffect(() => {
         setCurrentPage(1);
     }, [date, debouncedSearch, limit, classFilter]);
@@ -90,35 +88,50 @@ function ViewTeacherAttendance() {
             setErrorMessage("");
 
             try {
-                const response: AttendanceResponse =
-                    await getTeacherAttendance({
-                        date,
-                        search: debouncedSearch.trim(),
-                        page: currentPage,
-                        limit,
-                        classFilter
-                    });
+                const response = await getTeacherAttendance({
+                    date,
+                    search: debouncedSearch.trim(),
+                    page: currentPage,
+                    limit,
+                    classFilter
+                });
 
-                if (cancelled) {
-                    return;
+                if (cancelled) return;
+
+                /*
+                 * Supports either an Axios response or a service
+                 * that already returns response.data.
+                 */
+                const data: AttendanceResponse =
+                    response?.data ?? response;
+
+                if (!data || !Array.isArray(data.attendance)) {
+                    throw new Error(
+                        "The attendance API returned an unexpected response."
+                    );
                 }
 
-                setAttendanceData(response.attendance);
-                setTotalTeachers(response.totalRecords);
-                setTotalPages(Math.max(1, response.totalPages));
+                if (Array.isArray(data.classes)) {
+                    setAvailableClasses(data.classes);
+                }
 
-                setPresentCount(response.presentCount);
-                setAbsentCount(response.absentCount);
-                setLeaveCount(response.leaveCount);
-                setNotMarkedCount(response.notMarkedCount);
+                setAttendanceData(data.attendance);
+                setTotalTeachers(data.totalRecords ?? 0);
+                setTotalPages(Math.max(1, data.totalPages ?? 1));
 
-                if (currentPage !== response.currentPage) {
-                    setCurrentPage(response.currentPage);
+                setPresentCount(data.presentCount ?? 0);
+                setAbsentCount(data.absentCount ?? 0);
+                setLeaveCount(data.leaveCount ?? 0);
+                setNotMarkedCount(data.notMarkedCount ?? 0);
+
+                if (
+                    data.currentPage &&
+                    currentPage !== data.currentPage
+                ) {
+                    setCurrentPage(data.currentPage);
                 }
             } catch (error) {
-                if (cancelled) {
-                    return;
-                }
+                if (cancelled) return;
 
                 const apiError = error as {
                     response?: {
@@ -126,6 +139,7 @@ function ViewTeacherAttendance() {
                             message?: string;
                         };
                     };
+                    message?: string;
                 };
 
                 setAttendanceData([]);
@@ -139,6 +153,7 @@ function ViewTeacherAttendance() {
 
                 setErrorMessage(
                     apiError.response?.data?.message ??
+                    apiError.message ??
                     "Failed to fetch teacher attendance."
                 );
             } finally {
@@ -162,17 +177,17 @@ function ViewTeacherAttendance() {
     ]);
 
     return (
-        <div className="flex flex-col min-h-screen font-fredoka">
+        <div className="flex min-h-screen flex-col font-fredoka">
             <NavBar />
 
             <div className="flex flex-1 bg-purple-100">
                 <SideBar />
 
-                <div>
+                <div className="min-w-0 flex-1">
                     <Breadcrumb />
 
-                    <div className="flex flex-col pt-12 pl-20 mb-10">
-                        <div className="flex justify-between items-center mb-6">
+                    <div className="mb-10 flex flex-col px-8 pt-12 lg:pl-20">
+                        <div className="mb-6 flex items-center justify-between gap-4">
                             <div>
                                 <h1 className="text-3xl font-medium text-gray-900">
                                     View Attendance
@@ -188,14 +203,14 @@ function ViewTeacherAttendance() {
                                 onClick={() =>
                                     navigate("/principal/teacherAttendance")
                                 }
-                                className="rounded-lg bg-purple-300 px-6 py-3 font-medium text-purple-950 shadow-[0_2px_3px] transition-colors hover:bg-violet-300 cursor-pointer"
+                                className="cursor-pointer rounded-lg bg-purple-300 px-6 py-3 font-medium text-purple-950 shadow-[0_2px_3px] transition-colors hover:bg-violet-300"
                             >
                                 Mark Attendance
                             </button>
                         </div>
 
-                        <div className="flex justify-between items-center mb-5">
-                            <div className="flex gap-5">
+                        <div className="mb-5 flex flex-wrap items-center justify-between gap-4">
+                            <div className="flex flex-wrap items-center gap-5">
                                 <div className="flex items-center gap-4">
                                     <label
                                         htmlFor="teacher-attendance-date"
@@ -212,56 +227,57 @@ function ViewTeacherAttendance() {
                                         onChange={(event) =>
                                             setDate(event.target.value)
                                         }
-                                        className="border-2 border-gray-500 rounded-sm p-2 focus:outline-none focus:border-gray-900 transition-colors duration-300 ease-in-out"
+                                        className="rounded-sm border-2 border-gray-500 p-2 transition-colors duration-300 ease-in-out focus:border-gray-900 focus:outline-none"
                                     />
                                 </div>
+
                                 <ClassFilter
                                     classFilter={classFilter}
                                     setClassFilter={setClassFilter}
+                                    classes={availableClasses}
                                 />
                             </div>
+
                             <SearchBar
                                 search={search}
                                 setSearch={setSearch}
                             />
                         </div>
 
-                        <div className="flex justify-between items-center mb-5">
-                            <div className="flex flex-wrap gap-5 items-center">
-                                <div>
-                                    Total Teachers:
-                                    <span className="font-medium ml-1">
-                                        {totalTeachers}
-                                    </span>
-                                </div>
+                        <div className="mb-5 flex flex-wrap items-center gap-x-6 gap-y-3">
+                            <div>
+                                Total Teachers:
+                                <span className="ml-1 font-medium">
+                                    {totalTeachers}
+                                </span>
+                            </div>
 
-                                <div>
-                                    Present:
-                                    <span className="font-medium ml-1">
-                                        {presentCount}
-                                    </span>
-                                </div>
+                            <div>
+                                Present:
+                                <span className="ml-1 font-medium">
+                                    {presentCount}
+                                </span>
+                            </div>
 
-                                <div>
-                                    Absent:
-                                    <span className="font-medium ml-1">
-                                        {absentCount}
-                                    </span>
-                                </div>
+                            <div>
+                                Absent:
+                                <span className="ml-1 font-medium">
+                                    {absentCount}
+                                </span>
+                            </div>
 
-                                <div>
-                                    Leave:
-                                    <span className="font-medium ml-1">
-                                        {leaveCount}
-                                    </span>
-                                </div>
+                            <div>
+                                Leave:
+                                <span className="ml-1 font-medium">
+                                    {leaveCount}
+                                </span>
+                            </div>
 
-                                <div>
-                                    Not Marked:
-                                    <span className="font-medium ml-1">
-                                        {notMarkedCount}
-                                    </span>
-                                </div>
+                            <div>
+                                Not Marked:
+                                <span className="ml-1 font-medium">
+                                    {notMarkedCount}
+                                </span>
                             </div>
                         </div>
 
@@ -282,14 +298,12 @@ function ViewTeacherAttendance() {
                             </div>
                         )}
 
-                        <div className="flex justify-between mt-5 mb-5 items-center">
-                            <div className="mt-1">
-                                <Pagination
-                                    currentPage={currentPage}
-                                    totalPages={totalPages}
-                                    setCurrentPage={setCurrentPage}
-                                />
-                            </div>
+                        <div className="mb-5 mt-5 flex items-center justify-between gap-4">
+                            <Pagination
+                                currentPage={currentPage}
+                                totalPages={totalPages}
+                                setCurrentPage={setCurrentPage}
+                            />
 
                             <Limit
                                 setLimit={setLimit}

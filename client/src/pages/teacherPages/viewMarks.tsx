@@ -4,10 +4,11 @@ import SortBy from "../../components/sortBy";
 import OrderBy from "../../components/orderBy";
 import ExamFilter from "../../components/examFilter";
 import SubjectFilter from "../../components/subjectFilter";
+import ClassFilter from "../../components/classFilter";
 import SearchBar from "../../components/searchBar";
 import Pagination from "../../components/pagination";
 import Limit from "../../components/limit";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import TeacherMarksTable from "../../components/teacherComponents/marksTable";
 import {
     viewMarks,
@@ -18,39 +19,39 @@ import { useNavigate } from "react-router-dom";
 import Breadcrumb from "../../components/breadcrumb";
 import Modal from "../../components/modal";
 
-function TeacherViewMarks() {
-    type ExamType = "All" | "class test" | "mid term" | "final";
+type ExamType = "All" | "class test" | "mid term" | "final";
 
-    type Mark = {
+type Mark = {
+    _id: string;
+    studentId: {
         _id: string;
-        studentId: {
-            _id: string;
-            class: string;
-            userId: {
-                name: string;
-                uid: string;
-            } | null;
-        } | null;
-        subjectId: {
-            name: string;
-        } | null;
-        exam: string;
-        marksObtained: number;
-        totalMarks: number;
-    };
-
-    type TeacherSubject = {
-        _id: string;
-        name: string;
         class: string;
-        subjectCode: string;
-    };
+        userId: {
+            name: string;
+            uid: string;
+        } | null;
+    } | null;
+    subjectId: {
+        name: string;
+    } | null;
+    exam: string;
+    marksObtained: number;
+    totalMarks: number;
+};
 
+type TeacherSubject = {
+    _id: string;
+    name: string;
+    class: string;
+    subjectCode: string;
+};
+
+function TeacherViewMarks() {
     const navigate = useNavigate();
 
     const [marksData, setMarksData] = useState<Mark[]>([]);
     const [currentPage, setCurrentPage] = useState(1);
-    const [limit, setLimit] = useState(5);
+    const [limit, setLimit] = useState(10);
     const [totalPages, setTotalPages] = useState(1);
 
     const [search, setSearch] = useState("");
@@ -64,6 +65,7 @@ function TeacherViewMarks() {
         TeacherSubject[]
     >([]);
     const [subjectFilter, setSubjectFilter] = useState("All");
+    const [classFilter, setClassFilter] = useState("All");
     const [subjectsLoading, setSubjectsLoading] = useState(true);
 
     const [modalOpen, setModalOpen] = useState(false);
@@ -80,29 +82,45 @@ function TeacherViewMarks() {
         "Marks Obtained",
     ];
 
-    // Fetch only the subjects permitted for the logged-in teacher.
+    // Fetch the logged-in teacher's subject-class assignments.
     useEffect(() => {
         const fetchTeacherSubjects = async () => {
             try {
                 setSubjectsLoading(true);
 
                 const response = await getTeacherSubjects();
+
                 const subjects: TeacherSubject[] =
-                    response.data.subjects;
+                    response.data.subjects ?? [];
 
                 setTeacherSubjects(subjects);
-
             } catch (error) {
-                console.log(error);
+                console.error(
+                    "Failed to load teacher subjects:",
+                    error
+                );
                 setTeacherSubjects([]);
-                setSubjectFilter("");
+                setSubjectFilter("All");
+                setClassFilter("All");
             } finally {
                 setSubjectsLoading(false);
             }
         };
 
-        fetchTeacherSubjects();
+        void fetchTeacherSubjects();
     }, []);
+
+    // Build the class options from the teacher's assignments.
+    const teacherClasses = useMemo(() => {
+        return Array.from(
+            new Set(teacherSubjects.map((subject) => subject.class))
+        ).sort((a, b) => {
+            const classNumber = (value: string) =>
+                Number.parseInt(value, 10);
+
+            return classNumber(a) - classNumber(b);
+        });
+    }, [teacherSubjects]);
 
     const fetchMarks = useCallback(async () => {
         if (subjectsLoading) {
@@ -115,10 +133,36 @@ function TeacherViewMarks() {
             return;
         }
 
+        // Validate the selected subject against the teacher's assignments.
         if (
             subjectFilter !== "All" &&
             !teacherSubjects.some(
-                (subject) => subject.name === subjectFilter
+                (subject) => subject._id === subjectFilter
+            )
+        ) {
+            setMarksData([]);
+            setTotalPages(1);
+            return;
+        }
+
+        // Validate the selected class against the teacher's assignments.
+        if (
+            classFilter !== "All" &&
+            !teacherClasses.includes(classFilter)
+        ) {
+            setMarksData([]);
+            setTotalPages(1);
+            return;
+        }
+
+        // A selected subject must also belong to the selected class.
+        if (
+            subjectFilter !== "All" &&
+            classFilter !== "All" &&
+            !teacherSubjects.some(
+                (subject) =>
+                    subject._id === subjectFilter &&
+                    subject.class === classFilter
             )
         ) {
             setMarksData([]);
@@ -127,9 +171,6 @@ function TeacherViewMarks() {
         }
 
         try {
-            const selectedSubject =
-                subjectFilter === "All" ? "All" : subjectFilter;
-
             const response = await viewMarks(
                 examType,
                 debouncedSearch,
@@ -137,20 +178,23 @@ function TeacherViewMarks() {
                 orderBy,
                 currentPage,
                 limit,
-                selectedSubject
+                subjectFilter,
+                classFilter
             );
 
-            setMarksData(response.data.marks);
-            setTotalPages(response.data.totalPages);
+            setMarksData(response.data.marks ?? []);
+            setTotalPages(response.data.totalPages || 1);
         } catch (error) {
-            console.log(error);
+            console.error("Failed to load marks:", error);
             setMarksData([]);
             setTotalPages(1);
         }
     }, [
         subjectsLoading,
         teacherSubjects,
+        teacherClasses,
         subjectFilter,
+        classFilter,
         examType,
         debouncedSearch,
         sortBy,
@@ -164,13 +208,11 @@ function TeacherViewMarks() {
             setDebouncedSearch(search);
         }, 500);
 
-        return () => {
-            clearTimeout(timer);
-        };
+        return () => clearTimeout(timer);
     }, [search]);
 
     useEffect(() => {
-        fetchMarks();
+        void fetchMarks();
     }, [fetchMarks]);
 
     useEffect(() => {
@@ -182,7 +224,24 @@ function TeacherViewMarks() {
         orderBy,
         limit,
         subjectFilter,
+        classFilter,
     ]);
+
+    // If the selected class changes, clear a subject that
+    // is not assigned to that class.
+    useEffect(() => {
+        if (
+            subjectFilter !== "All" &&
+            !teacherSubjects.some(
+                (subject) =>
+                    subject._id === subjectFilter &&
+                    (classFilter === "All" ||
+                        subject.class === classFilter)
+            )
+        ) {
+            setSubjectFilter("All");
+        }
+    }, [classFilter, subjectFilter, teacherSubjects]);
 
     function handleAddMarks() {
         navigate("marksForm?mode=add");
@@ -194,7 +253,9 @@ function TeacherViewMarks() {
 
     function handleDeleteMarks(id: string) {
         setModalTitle("Delete Mark");
-        setModalMessage("Are you sure you want to delete this mark?");
+        setModalMessage(
+            "Are you sure you want to delete this mark?"
+        );
         setModalConfirm(true);
         setModalAction(() => () => confirmDeleteMarks(id));
         setModalOpen(true);
@@ -214,11 +275,12 @@ function TeacherViewMarks() {
                 await fetchMarks();
             }
         } catch (error: any) {
-            console.log(error);
+            console.error("Failed to delete mark:", error);
 
             setModalTitle("Error");
             setModalMessage(
-                error.response?.data?.message || "Failed to delete mark."
+                error.response?.data?.message ||
+                "Failed to delete mark."
             );
             setModalConfirm(false);
             setModalAction(null);
@@ -227,6 +289,17 @@ function TeacherViewMarks() {
     }
 
     const startIndex = (currentPage - 1) * limit;
+
+    const subjectOptions = teacherSubjects
+        .filter(
+            (subject) =>
+                classFilter === "All" ||
+                subject.class === classFilter
+        )
+        .map((subject) => ({
+            value: subject._id,
+            label: `${subject.name} — ${subject.class}`,
+        }));
 
     return (
         <div className="flex flex-col min-h-screen font-fredoka">
@@ -278,12 +351,17 @@ function TeacherViewMarks() {
                                     setExamType={setExamType}
                                 />
 
+                                <ClassFilter
+                                    classFilter={classFilter}
+                                    setClassFilter={setClassFilter}
+                                    classes={teacherClasses}
+                                    disabled={subjectsLoading}
+                                />
+
                                 <SubjectFilter
                                     subjectFilter={subjectFilter}
                                     setSubjectFilter={setSubjectFilter}
-                                    subjects={teacherSubjects.map(
-                                        (subject) => subject.name
-                                    )}
+                                    subjects={subjectOptions}
                                     disabled={subjectsLoading}
                                 />
                             </div>
@@ -350,7 +428,9 @@ function TeacherViewMarks() {
                         : undefined
                 }
                 confirmText={
-                    modalTitle === "Delete Mark" ? "Delete" : "Confirm"
+                    modalTitle === "Delete Mark"
+                        ? "Delete"
+                        : "Confirm"
                 }
             />
         </div>

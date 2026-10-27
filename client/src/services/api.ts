@@ -22,8 +22,10 @@ api.interceptors.response.use(
 
         if (
             status === 401 &&
-            (code === "ACCOUNT_DEACTIVATED" ||
-                code === "TOKEN_EXPIRED")
+            (
+                code === "ACCOUNT_DEACTIVATED" ||
+                code === "TOKEN_EXPIRED"
+            )
         ) {
             localStorage.removeItem("token");
             localStorage.removeItem("user");

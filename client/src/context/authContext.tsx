@@ -8,12 +8,14 @@ type AuthContextType = {
 export const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
-
     const navigate = useNavigate();
 
     const logOut = () => {
         localStorage.removeItem("token");
         localStorage.removeItem("user");
+
+        window.dispatchEvent(new Event("logout"));
+
         navigate("/");
     };
 

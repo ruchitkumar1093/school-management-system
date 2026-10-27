@@ -36,7 +36,7 @@ function StudentViewMarks() {
     const [totalPages, setTotalPages] = useState(1);
 
     const [currentPage, setCurrentPage] = useState(1);
-    const [limit, setLimit] = useState(5);
+    const [limit, setLimit] = useState(10);
 
     const [search, setSearch] = useState("");
     const [debouncedSearch, setDebouncedSearch] = useState("");

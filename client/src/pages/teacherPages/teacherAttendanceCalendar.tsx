@@ -25,7 +25,6 @@ type TeacherInfo = {
     name: string;
     uid: string;
     employeeID: string;
-    department: string;
 };
 
 type AttendanceResponse = {
@@ -248,13 +247,6 @@ function TeacherAttendanceCalendar() {
                                     Employee ID:
                                     <span className="ml-1 font-medium">
                                         {teacher.employeeID}
-                                    </span>
-                                </div>
-
-                                <div>
-                                    Department:
-                                    <span className="ml-1 font-medium">
-                                        {teacher.department}
                                     </span>
                                 </div>
                             </div>

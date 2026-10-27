@@ -18,7 +18,6 @@ type TeacherInfo = {
     name: string;
     uid: string;
     employeeID: string;
-    department: string;
 };
 
 function MyAttendance() {
@@ -149,13 +148,6 @@ function MyAttendance() {
                                         Employee ID:
                                         <span className="font-medium ml-1">
                                             {teacher.employeeID}
-                                        </span>
-                                    </div>
-
-                                    <div>
-                                        Department:
-                                        <span className="font-medium ml-1">
-                                            {teacher.department}
                                         </span>
                                     </div>
                                 </div>

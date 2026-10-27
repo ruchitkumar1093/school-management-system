@@ -13,6 +13,7 @@ import AdmissionRequest from "../models/AdmissionRequest";
 import TeacherAttendance from "../models/TeacherAttendance";
 import Arrangement from "../models/Arrangement";
 import Holiday from "../models/Holiday";
+import TeacherAssignment from "../models/TeacherAssignment";
 
 export const deactivateStudent = async (req: Request, res: Response, next: NextFunction) => {
     try {
@@ -86,7 +87,11 @@ export const activateStudent = async (req: Request, res: Response, next: NextFun
     }
 };
 
-export const assignClassTeacher = async (req: Request, res: Response, next: NextFunction) => {
+export const assignClassTeacher = async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+) => {
     try {
         const studentClass = req.params.class as StudentClass;
         const { teacherId } = req.body;
@@ -115,22 +120,26 @@ export const assignClassTeacher = async (req: Request, res: Response, next: Next
             });
         }
 
-        if (teacher.classAssigned !== studentClass) {
+        const teacherAssignment = await TeacherAssignment.findOne({
+            teacherId: teacher._id,
+            classId: classData._id
+        });
+
+        if (!teacherAssignment) {
             return res.status(400).json({
                 message: "Teacher is not assigned to this class"
             });
         }
 
         await Class.updateOne(
-            { class: studentClass },
+            { _id: classData._id },
             { $set: { teacherId: teacher._id } }
         );
 
-        res.status(200).json({
+        return res.status(200).json({
             message: "Class teacher assigned successfully"
         });
-    }
-    catch (error) {
+    } catch (error) {
         next(error);
     }
 };
@@ -142,39 +151,24 @@ export const getLeaveApplications = async (
     res: Response
 ) => {
     try {
-        const status =
-            req.query.status?.toString() || "All";
+        const status = req.query.status?.toString() || "All";
+        const classFilter = req.query.class?.toString() || "All";
 
-        const classFilter =
-            req.query.class?.toString() || "All";
+        const currentPage = Math.max(Number(req.query.page) || 1, 1);
+        const pageLimit = Math.max(Number(req.query.limit) || 5, 1);
+        const skip = (currentPage - 1) * pageLimit;
 
-        const currentPage = Math.max(
-            Number(req.query.page) || 1,
-            1
-        );
+        // Get available classes for the dropdown.
+        const availableClasses: string[] = await Class.distinct("class");
 
-        const pageLimit = Math.max(
-            Number(req.query.limit) || 5,
-            1
-        );
+        const classes = availableClasses.sort((a, b) => {
+            const numberA = parseInt(a.match(/\d+/)?.[0] ?? "0", 10);
+            const numberB = parseInt(b.match(/\d+/)?.[0] ?? "0", 10);
+            return numberA - numberB;
+        });
 
-        const skip =
-            (currentPage - 1) * pageLimit;
-
-        let studentIds;
-
-        if (classFilter !== "All") {
-            const students = await Student.find({
-                class: classFilter as StudentClass
-            }).select("_id");
-
-            studentIds = students.map(
-                student => student._id
-            );
-        }
-
-        const filter: any = {
-            studentId: { $exists: true }
+        const filter: Record<string, any> = {
+            studentId: { $exists: true, $ne: null },
         };
 
         if (status !== "All") {
@@ -182,70 +176,67 @@ export const getLeaveApplications = async (
         }
 
         if (classFilter !== "All") {
+            const students = await Student.find({
+                class: classFilter as StudentClass,
+            }).select("_id");
+
             filter.studentId = {
-                $in: studentIds
+                $in: students.map((student) => student._id),
             };
         }
 
-        const totalLeaves =
-            await Leave.countDocuments(filter);
+        const [totalLeaves, leaves] = await Promise.all([
+            Leave.countDocuments(filter),
 
-        const leaves = await Leave.find(filter)
-            .sort({
-                createdAt: -1
-            })
-            .skip(skip)
-            .limit(pageLimit)
-            .populate({
-                path: "studentId",
-                populate: {
-                    path: "userId",
-                    select: "name uid"
-                }
-            });
-
-        const formattedLeaves = leaves.map(
-            (leave) => {
-
-                const student =
-                    leave.studentId as any;
-
-                return {
-                    _id: leave._id,
-                    student: {
-                        _id: student._id,
-                        name: student.userId.name,
-                        uid: student.userId.uid,
-                        class: student.class
+            Leave.find(filter)
+                .sort({ createdAt: -1 })
+                .skip(skip)
+                .limit(pageLimit)
+                .populate({
+                    path: "studentId",
+                    populate: {
+                        path: "userId",
+                        select: "name uid",
                     },
-                    startDate: leave.startDate,
-                    endDate: leave.endDate,
-                    reason: leave.reason,
-                    status: leave.status
-                };
+                }),
+        ]);
+
+        const formattedLeaves = leaves.flatMap((leave) => {
+            const student = leave.studentId as any;
+
+            // Avoid crashing if a referenced student or user no longer exists.
+            if (!student || !student.userId) {
+                return [];
             }
-        );
 
-        const totalPages = Math.ceil(
-            totalLeaves / pageLimit
-        );
+            return [{
+                _id: leave._id,
+                student: {
+                    _id: student._id,
+                    name: student.userId.name,
+                    uid: student.userId.uid,
+                    class: student.class,
+                },
+                startDate: leave.startDate,
+                endDate: leave.endDate,
+                reason: leave.reason,
+                status: leave.status,
+            }];
+        });
 
-        return res.status(200).json({
+        res.status(200).json({
             leaves: formattedLeaves,
             totalLeaves,
-            totalPages,
+            totalPages: Math.ceil(totalLeaves / pageLimit),
             currentPage,
-            limit: pageLimit
+            limit: pageLimit,
+            classes,
         });
-    }
-    catch (error) {
-        console.error(
-            "Get principal leave applications error:",
-            error
-        );
+    } catch (error) {
+        console.error("Get principal leave applications error:", error);
 
-        return res.status(500).json({
-            message: "Failed to get leave applications"
+        res.status(500).json({
+            message: "Failed to get leave applications",
         });
     }
 };
@@ -363,116 +354,159 @@ export const getTeacherLeaveApplications = async (
     res: Response
 ) => {
     try {
-        const status =
-            req.query.status?.toString() || "All";
+        const status = req.query.status?.toString() || "All";
+        const classFilter = req.query.class?.toString() || "All";
 
-        const department =
-            req.query.department?.toString() || "All";
+        const currentPage = Math.max(Number(req.query.page) || 1, 1);
+        const pageLimit = Math.max(Number(req.query.limit) || 5, 1);
+        const skip = (currentPage - 1) * pageLimit;
 
-        const currentPage = Math.max(
-            Number(req.query.page) || 1,
-            1
-        );
+        // Fetch available classes for the shared class filter.
+        const availableClasses: string[] = await Class.distinct("class");
 
-        const pageLimit = Math.max(
-            Number(req.query.limit) || 5,
-            1
-        );
+        const classes = availableClasses.sort((a, b) => {
+            const numberA = parseInt(a.match(/\d+/)?.[0] ?? "0", 10);
+            const numberB = parseInt(b.match(/\d+/)?.[0] ?? "0", 10);
+            return numberA - numberB;
+        });
 
-        const skip =
-            (currentPage - 1) * pageLimit;
+        // Find teachers assigned to the selected class.
+        let teacherIds: any[] | null = null;
 
-        let teacherIds;
-
-        if (department !== "All") {
-            const teachers = await Teacher.find({
-                department: department as
-                    | "Science"
-                    | "Mathematics"
-                    | "English"
-                    | "Social Science"
-                    | "Hindi"
+        if (classFilter !== "All") {
+            const selectedClass = await Class.findOne({
+                class: classFilter as StudentClass,
             }).select("_id");
 
-            teacherIds = teachers.map(
-                teacher => teacher._id
-            );
+            if (!selectedClass) {
+                return res.status(200).json({
+                    leaves: [],
+                    totalLeaves: 0,
+                    totalPages: 0,
+                    currentPage,
+                    limit: pageLimit,
+                    classes,
+                });
+            }
+
+            teacherIds = await TeacherAssignment.distinct("teacherId", {
+                classId: selectedClass._id,
+            });
         }
 
-        const filter: any = {
-            teacherId: { $exists: true }
+        const filter: Record<string, any> = {
+            teacherId: { $exists: true, $ne: null },
         };
 
         if (status !== "All") {
             filter.status = status;
         }
 
-        if (department !== "All") {
+        if (teacherIds !== null) {
             filter.teacherId = {
-                $in: teacherIds
+                $in: teacherIds,
             };
         }
 
-        const totalLeaves =
-            await Leave.countDocuments(filter);
+        const [totalLeaves, leaves] = await Promise.all([
+            Leave.countDocuments(filter),
 
-        const leaves = await Leave.find(filter)
-            .sort({
-                createdAt: -1
+            Leave.find(filter)
+                .sort({ createdAt: -1 })
+                .skip(skip)
+                .limit(pageLimit)
+                .populate({
+                    path: "teacherId",
+                    match: { isDeleted: { $ne: true } },
+                    populate: {
+                        path: "userId",
+                        select: "name uid",
+                    },
+                }),
+        ]);
+
+        // Get valid teachers from the populated leave records.
+        const validLeaves = leaves.filter((leave) => {
+            const teacher = leave.teacherId as any;
+            return teacher && teacher.userId;
+        });
+
+        const pageTeacherIds = [
+            ...new Set(
+                validLeaves.map((leave) => {
+                    const teacher = leave.teacherId as any;
+                    return teacher._id.toString();
+                })
+            ),
+        ];
+
+        // Load assignments for the teachers on this page.
+        const assignments = pageTeacherIds.length
+            ? await TeacherAssignment.find({
+                teacherId: { $in: pageTeacherIds },
+            }).populate({
+                path: "classId",
+                select: "class",
             })
-            .skip(skip)
-            .limit(pageLimit)
-            .populate({
-                path: "teacherId",
-                populate: {
-                    path: "userId",
-                    select: "name uid"
-                }
+            : [];
+
+        const classesByTeacher = new Map<string, Set<string>>();
+
+        for (const assignment of assignments) {
+            const teacherId = assignment.teacherId.toString();
+            const assignedClass = assignment.classId as any;
+
+            if (!assignedClass?.class) {
+                continue;
+            }
+
+            if (!classesByTeacher.has(teacherId)) {
+                classesByTeacher.set(teacherId, new Set<string>());
+            }
+
+            classesByTeacher.get(teacherId)!.add(assignedClass.class);
+        }
+
+        const formattedLeaves = validLeaves.map((leave) => {
+            const teacher = leave.teacherId as any;
+
+            const assignedClasses = [
+                ...(classesByTeacher.get(teacher._id.toString()) ?? []),
+            ].sort((a, b) => {
+                const numberA = parseInt(a.match(/\d+/)?.[0] ?? "0", 10);
+                const numberB = parseInt(b.match(/\d+/)?.[0] ?? "0", 10);
+                return numberA - numberB;
             });
 
-        const formattedLeaves = leaves.map(
-            (leave) => {
-                const teacher =
-                    leave.teacherId as any;
+            return {
+                _id: leave._id,
+                teacher: {
+                    _id: teacher._id,
+                    name: teacher.userId.name,
+                    uid: teacher.userId.uid,
+                    employeeID: teacher.employeeID,
+                    classes: assignedClasses,
+                },
+                startDate: leave.startDate,
+                endDate: leave.endDate,
+                reason: leave.reason,
+                status: leave.status,
+            };
+        });
 
-                return {
-                    _id: leave._id,
-                    teacher: {
-                        _id: teacher._id,
-                        name: teacher.userId.name,
-                        uid: teacher.userId.uid,
-                        employeeID: teacher.employeeID,
-                        department: teacher.department,
-                        classAssigned: teacher.classAssigned
-                    },
-                    startDate: leave.startDate,
-                    endDate: leave.endDate,
-                    reason: leave.reason,
-                    status: leave.status
-                };
-            }
-        );
-
-        const totalPages = Math.ceil(
-            totalLeaves / pageLimit
-        );
-
-        return res.status(200).json({
+        res.status(200).json({
             leaves: formattedLeaves,
             totalLeaves,
-            totalPages,
+            totalPages: Math.ceil(totalLeaves / pageLimit),
             currentPage,
-            limit: pageLimit
+            limit: pageLimit,
+            classes,
         });
-    }
-    catch (error) {
-        console.error(
-            "Get teacher leave applications error:",
-            error
-        );
+    } catch (error) {
+        console.error("Get teacher leave applications error:", error);
 
-        return res.status(500).json({
-            message: "Failed to get teacher leave applications"
+        res.status(500).json({
+            message: "Failed to get teacher leave applications",
         });
     }
 };
@@ -732,7 +766,11 @@ export const restoreStudent = async (req: Request, res: Response, next: NextFunc
 };
 
 //GET all
-export const getStudents = async (req: Request, res: Response, next: NextFunction) => {
+export const getStudents = async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+) => {
     try {
         const {
             class: classFilter = "All",
@@ -744,11 +782,11 @@ export const getStudents = async (req: Request, res: Response, next: NextFunctio
             showDeleted = "false"
         } = req.query;
 
-        const currentPage = Math.max(Number(page), 1);
-        const pageLimit = Math.max(Number(limit), 1);
+        const currentPage = Math.max(Number(page) || 1, 1);
+        const pageLimit = Math.max(Number(limit) || 5, 1);
         const skip = (currentPage - 1) * pageLimit;
 
-        const match: any = {};
+        const match: Record<string, any> = {};
 
         if (showDeleted !== "true") {
             match.$or = [
@@ -760,6 +798,8 @@ export const getStudents = async (req: Request, res: Response, next: NextFunctio
         if (classFilter !== "All") {
             match.class = classFilter;
         }
+
+        const searchValue = search.toString().trim();
 
         const pipeline: any[] = [
             {
@@ -775,9 +815,9 @@ export const getStudents = async (req: Request, res: Response, next: NextFunctio
             }
         ];
 
-        if (search.toString().trim() !== "") {
+        if (searchValue) {
             match["userId.name"] = {
-                $regex: search.toString().trim(),
+                $regex: searchValue,
                 $options: "i"
             };
         }
@@ -792,35 +832,35 @@ export const getStudents = async (req: Request, res: Response, next: NextFunctio
                     "userId.name": order === "desc" ? -1 : 1
                 }
             });
-        }
-
-        if (sortBy === "Class") {
-            pipeline.push({
-                $addFields: {
-                    classNumber: {
-                        $toInt: {
-                            $getField: {
-                                field: "match",
-                                input: {
-                                    $regexFind: {
-                                        input: "$class",
-                                        regex: "\\d+"
+        } else if (sortBy === "Class") {
+            pipeline.push(
+                {
+                    $addFields: {
+                        classNumber: {
+                            $toInt: {
+                                $getField: {
+                                    field: "match",
+                                    input: {
+                                        $regexFind: {
+                                            input: {
+                                                $ifNull: ["$class", ""]
+                                            },
+                                            regex: "\\d+"
+                                        }
                                     }
                                 }
                             }
                         }
                     }
+                },
+                {
+                    $sort: {
+                        classNumber: order === "desc" ? -1 : 1,
+                        "userId.name": 1
+                    }
                 }
-            });
-
-            pipeline.push({
-                $sort: {
-                    classNumber: order === "desc" ? -1 : 1
-                }
-            });
-        }
-
-        if (sortBy === "Roll no") {
+            );
+        } else if (sortBy === "Roll no") {
             pipeline.push({
                 $sort: {
                     rollNumber: order === "desc" ? -1 : 1
@@ -840,25 +880,32 @@ export const getStudents = async (req: Request, res: Response, next: NextFunctio
             }
         });
 
-        const result = await Student.aggregate(pipeline);
+        const [result, classes] = await Promise.all([
+            Student.aggregate(pipeline),
+            Class.distinct("class")
+        ]);
 
-        const students = result[0]?.students || [];
-        const totalStudents = result[0]?.total[0]?.count || 0;
+        const students = result[0]?.students ?? [];
+        const totalStudents = result[0]?.total[0]?.count ?? 0;
         const totalPages = Math.ceil(totalStudents / pageLimit);
 
-        res.status(200).json({
+        const sortedClasses = classes.sort(
+            (a: string, b: string) =>
+                Number.parseInt(a, 10) - Number.parseInt(b, 10)
+        );
+
+        return res.status(200).json({
             students,
             totalStudents,
             totalPages,
             currentPage,
-            limit: pageLimit
+            limit: pageLimit,
+            classes: sortedClasses
         });
-    }
-    catch (error) {
+    } catch (error) {
         next(error);
     }
 };
-
 
 export const getTeachers = async (
     req: Request,
@@ -873,14 +920,15 @@ export const getTeachers = async (
             order = "asc",
             page = "1",
             limit = "5",
-            showDeleted = "false"
+            showDeleted = "false",
+            classTeacherOnly = "false"
         } = req.query;
 
-        const currentPage = Math.max(Number(page), 1);
-        const pageLimit = Math.max(Number(limit), 1);
+        const currentPage = Math.max(Number(page) || 1, 1);
+        const pageLimit = Math.max(Number(limit) || 5, 1);
         const skip = (currentPage - 1) * pageLimit;
 
-        const match: any = {};
+        const match: Record<string, any> = {};
 
         if (showDeleted !== "true") {
             match.$or = [
@@ -889,9 +937,7 @@ export const getTeachers = async (
             ];
         }
 
-        if (classFilter !== "All") {
-            match.classAssigned = classFilter;
-        }
+        const searchValue = search.toString().trim();
 
         const pipeline: any[] = [
             {
@@ -904,6 +950,62 @@ export const getTeachers = async (
             },
             {
                 $unwind: "$userId"
+            },
+            {
+                $lookup: {
+                    from: "teacherassignments",
+                    localField: "_id",
+                    foreignField: "teacherId",
+                    as: "assignments"
+                }
+            },
+            {
+                $lookup: {
+                    from: "classes",
+                    localField: "assignments.classId",
+                    foreignField: "_id",
+                    as: "assignedClasses"
+                }
+            },
+            {
+                $addFields: {
+                    classes: {
+                        $setUnion: [
+                            {
+                                $map: {
+                                    input: "$assignedClasses",
+                                    as: "classItem",
+                                    in: "$$classItem.class"
+                                }
+                            },
+                            []
+                        ]
+                    }
+                }
+            },
+            {
+                $lookup: {
+                    from: "subjects",
+                    localField: "assignments.subjectId",
+                    foreignField: "_id",
+                    as: "assignedSubjects"
+                }
+            },
+            {
+                $addFields: {
+                    subjects: {
+                        $setUnion: [
+                            {
+                                $map: {
+                                    input: "$assignedSubjects",
+                                    as: "subjectItem",
+                                    in: "$$subjectItem.name"
+                                }
+                            },
+                            []
+                        ]
+                    }
+                }
             },
             {
                 $lookup: {
@@ -930,24 +1032,30 @@ export const getTeachers = async (
                         $gt: [{ $size: "$classTeacherMatch" }, 0]
                     }
                 }
-            },
-            {
-                $project: {
-                    classTeacherMatch: 0
-                }
             }
         ];
 
-        const searchValue = search.toString().trim();
-
-        if (searchValue !== "") {
+        if (searchValue) {
             match["userId.name"] = {
                 $regex: searchValue,
                 $options: "i"
             };
         }
 
+        if (classFilter !== "All") {
+            match.classes = classFilter;
+        }
+
         pipeline.push({ $match: match });
+
+        // Apply the Class Teachers Only filter before pagination.
+        if (classTeacherOnly === "true") {
+            pipeline.push({
+                $match: {
+                    isClassTeacher: true
+                }
+            });
+        }
 
         if (sortBy === "Teacher Name") {
             pipeline.push({
@@ -955,56 +1063,89 @@ export const getTeachers = async (
                     "userId.name": order === "desc" ? -1 : 1
                 }
             });
-        }
-
-        if (sortBy === "Class Assigned") {
-            pipeline.push({
-                $addFields: {
-                    classNumber: {
-                        $toInt: {
-                            $getField: {
-                                field: "match",
-                                input: {
-                                    $regexFind: {
-                                        input: "$classAssigned",
-                                        regex: "\\d+"
+        } else if (sortBy === "Class Assigned") {
+            pipeline.push(
+                {
+                    $addFields: {
+                        classNumber: {
+                            $min: {
+                                $map: {
+                                    input: "$classes",
+                                    as: "className",
+                                    in: {
+                                        $toInt: {
+                                            $getField: {
+                                                field: "match",
+                                                input: {
+                                                    $regexFind: {
+                                                        input: "$$className",
+                                                        regex: "\\d+"
+                                                    }
+                                                }
+                                            }
+                                        }
                                     }
                                 }
                             }
                         }
                     }
+                },
+                {
+                    $sort: {
+                        classNumber: order === "desc" ? -1 : 1,
+                        "userId.name": 1
+                    }
                 }
-            });
-
-            pipeline.push({
-                $sort: {
-                    classNumber: order === "desc" ? -1 : 1
-                }
-            });
+            );
         }
 
         pipeline.push({
             $facet: {
                 teachers: [
                     { $skip: skip },
-                    { $limit: pageLimit }
+                    { $limit: pageLimit },
+                    {
+                        $project: {
+                            user: "$userId",
+                            userId: 1,
+                            employeeID: 1,
+                            department: 1,
+                            classAssigned: 1,
+                            classes: 1,
+                            subjects: 1,
+                            isDeleted: 1,
+                            deletedAt: 1,
+                            isClassTeacher: 1
+                        }
+                    }
                 ],
-                total: [{ $count: "count" }]
+                total: [
+                    { $count: "count" }
+                ]
             }
         });
 
-        const result = await Teacher.aggregate(pipeline);
+        const [result, availableClasses] = await Promise.all([
+            Teacher.aggregate(pipeline),
+            Class.distinct("class")
+        ]);
 
-        const teachers = result[0]?.teachers || [];
-        const totalTeachers = result[0]?.total[0]?.count || 0;
+        const teachers = result[0]?.teachers ?? [];
+        const totalTeachers = result[0]?.total[0]?.count ?? 0;
         const totalPages = Math.ceil(totalTeachers / pageLimit);
 
-        res.status(200).json({
+        const sortedClasses = availableClasses.sort(
+            (a: string, b: string) =>
+                Number.parseInt(a, 10) - Number.parseInt(b, 10)
+        );
+
+        return res.status(200).json({
             teachers,
             totalTeachers,
             totalPages,
             currentPage,
-            limit: pageLimit
+            limit: pageLimit,
+            classes: sortedClasses
         });
     } catch (error) {
         next(error);
@@ -1163,6 +1304,7 @@ export const permanentlyDeleteStudent = async (req: Request, res: Response, next
     }
 }
 
+
 export const getSubjects = async (
     req: Request,
     res: Response,
@@ -1182,7 +1324,7 @@ export const getSubjects = async (
         const pageLimit = Math.max(Number(limit) || 5, 1);
         const skip = (currentPage - 1) * pageLimit;
 
-        const match: any = {};
+        const match: Record<string, any> = {};
 
         if (classFilter !== "All") {
             match.class = classFilter;
@@ -1190,35 +1332,93 @@ export const getSubjects = async (
 
         const searchValue = search.toString().trim();
 
-        if (searchValue !== "") {
+        if (searchValue) {
             match.name = {
                 $regex: searchValue,
                 $options: "i"
             };
         }
 
+        const sortOrder = order === "desc" ? -1 : 1;
+
         const pipeline: any[] = [
+            { $match: match }
+        ];
+
+        if (sortBy === "Subject Name") {
+            pipeline.push({
+                $sort: {
+                    name: sortOrder
+                }
+            });
+        } else if (sortBy === "Class") {
+            pipeline.push(
+                {
+                    $addFields: {
+                        classNumber: {
+                            $toInt: {
+                                $arrayElemAt: [
+                                    {
+                                        $regexFindAll: {
+                                            input: "$class",
+                                            regex: "\\d+"
+                                        }
+                                    },
+                                    0
+                                ]
+                            }
+                        }
+                    }
+                },
+                {
+                    $sort: {
+                        classNumber: sortOrder,
+                        name: 1
+                    }
+                }
+            );
+        } else {
+            pipeline.push({
+                $sort: {
+                    createdAt: -1
+                }
+            });
+        }
+
+        // Find the teacher assigned to each exact subject-class pair.
+        pipeline.push(
             {
                 $lookup: {
-                    from: "teachers",
+                    from: "teacherassignments",
                     let: {
-                        subjectName: "$name",
+                        subjectId: "$_id",
                         subjectClass: "$class"
                     },
                     pipeline: [
+                        {
+                            $lookup: {
+                                from: "classes",
+                                localField: "classId",
+                                foreignField: "_id",
+                                as: "classDoc"
+                            }
+                        },
+                        {
+                            $unwind: "$classDoc"
+                        },
                         {
                             $match: {
                                 $expr: {
                                     $and: [
                                         {
                                             $eq: [
-                                                "$department",
-                                                "$$subjectName"
+                                                "$subjectId",
+                                                "$$subjectId"
                                             ]
                                         },
                                         {
                                             $eq: [
-                                                "$classAssigned",
+                                                "$classDoc.class",
                                                 "$$subjectClass"
                                             ]
                                         }
@@ -1228,8 +1428,30 @@ export const getSubjects = async (
                         },
                         {
                             $lookup: {
+                                from: "teachers",
+                                localField: "teacherId",
+                                foreignField: "_id",
+                                as: "teacher"
+                            }
+                        },
+                        {
+                            $unwind: {
+                                path: "$teacher",
+                                preserveNullAndEmptyArrays: true
+                            }
+                        },
+                        {
+                            $match: {
+                                $or: [
+                                    { "teacher.isDeleted": { $ne: true } },
+                                    { teacher: { $exists: false } }
+                                ]
+                            }
+                        },
+                        {
+                            $lookup: {
                                 from: "users",
-                                localField: "userId",
+                                localField: "teacher.userId",
                                 foreignField: "_id",
                                 as: "user"
                             }
@@ -1245,9 +1467,10 @@ export const getSubjects = async (
                                 _id: 0,
                                 name: "$user.name"
                             }
-                        }
+                        },
+                        { $limit: 1 }
                     ],
-                    as: "teacher"
+                    as: "assignmentTeacher"
                 }
             },
             {
@@ -1256,7 +1479,7 @@ export const getSubjects = async (
                         $ifNull: [
                             {
                                 $arrayElemAt: [
-                                    "$teacher.name",
+                                    "$assignmentTeacher.name",
                                     0
                                 ]
                             },
@@ -1266,83 +1489,53 @@ export const getSubjects = async (
                 }
             },
             {
-                $match: match
+                $project: {
+                    assignmentTeacher: 0,
+                    classNumber: 0
+                }
+            },
+            {
+                $facet: {
+                    subjects: [
+                        { $skip: skip },
+                        { $limit: pageLimit }
+                    ],
+                    total: [
+                        { $count: "count" }
+                    ]
+                }
             }
-        ];
-
-        if (sortBy === "Subject Name") {
-            pipeline.push({
-                $sort: {
-                    name: order === "desc" ? -1 : 1
-                }
-            });
-        }
-        else if (sortBy === "Class") {
-            pipeline.push({
-                $addFields: {
-                    classNumber: {
-                        $toInt: {
-                            $getField: {
-                                field: "match",
-                                input: {
-                                    $regexFind: {
-                                        input: "$class",
-                                        regex: "\\d+"
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            });
-
-            pipeline.push({
-                $sort: {
-                    classNumber: order === "desc" ? -1 : 1,
-                    name: 1
-                }
-            });
-        }
-        else {
-            pipeline.push({
-                $sort: {
-                    createdAt: -1
-                }
-            });
-        }
-
-        pipeline.push({
-            $facet: {
-                subjects: [
-                    { $skip: skip },
-                    { $limit: pageLimit }
-                ],
-                total: [
-                    { $count: "count" }
-                ]
-            }
-        });
-
-        const result = await Subject.aggregate(pipeline);
-
-        const subjects = result[0]?.subjects || [];
-        const totalSubjects = result[0]?.total[0]?.count || 0;
-        const totalPages = Math.ceil(
-            totalSubjects / pageLimit
         );
 
-        res.status(200).json({
+        const [result, allClasses] = await Promise.all([
+            Subject.aggregate(pipeline),
+            Class.find({})
+                .distinct("class")
+        ]);
+
+        const subjects = result[0]?.subjects ?? [];
+        const totalSubjects = result[0]?.total[0]?.count ?? 0;
+
+        const classes = allClasses.sort(
+            (a: string, b: string) =>
+                Number.parseInt(a, 10) -
+                Number.parseInt(b, 10)
+        );
+
+        return res.status(200).json({
             subjects,
             totalSubjects,
-            totalPages,
+            totalPages: Math.ceil(totalSubjects / pageLimit),
             currentPage,
-            limit: pageLimit
+            limit: pageLimit,
+            classes
         });
-    }
-    catch (error) {
+    } catch (error) {
         next(error);
     }
 };
+
+
 
 export const getMarks = async (
     req: Request,
@@ -1366,39 +1559,37 @@ export const getMarks = async (
         const pageLimit = Math.max(Number(limit) || 5, 1);
         const skip = (currentPage - 1) * pageLimit;
 
-        const studentLookup: any[] = [
-            {
-                $lookup: {
-                    from: "users",
-                    localField: "student.userId",
-                    foreignField: "_id",
-                    as: "studentUser"
-                }
-            },
-            {
-                $unwind: {
-                    path: "$studentUser",
-                    preserveNullAndEmptyArrays: true
-                }
-            }
-        ];
+        const match: Record<string, any> = {};
 
-        const teacherLookup: any[] = [
-            {
-                $lookup: {
-                    from: "users",
-                    localField: "teacher.userId",
-                    foreignField: "_id",
-                    as: "teacherUser"
-                }
-            },
-            {
-                $unwind: {
-                    path: "$teacherUser",
-                    preserveNullAndEmptyArrays: true
-                }
-            }
-        ];
+        if (classFilter !== "All") {
+            match["student.class"] = classFilter;
+        }
+
+        if (exam !== "All") {
+            match.exam = exam;
+        }
+
+        if (subject !== "All") {
+            match["subject.name"] = subject;
+        }
+
+        if (
+            teacher !== "All" &&
+            mongoose.Types.ObjectId.isValid(teacher.toString())
+        ) {
+            match.teacherId = new mongoose.Types.ObjectId(
+                teacher.toString()
+            );
+        }
+
+        const searchValue = search.toString().trim();
+
+        if (searchValue) {
+            match["studentUser.name"] = {
+                $regex: searchValue,
+                $options: "i"
+            };
+        }
 
         const pipeline: any[] = [
             {
@@ -1415,7 +1606,20 @@ export const getMarks = async (
                     preserveNullAndEmptyArrays: true
                 }
             },
-            ...studentLookup,
+            {
+                $lookup: {
+                    from: "users",
+                    localField: "student.userId",
+                    foreignField: "_id",
+                    as: "studentUser"
+                }
+            },
+            {
+                $unwind: {
+                    path: "$studentUser",
+                    preserveNullAndEmptyArrays: true
+                }
+            },
             {
                 $lookup: {
                     from: "teachers",
@@ -1430,7 +1634,20 @@ export const getMarks = async (
                     preserveNullAndEmptyArrays: true
                 }
             },
-            ...teacherLookup,
+            {
+                $lookup: {
+                    from: "users",
+                    localField: "teacher.userId",
+                    foreignField: "_id",
+                    as: "teacherUser"
+                }
+            },
+            {
+                $unwind: {
+                    path: "$teacherUser",
+                    preserveNullAndEmptyArrays: true
+                }
+            },
             {
                 $lookup: {
                     from: "subjects",
@@ -1444,41 +1661,9 @@ export const getMarks = async (
                     path: "$subject",
                     preserveNullAndEmptyArrays: true
                 }
-            }
+            },
+            { $match: match }
         ];
-
-        const match: any = {};
-
-        if (classFilter !== "All") {
-            match["student.class"] = classFilter;
-        }
-
-        if (exam !== "All") {
-            match.exam = exam;
-        }
-
-        if (subject !== "All") {
-            match["subject.name"] = subject;
-        }
-
-        if (teacher !== "All" && mongoose.Types.ObjectId.isValid(teacher.toString())) {
-            match.teacherId = new mongoose.Types.ObjectId(
-                teacher.toString()
-            );
-        }
-
-        const searchValue = search.toString().trim();
-
-        if (searchValue !== "") {
-            match["studentUser.name"] = {
-                $regex: searchValue,
-                $options: "i"
-            };
-        }
-
-        pipeline.push({
-            $match: match
-        });
 
         if (sortBy === "Student Name") {
             pipeline.push({
@@ -1486,48 +1671,47 @@ export const getMarks = async (
                     "studentUser.name": order === "desc" ? -1 : 1
                 }
             });
-        }
-        else if (sortBy === "Subject Name") {
+        } else if (sortBy === "Subject Name") {
             pipeline.push({
                 $sort: {
                     "subject.name": order === "desc" ? -1 : 1
                 }
             });
-        }
-        else if (sortBy === "Class") {
-            pipeline.push({
-                $addFields: {
-                    classNumber: {
-                        $toInt: {
-                            $getField: {
-                                field: "match",
-                                input: {
-                                    $regexFind: {
-                                        input: "$student.class",
-                                        regex: "\\d+"
+        } else if (sortBy === "Class") {
+            pipeline.push(
+                {
+                    $addFields: {
+                        classNumber: {
+                            $toInt: {
+                                $getField: {
+                                    field: "match",
+                                    input: {
+                                        $regexFind: {
+                                            input: {
+                                                $ifNull: ["$student.class", ""]
+                                            },
+                                            regex: "\\d+"
+                                        }
                                     }
                                 }
                             }
                         }
                     }
+                },
+                {
+                    $sort: {
+                        classNumber: order === "desc" ? -1 : 1,
+                        "studentUser.name": 1
+                    }
                 }
-            });
-
-            pipeline.push({
-                $sort: {
-                    classNumber: order === "desc" ? -1 : 1,
-                    "studentUser.name": 1
-                }
-            });
-        }
-        else if (sortBy === "Marks Obtained") {
+            );
+        } else if (sortBy === "Marks Obtained") {
             pipeline.push({
                 $sort: {
                     marksObtained: order === "desc" ? -1 : 1
                 }
             });
-        }
-        else {
+        } else {
             pipeline.push({
                 $sort: {
                     createdAt: -1
@@ -1547,17 +1731,16 @@ export const getMarks = async (
             }
         });
 
-        const result = await Mark.aggregate(pipeline);
+        const [result, classes] = await Promise.all([
+            Mark.aggregate(pipeline),
+            Class.distinct("class")
+        ]);
 
-        const marks = result[0]?.marks || [];
-        const totalMarks = result[0]?.total[0]?.count || 0;
-
-        const totalPages = Math.ceil(
-            totalMarks / pageLimit
-        );
+        const marks = result[0]?.marks ?? [];
+        const totalMarks = result[0]?.total[0]?.count ?? 0;
 
         const formattedMarks = marks.map((mark: any) => ({
-            _id: mark._id,
+            _id: mark._id.toString(),
             studentId: mark.student
                 ? {
                     _id: mark.student._id.toString(),
@@ -1589,18 +1772,24 @@ export const getMarks = async (
             totalMarks: mark.totalMarks
         }));
 
-        res.status(200).json({
+        return res.status(200).json({
             marks: formattedMarks,
             totalMarks,
-            totalPages,
+            totalPages: Math.ceil(totalMarks / pageLimit),
             currentPage,
-            limit: pageLimit
+            limit: pageLimit,
+            classes: classes.sort(
+                (a: string, b: string) =>
+                    Number.parseInt(a, 10) -
+                    Number.parseInt(b, 10)
+            )
         });
-    }
-    catch (error) {
+    } catch (error) {
         next(error);
     }
 };
+
+
 
 export const getMarkTeachers = async (
     req: Request,
@@ -1608,34 +1797,16 @@ export const getMarkTeachers = async (
     next: NextFunction
 ) => {
     try {
-        const teachers = await Mark.aggregate([
-            {
-                $group: {
-                    _id: "$teacherId"
-                }
-            },
+        const teachers = await Teacher.aggregate([
             {
                 $match: {
-                    _id: {
-                        $ne: null
-                    }
+                    isDeleted: { $ne: true }
                 }
-            },
-            {
-                $lookup: {
-                    from: "teachers",
-                    localField: "_id",
-                    foreignField: "_id",
-                    as: "teacher"
-                }
-            },
-            {
-                $unwind: "$teacher"
             },
             {
                 $lookup: {
                     from: "users",
-                    localField: "teacher.userId",
+                    localField: "userId",
                     foreignField: "_id",
                     as: "user"
                 }
@@ -1644,11 +1815,48 @@ export const getMarkTeachers = async (
                 $unwind: "$user"
             },
             {
+                $lookup: {
+                    from: "teacherassignments",
+                    localField: "_id",
+                    foreignField: "teacherId",
+                    as: "assignments"
+                }
+            },
+            {
+                $lookup: {
+                    from: "classes",
+                    localField: "assignments.classId",
+                    foreignField: "_id",
+                    as: "assignedClasses"
+                }
+            },
+            {
                 $project: {
                     _id: 0,
-                    id: "$teacher._id",
+                    id: { $toString: "$_id" },
                     name: "$user.name",
-                    classAssigned: "$teacher.classAssigned"
+                    classes: {
+                        $sortArray: {
+                            input: {
+                                $setUnion: [
+                                    {
+                                        $map: {
+                                            input: "$assignedClasses",
+                                            as: "classItem",
+                                            in: "$$classItem.class"
+                                        }
+                                    },
+                                    []
+                                ]
+                            },
+                            sortBy: 1
+                        }
+                    }
+                }
+            },
+            {
+                $sort: {
+                    name: 1
                 }
             }
         ]);
@@ -1656,11 +1864,11 @@ export const getMarkTeachers = async (
         return res.status(200).json({
             teachers
         });
-    }
-    catch (error) {
+    } catch (error) {
         next(error);
     }
 };
+
 
 type StudentClass =
     | "1st"
@@ -1687,8 +1895,11 @@ export const getExamResults = async (
     next: NextFunction
 ) => {
     try {
-        const studentClass = req.query.class as StudentClass;
-        const exam = req.query.exam as ExamType;
+        const studentClass =
+            req.query.class?.toString() as StudentClass | undefined;
+
+        const exam =
+            req.query.exam?.toString() as ExamType | undefined;
 
         const search = req.query.search?.toString().trim() || "";
         const sortBy = req.query.sortBy?.toString() || "None";
@@ -1710,17 +1921,22 @@ export const getExamResults = async (
             });
         }
 
-        const students = await Student.find({
-            class: studentClass
-        }).populate({
-            path: "userId",
-            select: "name uid"
-        });
+        const [students, subjects, classes] = await Promise.all([
+            Student.find({
+                class: studentClass
+            }).populate({
+                path: "userId",
+                select: "name uid"
+            }),
 
-        const subjects = await Subject.find({
-            class: studentClass
-        }).select("name subjectCode");
+            Subject.find({
+                class: studentClass
+            }).select("name subjectCode"),
 
+            Class.distinct("class")
+        ]);
+
+        // Fetch marks for all students in the selected class and exam.
         const marks = await Mark.find({
             studentId: {
                 $in: students.map(student => student._id)
@@ -1731,8 +1947,8 @@ export const getExamResults = async (
             select: "name subjectCode"
         });
 
+        // Calculate results dynamically for every subject in this class.
         let results = students.map(student => {
-
             const studentMarks = marks.filter(
                 mark =>
                     mark.studentId.toString() ===
@@ -1744,8 +1960,13 @@ export const getExamResults = async (
                 {
                     obtained: number;
                     total: number;
-                }
+                } | null
             > = {};
+
+            // Initialize every subject, including subjects without marks.
+            subjects.forEach(subject => {
+                subjectMarks[subject.name] = null;
+            });
 
             studentMarks.forEach(mark => {
                 if (!mark.subjectId) {
@@ -1753,27 +1974,21 @@ export const getExamResults = async (
                 }
 
                 const subject = mark.subjectId as any;
+                const subjectName = subject.name as string;
 
-                subjectMarks[subject.name] = {
-                    obtained: mark.marksObtained,
-                    total: mark.totalMarks
-                };
+                // Only include subjects belonging to the selected class.
+                if (
+                    Object.prototype.hasOwnProperty.call(
+                        subjectMarks,
+                        subjectName
+                    )
+                ) {
+                    subjectMarks[subjectName] = {
+                        obtained: mark.marksObtained,
+                        total: mark.totalMarks
+                    };
+                }
             });
-
-            const science =
-                subjectMarks["Science"] ?? null;
-
-            const mathematics =
-                subjectMarks["Mathematics"] ?? null;
-
-            const english =
-                subjectMarks["English"] ?? null;
-
-            const socialScience =
-                subjectMarks["Social Science"] ?? null;
-
-            const hindi =
-                subjectMarks["Hindi"] ?? null;
 
             const requiredSubjects = subjects.map(
                 subject => subject.name
@@ -1787,7 +2002,6 @@ export const getExamResults = async (
             let hasAnyMarks = false;
 
             requiredSubjects.forEach(subjectName => {
-
                 const mark = subjectMarks[subjectName];
 
                 if (!mark) {
@@ -1800,10 +2014,12 @@ export const getExamResults = async (
                 obtainedMarks += mark.obtained;
                 totalMarks += mark.total;
 
-                const percentage =
-                    (mark.obtained / mark.total) * 100;
+                const subjectPercentage =
+                    mark.total > 0
+                        ? (mark.obtained / mark.total) * 100
+                        : 0;
 
-                if (percentage < 33) {
+                if (subjectPercentage < 33) {
                     hasFailedSubject = true;
                 }
             });
@@ -1813,11 +2029,9 @@ export const getExamResults = async (
 
             if (!hasAnyMarks) {
                 result = "Not Assessed";
-            }
-            else if (hasMissingMarks) {
+            } else if (hasMissingMarks) {
                 result = "Incomplete";
-            }
-            else {
+            } else {
                 percentage =
                     totalMarks > 0
                         ? Number(
@@ -1828,43 +2042,29 @@ export const getExamResults = async (
                         )
                         : null;
 
-                result = hasFailedSubject
-                    ? "Fail"
-                    : "Pass";
+                result = hasFailedSubject ? "Fail" : "Pass";
             }
 
+            const user = student.userId as any;
+
             return {
-                studentName:
-                    (student.userId as any)?.name ??
-                    "Student Deleted",
-
-                uid:
-                    (student.userId as any)?.uid ??
-                    "",
-
+                studentName: user?.name ?? "Student Deleted",
+                uid: user?.uid ?? "",
                 class: student.class,
-
-                science,
-                mathematics,
-                english,
-                socialScience,
-                hindi,
-
-                total:
-                    hasAnyMarks
-                        ? {
-                            obtained: obtainedMarks,
-                            total: totalMarks
-                        }
-                        : null,
-
+                subjects: subjectMarks,
+                total: hasAnyMarks
+                    ? {
+                        obtained: obtainedMarks,
+                        total: totalMarks
+                    }
+                    : null,
                 percentage,
-
                 result
             };
         });
 
-        if (search !== "") {
+        // Search by student name or UID.
+        if (search) {
             const searchValue = search.toLowerCase();
 
             results = results.filter(student =>
@@ -1877,29 +2077,26 @@ export const getExamResults = async (
             );
         }
 
+        // Sorting.
         if (sortBy === "Student Name") {
             results.sort((a, b) => {
-                const comparison =
-                    a.studentName.localeCompare(
-                        b.studentName
-                    );
+                const comparison = a.studentName.localeCompare(
+                    b.studentName
+                );
 
                 return order === "desc"
                     ? -comparison
                     : comparison;
             });
-        }
-        else if (sortBy === "UID") {
+        } else if (sortBy === "UID") {
             results.sort((a, b) => {
-                const comparison =
-                    a.uid.localeCompare(b.uid);
+                const comparison = a.uid.localeCompare(b.uid);
 
                 return order === "desc"
                     ? -comparison
                     : comparison;
             });
-        }
-        else if (sortBy === "Total Marks") {
+        } else if (sortBy === "Total Marks") {
             results.sort((a, b) => {
                 const comparison =
                     (a.total?.obtained ?? 0) -
@@ -1909,8 +2106,7 @@ export const getExamResults = async (
                     ? -comparison
                     : comparison;
             });
-        }
-        else if (sortBy === "Percentage") {
+        } else if (sortBy === "Percentage") {
             results.sort((a, b) => {
                 const comparison =
                     (a.percentage ?? -1) -
@@ -1922,107 +2118,439 @@ export const getExamResults = async (
             });
         }
 
+        // Pagination.
         const totalResults = results.length;
 
         const totalPages = Math.ceil(
             totalResults / pageLimit
         );
 
-        const startIndex =
-            (currentPage - 1) * pageLimit;
+        const startIndex = (currentPage - 1) * pageLimit;
 
         const paginatedResults = results.slice(
             startIndex,
             startIndex + pageLimit
         );
 
-        res.status(200).json({
+        // Sort available classes numerically.
+        const sortedClasses = classes.sort(
+            (a: string, b: string) =>
+                Number.parseInt(a, 10) -
+                Number.parseInt(b, 10)
+        );
+
+        // Return all subjects so the frontend can build dynamic columns.
+        const formattedSubjects = subjects.map(subject => ({
+            name: subject.name,
+            subjectCode: subject.subjectCode
+        }));
+
+        return res.status(200).json({
             results: paginatedResults,
+            subjects: formattedSubjects,
             totalResults,
             totalPages,
             currentPage,
-            limit: pageLimit
+            limit: pageLimit,
+            classes: sortedClasses
         });
-
     } catch (error) {
-        console.log(error);
         next(error);
     }
 };
 
 // Subject CRUD
 
-export const getSubjectById = async (req: Request, res: Response, next: NextFunction) => {
-    try {
-        const subject = await Subject.findById(req.params.id);
+const MAX_SUBJECT_NAMES = 8;
 
-        if (!subject) {
-            return res.status(404).json({
-                message: "Subject not found"
+const EXISTING_SUBJECT_NAMES = [
+    "Science",
+    "Mathematics",
+    "English",
+    "Social Science",
+    "Hindi",
+];
+
+const escapeRegex = (value: string): string =>
+    value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+const normalizeSubjectName = (value: string): string =>
+    value.trim().replace(/\s+/g, " ");
+
+// Get distinct subject names for the subject-name dropdown.
+export const getSubjectNames = async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+) => {
+    try {
+        const names = await Subject.distinct("name");
+
+        // Keep the original five available even if a subject has not
+        // yet been assigned to a class.
+        const uniqueNames = new Map<string, string>();
+
+        for (const name of [...EXISTING_SUBJECT_NAMES, ...names]) {
+            const normalized = normalizeSubjectName(name);
+            const key = normalized.toLowerCase();
+
+            if (!uniqueNames.has(key)) {
+                uniqueNames.set(key, normalized);
+            }
+        }
+
+        return res.status(200).json(
+            Array.from(uniqueNames.values())
+                .sort((a, b) => a.localeCompare(b))
+                .map((name) => ({ name }))
+        );
+    } catch (error) {
+        next(error);
+    }
+};
+
+// Get classes for the class dropdown.
+export const getClasses = async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+) => {
+    try {
+        const classes = await Class.find()
+            .select("_id class")
+            .lean();
+
+        const classOrder: Record<string, number> = {
+            "1st": 1,
+            "2nd": 2,
+            "3rd": 3,
+            "4th": 4,
+            "5th": 5,
+            "6th": 6,
+            "7th": 7,
+            "8th": 8,
+            "9th": 9,
+            "10th": 10,
+            "11th": 11,
+            "12th": 12,
+        };
+
+        classes.sort(
+            (a, b) =>
+                (classOrder[a.class] ?? 99) -
+                (classOrder[b.class] ?? 99)
+        );
+
+        return res.status(200).json(classes);
+    } catch (error) {
+        next(error);
+    }
+};
+
+// Add a subject record for a particular class.
+export const createSubject = async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+) => {
+    try {
+        const {
+            name: rawName,
+            subjectCode: rawSubjectCode,
+            class: rawClass,
+        } = req.body;
+
+        if (
+            typeof rawName !== "string" ||
+            typeof rawSubjectCode !== "string" ||
+            typeof rawClass !== "string"
+        ) {
+            return res.status(400).json({
+                message: "Subject name, subject code, and class are required",
             });
         }
 
-        res.status(200).json(subject);
-    }
-    catch (error) {
-        next(error);
-    }
-}
+        const name = normalizeSubjectName(rawName);
+        const subjectCode = rawSubjectCode.trim().toUpperCase();
 
-export const createSubject = async (req: Request, res: Response, next: NextFunction) => {
-    try {
-        const {
-            name,
-            subjectCode,
-            class: subjectClass
-        } = req.body;
+        if (!name || !subjectCode) {
+            return res.status(400).json({
+                message: "Subject name and subject code cannot be empty",
+            });
+        }
 
+        // Validate the class against the allowed class values.
+        const validClasses: StudentClass[] = [
+            "1st", "2nd", "3rd", "4th", "5th", "6th",
+            "7th", "8th", "9th", "10th", "11th", "12th",
+        ];
+
+        if (!validClasses.includes(rawClass as StudentClass)) {
+            return res.status(400).json({
+                message: "Invalid class selected",
+            });
+        }
+
+        const subjectClass = rawClass as StudentClass;
+
+        // Ensure the class exists in the database.
+        const classExists = await Class.exists({
+            class: subjectClass,
+        });
+
+        if (!classExists) {
+            return res.status(400).json({
+                message: "Invalid class selected",
+            });
+        }
+
+        // Prevent duplicate subject names within the same class,
+        // regardless of capitalization.
         const existingSubject = await Subject.findOne({
-            name,
-            class: subjectClass
+            name: {
+                $regex: `^${escapeRegex(name)}$`,
+                $options: "i",
+            },
+            class: subjectClass,
         });
 
         if (existingSubject) {
             return res.status(400).json({
-                message: "A subject with this name already exists for this class"
+                message: "A subject with this name already exists for this class",
             });
         }
 
-        await Subject.create({
+        // Enforce the maximum number of distinct subject names.
+        const existingName = await Subject.findOne({
+            name: {
+                $regex: `^${escapeRegex(name)}$`,
+                $options: "i",
+            },
+        });
+
+        if (!existingName) {
+            const currentNames = await Subject.distinct("name");
+
+            const uniqueNames = new Set(
+                currentNames.map((item) =>
+                    normalizeSubjectName(item).toLowerCase()
+                )
+            );
+
+            for (const defaultName of EXISTING_SUBJECT_NAMES) {
+                uniqueNames.add(defaultName.toLowerCase());
+            }
+
+            if (uniqueNames.size >= MAX_SUBJECT_NAMES) {
+                return res.status(400).json({
+                    message: "A maximum of 8 distinct subject names is allowed",
+                });
+            }
+        }
+
+        // Subject codes must be unique.
+        const existingCode = await Subject.findOne({
+            subjectCode,
+        });
+
+        if (existingCode) {
+            return res.status(409).json({
+                message: "This subject code is already in use",
+            });
+        }
+
+        const subject = await Subject.create({
             name,
             subjectCode,
-            class: subjectClass
+            class: subjectClass,
         });
 
-        res.status(200).json({
-            message: "subject created successfully"
+        return res.status(201).json({
+            message: "Subject created successfully",
+            subject,
         });
-    }
-    catch (error) {
-        console.log(error);
+    } catch (error) {
+        if ((error as { code?: number }).code === 11000) {
+            return res.status(409).json({
+                message: "A subject with this name, class, or code already exists",
+            });
+        }
+
         next(error);
     }
-}
+};
 
-export const updateSubject = async (req: Request, res: Response, next: NextFunction) => {
+// Update an existing subject record.
+export const updateSubject = async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+) => {
     try {
         const { id } = req.params;
 
+        if (!mongoose.isValidObjectId(id)) {
+            return res.status(400).json({
+                message: "Invalid subject ID",
+            });
+        }
+
         const {
-            name,
-            subjectCode,
-            class: subjectClass
+            name: rawName,
+            subjectCode: rawSubjectCode,
+            class: rawClass,
         } = req.body;
 
-        const existingSubject = await Subject.findOne({
-            name,
+        if (
+            typeof rawName !== "string" ||
+            typeof rawSubjectCode !== "string" ||
+            typeof rawClass !== "string"
+        ) {
+            return res.status(400).json({
+                message: "Subject name, subject code, and class are required",
+            });
+        }
+
+        const name = normalizeSubjectName(rawName);
+        const subjectCode = rawSubjectCode.trim().toUpperCase();
+
+        if (!name || !subjectCode) {
+            return res.status(400).json({
+                message: "Subject name and subject code cannot be empty",
+            });
+        }
+
+        // Validate the class against the allowed class values.
+        const validClasses: StudentClass[] = [
+            "1st", "2nd", "3rd", "4th", "5th", "6th",
+            "7th", "8th", "9th", "10th", "11th", "12th",
+        ];
+
+        if (!validClasses.includes(rawClass as StudentClass)) {
+            return res.status(400).json({
+                message: "Invalid class selected",
+            });
+        }
+
+        const subjectClass = rawClass as StudentClass;
+
+        const subject = await Subject.findById(id);
+
+        if (!subject) {
+            return res.status(404).json({
+                message: "Subject not found",
+            });
+        }
+
+        // Ensure the selected class exists in the database.
+        const classExists = await Class.exists({
             class: subjectClass,
-            _id: { $ne: id }
         });
 
-        if (existingSubject) {
+        if (!classExists) {
             return res.status(400).json({
-                message: "A subject with this name already exists for this class"
+                message: "Invalid class selected",
+            });
+        }
+
+        // Prevent duplicate subject names within the same class,
+        // regardless of capitalization.
+        const duplicateSubject = await Subject.findOne({
+            name: {
+                $regex: `^${escapeRegex(name)}$`,
+                $options: "i",
+            },
+            class: subjectClass,
+            _id: { $ne: id },
+        });
+
+        if (duplicateSubject) {
+            return res.status(400).json({
+                message: "A subject with this name already exists for this class",
+            });
+        }
+
+        // Subject codes must be unique across all classes.
+        const duplicateCode = await Subject.findOne({
+            subjectCode,
+            _id: { $ne: id },
+        });
+
+        if (duplicateCode) {
+            return res.status(409).json({
+                message: "This subject code is already in use",
+            });
+        }
+
+        // Check whether this name already exists on another subject.
+        const nameAlreadyExists = await Subject.findOne({
+            name: {
+                $regex: `^${escapeRegex(name)}$`,
+                $options: "i",
+            },
+            _id: { $ne: id },
+        });
+
+        const isSameName =
+            normalizeSubjectName(subject.name).toLowerCase() ===
+            name.toLowerCase();
+
+        // Enforce the distinct subject-name limit when introducing
+        // a genuinely new name.
+        if (!nameAlreadyExists && !isSameName) {
+            const currentNames = await Subject.distinct("name");
+
+            const uniqueNames = new Set(
+                currentNames.map((item) =>
+                    normalizeSubjectName(item).toLowerCase()
+                )
+            );
+
+            for (const defaultName of EXISTING_SUBJECT_NAMES) {
+                uniqueNames.add(defaultName.toLowerCase());
+            }
+
+            if (uniqueNames.size >= MAX_SUBJECT_NAMES) {
+                return res.status(400).json({
+                    message: "A maximum of 8 distinct subject names is allowed",
+                });
+            }
+        }
+
+        // Update the subject.
+        subject.name = name;
+        subject.subjectCode = subjectCode;
+        subject.class = subjectClass;
+
+        await subject.save();
+
+        return res.status(200).json({
+            message: "Subject updated successfully",
+            subject,
+        });
+    } catch (error) {
+        if ((error as { code?: number }).code === 11000) {
+            return res.status(409).json({
+                message: "A subject with this name, class, or code already exists",
+            });
+        }
+
+        next(error);
+    }
+};
+
+// Fetch one subject record for edit mode.
+export const getSubjectById = async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+) => {
+    try {
+        const { id } = req.params;
+
+        if (!mongoose.isValidObjectId(id)) {
+            return res.status(400).json({
+                message: "Invalid subject ID",
             });
         }
 
@@ -2030,27 +2558,12 @@ export const updateSubject = async (req: Request, res: Response, next: NextFunct
 
         if (!subject) {
             return res.status(404).json({
-                message: "Subject not found"
+                message: "Subject not found",
             });
         }
 
-        await Subject.findByIdAndUpdate(
-            id,
-            {
-                name,
-                subjectCode,
-                class: subjectClass
-            },
-            {
-                runValidators: true
-            }
-        );
-
-        res.status(200).json({
-            message: "Subject updated successfully"
-        });
-    }
-    catch (error) {
+        return res.status(200).json(subject);
+    } catch (error) {
         next(error);
     }
 };
@@ -2078,6 +2591,116 @@ export const deleteSubject = async (req: Request, res: Response, next: NextFunct
 
 // Teacher CRUD
 
+type TeacherAssignmentInput = {
+    subjectId: string;
+    classId: string;
+};
+
+const resolveTeacherAssignments = async (
+    assignments: TeacherAssignmentInput[],
+    session: mongoose.ClientSession,
+    teacherId?: mongoose.Types.ObjectId
+) => {
+    if (!Array.isArray(assignments) || assignments.length === 0) {
+        throw Object.assign(
+            new Error("Add at least one subject and class assignment."),
+            { status: 400 }
+        );
+    }
+
+    const resolvedAssignments: {
+        subjectId: mongoose.Types.ObjectId;
+        classId: mongoose.Types.ObjectId;
+    }[] = [];
+
+    const seen = new Set<string>();
+
+    for (const item of assignments) {
+        if (
+            !item ||
+            typeof item.subjectId !== "string" ||
+            !mongoose.isValidObjectId(item.subjectId) ||
+            typeof item.classId !== "string" ||
+            !mongoose.isValidObjectId(item.classId)
+        ) {
+            throw Object.assign(
+                new Error("Every assignment must contain valid subject and class IDs."),
+                { status: 400 }
+            );
+        }
+
+        const subjectId = new mongoose.Types.ObjectId(item.subjectId);
+        const classId = new mongoose.Types.ObjectId(item.classId);
+
+        const assignmentKey = `${subjectId.toString()}:${classId.toString()}`;
+
+        if (seen.has(assignmentKey)) {
+            throw Object.assign(
+                new Error("Duplicate subject and class assignments are not allowed."),
+                { status: 400 }
+            );
+        }
+
+        seen.add(assignmentKey);
+
+        const subject = await Subject.findById(subjectId)
+            .select("_id name class")
+            .session(session);
+
+        const classDocument = await Class.findById(classId)
+            .select("_id class")
+            .session(session);
+
+        if (!subject) {
+            throw Object.assign(
+                new Error("The selected subject was not found."),
+                { status: 400 }
+            );
+        }
+
+        if (!classDocument) {
+            throw Object.assign(
+                new Error("The selected class was not found."),
+                { status: 400 }
+            );
+        }
+
+        if (subject.class !== classDocument.class) {
+            throw Object.assign(
+                new Error(
+                    `Subject "${subject.name}" does not belong to Class ${classDocument.class}.`
+                ),
+                { status: 400 }
+            );
+        }
+
+        const existingAssignment = await TeacherAssignment.findOne({
+            subjectId,
+            classId,
+            ...(teacherId
+                ? { teacherId: { $ne: teacherId } }
+                : {})
+        }).session(session);
+
+        if (existingAssignment) {
+            throw Object.assign(
+                new Error(
+                    `${subject.name} in Class ${classDocument.class} is already assigned to another teacher.`
+                ),
+                { status: 409 }
+            );
+        }
+
+        resolvedAssignments.push({
+            subjectId,
+            classId
+        });
+    }
+
+    return resolvedAssignments;
+};
+
+
 export const createTeacher = async (
     req: Request,
     res: Response,
@@ -2086,116 +2709,132 @@ export const createTeacher = async (
     const session = await mongoose.startSession();
 
     try {
-        const {
-            name,
-            password,
-            department,
-            classAssigned
-        } = req.body;
+        const { name, password, assignments } = req.body;
 
-        session.startTransaction();
-
-        const existingTeacher = await Teacher.findOne({
-            department,
-            classAssigned
-        }).session(session);
-
-        if (existingTeacher) {
-            await session.abortTransaction();
-
+        if (
+            typeof name !== "string" ||
+            !name.trim() ||
+            typeof password !== "string" ||
+            !password
+        ) {
             return res.status(400).json({
-                message: "A teacher is already assigned to this department and class"
+                message: "Teacher name and password are required."
             });
         }
 
-        const teacherUsers = await User.find({
-            role: "teacher",
-            uid: /^TCH\d+$/i
-        })
-            .select("uid")
-            .session(session);
+        let createdTeacher: any;
 
-        let uidNumber = 1;
-
-        for (const teacherUser of teacherUsers) {
-            const number = parseInt(
-                teacherUser.uid.toUpperCase().replace("TCH", ""),
-                10
+        await session.withTransaction(async () => {
+            // Validate all subject-class pairs before creating records.
+            const resolvedAssignments = await resolveTeacherAssignments(
+                assignments,
+                session
             );
 
-            if (number >= uidNumber) {
-                uidNumber = number + 1;
+            // Generate the next teacher UID.
+            const teacherUsers = await User.find({
+                role: "teacher",
+                uid: /^TCH\d+$/i
+            })
+                .select("uid")
+                .session(session);
+
+            let uidNumber = 1;
+
+            for (const teacherUser of teacherUsers) {
+                const number = parseInt(
+                    teacherUser.uid.toUpperCase().replace("TCH", ""),
+                    10
+                );
+
+                if (number >= uidNumber) {
+                    uidNumber = number + 1;
+                }
             }
-        }
 
-        const uid = `TCH${String(uidNumber).padStart(4, "0")}`;
+            const uid = `TCH${String(uidNumber).padStart(4, "0")}`;
 
-        const lastTeacher = await Teacher.findOne()
-            .sort({ employeeID: -1 })
-            .session(session);
+            // Generate the next employee ID.
+            const lastTeacher = await Teacher.findOne()
+                .sort({ employeeID: -1 })
+                .session(session);
 
-        let employeeNumber = 1;
+            let employeeNumber = 1;
 
-        if (lastTeacher) {
-            employeeNumber =
-                parseInt(
+            if (lastTeacher) {
+                const lastNumber = parseInt(
                     lastTeacher.employeeID.replace("EMP", ""),
                     10
-                ) + 1;
-        }
+                );
 
-        const employeeID =
-            `EMP${String(employeeNumber).padStart(4, "0")}`;
+                if (Number.isFinite(lastNumber)) {
+                    employeeNumber = lastNumber + 1;
+                }
+            }
 
-        const hashedPassword = await bcrypt.hash(password, 10);
+            const employeeID =
+                `EMP${String(employeeNumber).padStart(4, "0")}`;
 
-        const user = await User.create(
-            [
-                {
-                    name,
+            const hashedPassword = await bcrypt.hash(password, 10);
+
+            const [user] = await User.create(
+                [{
+                    name: name.trim(),
                     uid,
                     password: hashedPassword,
                     role: "teacher"
-                }
-            ],
-            { session }
-        );
+                }],
+                { session }
+            );
 
-        await Teacher.create(
-            [
-                {
-                    userId: user[0]._id,
-                    employeeID,
-                    department,
-                    classAssigned
-                }
-            ],
-            { session }
-        );
+            const [teacher] = await Teacher.create(
+                [{
+                    userId: user._id,
+                    employeeID
+                }],
+                { session }
+            );
 
-        // Remove the temporary arrangement for this vacancy, if one exists.
-        const removedArrangement =
-            await Arrangement.findOneAndDelete({
-                class: classAssigned,
-                department
-            }).session(session);
+            const assignmentDocuments = resolvedAssignments.map(
+                (assignment) => ({
+                    teacherId: teacher._id,
+                    subjectId: assignment.subjectId,
+                    classId: assignment.classId
+                })
+            );
 
-        await session.commitTransaction();
+            await TeacherAssignment.insertMany(
+                assignmentDocuments,
+                { session }
+            );
 
-        return res.status(201).json({
-            message: removedArrangement
-                ? "Teacher created successfully and temporary arrangement removed"
-                : "Teacher created successfully"
+            createdTeacher = {
+                _id: teacher._id,
+                userId: user._id,
+                uid,
+                employeeID
+            };
         });
 
-    } catch (error) {
-        if (session.inTransaction()) {
-            await session.abortTransaction();
+        return res.status(201).json({
+            message: "Teacher created successfully.",
+            teacher: createdTeacher
+        });
+    } catch (error: any) {
+        if (error.status) {
+            return res.status(error.status).json({
+                message: error.message
+            });
         }
 
-        console.error("Error creating teacher:", error);
-        next(error);
+        if (error.code === 11000) {
+            return res.status(409).json({
+                message:
+                    "A duplicate UID, employee ID, or subject-class assignment was detected."
+            });
+        }
 
+        return next(error);
     } finally {
         await session.endSession();
     }
@@ -2290,7 +2929,10 @@ export const getTeacherById = async (
     try {
         const teacher = await Teacher.findById(
             req.params.id
-        ).populate("userId", "name uid role isActive");
+        ).populate(
+            "userId",
+            "name uid role isActive"
+        );
 
         if (!teacher) {
             return res.status(404).json({
@@ -2298,12 +2940,71 @@ export const getTeacherById = async (
             });
         }
 
+        // Fetch all subject and class assignments.
+        const assignments = await TeacherAssignment.find({
+            teacherId: teacher._id
+        })
+            .populate({
+                path: "subjectId",
+                select: "name subjectCode class"
+            })
+            .populate({
+                path: "classId",
+                select: "class"
+            })
+            .lean();
+
+        // Get unique assigned classes.
+        const classes = [
+            ...new Set(
+                assignments
+                    .map((assignment) => {
+                        const assignedClass =
+                            assignment.classId as any;
+
+                        return assignedClass?.class;
+                    })
+                    .filter(
+                        (className): className is string =>
+                            typeof className === "string"
+                    )
+            )
+        ].sort((a, b) => {
+            const numberA = parseInt(a, 10);
+            const numberB = parseInt(b, 10);
+
+            return numberA - numberB;
+        });
+
+        // Get unique assigned subjects.
+        const subjects = [
+            ...new Set(
+                assignments
+                    .map((assignment) => {
+                        const subject =
+                            assignment.subjectId as any;
+
+                        return subject?.name;
+                    })
+                    .filter(
+                        (subjectName): subjectName is string =>
+                            typeof subjectName === "string"
+                    )
+            )
+        ].sort((a, b) => a.localeCompare(b));
+
+        // Check whether this teacher is a class teacher.
         const classTeacher = await Class.exists({
             teacherId: teacher._id
         });
 
         return res.status(200).json({
             ...teacher.toObject(),
+
+            assignments,
+            classes,
+            subjects,
+
             isClassTeacher: Boolean(classTeacher)
         });
     } catch (error) {
@@ -2311,74 +3012,146 @@ export const getTeacherById = async (
     }
 };
 
-export const updateTeacher = async (req: Request, res: Response, next: NextFunction) => {
+export const updateTeacher = async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+) => {
+    const session = await mongoose.startSession();
+
     try {
         const { id } = req.params;
-
         const {
             name,
             uid,
             password,
             employeeID,
-            department,
-            classAssigned
+            assignments
         } = req.body;
 
-        const teacher = await Teacher.findById(id);
-
-        if (!teacher) {
-            return res.status(404).json({
-                message: "Teacher not found"
-            });
-        }
-
-        const existingTeacher = await Teacher.findOne({
-            department,
-            classAssigned,
-            _id: { $ne: id }
-        });
-
-        if (existingTeacher) {
+        if (!mongoose.isValidObjectId(id)) {
             return res.status(400).json({
-                message: "A teacher is already assigned to this department and class"
+                message: "Invalid teacher ID."
             });
         }
 
-        const userUpdate: {
-            name: string;
-            uid: string;
-            password?: string;
-        } = {
-            name,
-            uid
-        };
-
-        if (password) {
-            userUpdate.password = await bcrypt.hash(password, 10);
+        if (
+            typeof name !== "string" ||
+            !name.trim() ||
+            typeof uid !== "string" ||
+            !uid.trim() ||
+            typeof employeeID !== "string" ||
+            !employeeID.trim()
+        ) {
+            return res.status(400).json({
+                message: "Teacher name, UID, and employee ID are required."
+            });
         }
 
-        await User.findByIdAndUpdate(
-            teacher.userId,
-            userUpdate
-        );
+        await session.withTransaction(async () => {
+            const teacher = await Teacher.findById(id).session(session);
 
-        await Teacher.findByIdAndUpdate(
-            id,
-            {
-                employeeID,
-                department,
-                classAssigned
-            },
-            {
-                runValidators: true
+            if (!teacher) {
+                throw Object.assign(
+                    new Error("Teacher not found."),
+                    { status: 404 }
+                );
             }
-        );
 
-        res.status(200).json({
-            message: "Teacher updated successfully"
+            // Resolve new assignments before changing existing data.
+            const resolvedAssignments = await resolveTeacherAssignments(
+                assignments,
+                session,
+                teacher._id
+            );
+
+            const userUpdate: {
+                name: string;
+                uid: string;
+                password?: string;
+            } = {
+                name: name.trim(),
+                uid: uid.trim()
+            };
+
+            if (
+                typeof password === "string" &&
+                password.trim()
+            ) {
+                userUpdate.password = await bcrypt.hash(password, 10);
+            }
+
+            const updatedUser = await User.findByIdAndUpdate(
+                teacher.userId,
+                userUpdate,
+                {
+                    new: true,
+                    runValidators: true,
+                    session
+                }
+            );
+
+            if (!updatedUser) {
+                throw Object.assign(
+                    new Error("Teacher user account not found."),
+                    { status: 404 }
+                );
+            }
+
+            teacher.employeeID = employeeID.trim();
+            await teacher.save({ session });
+
+            // Replace this teacher's assignments.
+            await TeacherAssignment.deleteMany({
+                teacherId: teacher._id
+            }).session(session);
+
+            await TeacherAssignment.insertMany(
+                resolvedAssignments.map((assignment) => ({
+                    teacherId: teacher._id,
+                    subjectId: assignment.subjectId,
+                    classId: assignment.classId
+                })),
+                { session }
+            );
         });
+
+        return res.status(200).json({
+            message: "Teacher and assignments updated successfully."
+        });
+    } catch (error: any) {
+        if (error.status) {
+            return res.status(error.status).json({
+                message: error.message
+            });
+        }
+
+        if (error.code === 11000) {
+            return res.status(409).json({
+                message:
+                    "The UID, employee ID, or a subject-class assignment is already in use."
+            });
+        }
+
+        return next(error);
+    } finally {
+        await session.endSession();
     }
-    catch (error) {
+};
+
+export const getAllSubjects = async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+) => {
+    try {
+        const subjects = await Subject.find({})
+            .select("_id name subjectCode class")
+            .sort({ name: 1, class: 1 })
+            .lean();
+
+        return res.status(200).json({ subjects });
+    } catch (error) {
         next(error);
     }
 };
@@ -2421,128 +3194,298 @@ export const deactivateTeacher = async (
     const session = await mongoose.startSession();
 
     try {
-        const { arrangedTeacherId } = req.body;
+        const { arrangements } = req.body;
+        const originalTeacherId = req.params.id;
 
-        if (
-            !mongoose.isValidObjectId(req.params.id) ||
-            !mongoose.isValidObjectId(arrangedTeacherId) ||
-            req.params.id === arrangedTeacherId.toString()
-        ) {
+        if (!mongoose.isValidObjectId(originalTeacherId)) {
             return res.status(400).json({
-                message: "A valid replacement teacher must be selected"
+                message: "Invalid original teacher ID.",
             });
         }
 
-        let createdArrangement: any = null;
+        if (!Array.isArray(arrangements) || arrangements.length === 0) {
+            return res.status(400).json({
+                message: "Provide a replacement for every subject assignment.",
+            });
+        }
+
+        const seenAssignments = new Set<string>();
+
+        for (const item of arrangements) {
+            if (
+                !item ||
+                typeof item.class !== "string" ||
+                !mongoose.isValidObjectId(item.subjectId) ||
+                !mongoose.isValidObjectId(item.arrangedTeacherId)
+            ) {
+                return res.status(400).json({
+                    message: "Each arrangement needs a valid class, subject ID and replacement teacher ID.",
+                });
+            }
+
+            if (item.arrangedTeacherId === originalTeacherId) {
+                return res.status(400).json({
+                    message: "A teacher cannot replace themselves.",
+                });
+            }
+
+            const key = `${item.class}:${item.subjectId}`;
+
+            if (seenAssignments.has(key)) {
+                return res.status(400).json({
+                    message: "Duplicate class and subject arrangements were provided.",
+                });
+            }
+
+            seenAssignments.add(key);
+        }
+
+        let createdArrangements: any[] = [];
 
         await session.withTransaction(async () => {
             const teacher = await Teacher.findOne({
-                _id: req.params.id,
-                isDeleted: false
+                _id: originalTeacherId,
+                isDeleted: { $ne: true },
             }).session(session);
 
             if (!teacher) {
                 throw Object.assign(
-                    new Error("Teacher not found"),
+                    new Error("Teacher not found."),
                     { status: 404 }
                 );
             }
 
-            const user = await User.findById(
-                teacher.userId
-            ).session(session);
+            const user = await User.findById(teacher.userId).session(session);
 
             if (!user) {
                 throw Object.assign(
-                    new Error("User not found"),
+                    new Error("Teacher user account not found."),
                     { status: 404 }
                 );
             }
 
-            if (user.isActive === false) {
+            if (user.isActive !== true) {
                 throw Object.assign(
-                    new Error("Teacher account is already deactivated"),
+                    new Error("Teacher account is already deactivated."),
                     { status: 400 }
                 );
             }
 
-            const arrangedTeacher = await Teacher.findOne({
-                _id: arrangedTeacherId,
-                isDeleted: false
+            const existingArrangements = await Arrangement.find({
+                originalTeacherId: teacher._id,
             }).session(session);
 
-            if (!arrangedTeacher) {
+            if (existingArrangements.length > 0) {
                 throw Object.assign(
-                    new Error("Replacement teacher not found"),
-                    { status: 404 }
-                );
-            }
-
-            const arrangedUser = await User.findById(
-                arrangedTeacher.userId
-            ).session(session);
-
-            if (!arrangedUser || arrangedUser.isActive !== true) {
-                throw Object.assign(
-                    new Error(
-                        "The replacement teacher must have an active account"
-                    ),
-                    { status: 400 }
-                );
-            }
-
-            const existingArrangement = await Arrangement.findOne({
-                originalTeacherId: teacher._id
-            }).session(session);
-
-            if (existingArrangement) {
-                throw Object.assign(
-                    new Error(
-                        "A temporary arrangement already exists for this teacher"
-                    ),
+                    new Error("Temporary arrangements already exist for this teacher."),
                     { status: 409 }
                 );
             }
 
-            // Find the class currently assigned to the original teacher.
-            const classDocument = await Class.findOne({
-                teacherId: teacher._id
-            }).session(session);
+            // The arrangements must cover every current subject assignment.
+            const originalAssignments = await TeacherAssignment.find({
+                teacherId: teacher._id,
+            })
+                .populate({
+                    path: "subjectId",
+                    select: "name",
+                })
+                .populate({
+                    path: "classId",
+                    select: "class",
+                })
+                .session(session);
 
-            const wasClassTeacher = Boolean(classDocument);
+            if (originalAssignments.length === 0) {
+                throw Object.assign(
+                    new Error("The teacher has no subject assignments to arrange."),
+                    { status: 400 }
+                );
+            }
 
-            const arrangement = new Arrangement({
-                originalTeacherId: teacher._id,
-                arrangedTeacherId: arrangedTeacher._id,
-                class: classDocument?.class ?? teacher.classAssigned,
-                department: teacher.department,
-                wasClassTeacher
-            });
+            const requestedKeys = new Set(
+                arrangements.map(
+                    (item: { class: string; subjectId: string }) =>
+                        `${item.class}:${item.subjectId}`
+                )
+            );
 
-            await arrangement.save({ session });
+            const actualKeys = new Set<string>();
 
-            // Transfer class-teacher responsibility regardless of the
-            // replacement teacher's own classAssigned field.
-            if (classDocument) {
-                classDocument.teacherId = arrangedTeacher._id;
-                await classDocument.save({ session });
+            for (const assignment of originalAssignments) {
+                const assignedClass = assignment.classId as any;
+                const subject = assignment.subjectId as any;
+
+                if (assignedClass?._id && subject?._id) {
+                    actualKeys.add(
+                        `${assignedClass.class}:${subject._id.toString()}`
+                    );
+                }
+            }
+
+            if (
+                requestedKeys.size !== actualKeys.size ||
+                [...actualKeys].some((key) => !requestedKeys.has(key))
+            ) {
+                throw Object.assign(
+                    new Error(
+                        "Provide exactly one replacement for every class and subject currently assigned to this teacher."
+                    ),
+                    { status: 400 }
+                );
+            }
+
+            const created: any[] = [];
+            const classTeacherFlags = new Map<string, boolean>();
+
+            for (const item of arrangements) {
+                const classDocument = await Class.findOne({
+                    class: item.class,
+                }).session(session);
+
+                if (!classDocument) {
+                    throw Object.assign(
+                        new Error(`Class ${item.class} was not found.`),
+                        { status: 404 }
+                    );
+                }
+
+                const subject = await Subject.findById(
+                    item.subjectId
+                ).session(session);
+
+                if (!subject) {
+                    throw Object.assign(
+                        new Error(`Subject ${item.subjectId} was not found.`),
+                        { status: 404 }
+                    );
+                }
+
+                // Ensure the original teacher really teaches this subject in this class.
+                const originalAssignment = await TeacherAssignment.findOne({
+                    teacherId: teacher._id,
+                    classId: classDocument._id,
+                    subjectId: subject._id,
+                }).session(session);
+
+                if (!originalAssignment) {
+                    throw Object.assign(
+                        new Error(
+                            `${teacher.employeeID} is not assigned to ${subject.name} in Class ${item.class}.`
+                        ),
+                        { status: 400 }
+                    );
+                }
+
+                const replacement = await Teacher.findOne({
+                    _id: item.arrangedTeacherId,
+                    isDeleted: { $ne: true },
+                }).session(session);
+
+                if (!replacement) {
+                    throw Object.assign(
+                        new Error("A replacement teacher was not found."),
+                        { status: 404 }
+                    );
+                }
+
+                const replacementUser = await User.findById(
+                    replacement.userId
+                ).session(session);
+
+                if (!replacementUser || replacementUser.isActive !== true) {
+                    throw Object.assign(
+                        new Error("Every replacement teacher must have an active account."),
+                        { status: 400 }
+                    );
+                }
+
+                const replacementAssignments = await TeacherAssignment.find({
+                    teacherId: replacement._id,
+                })
+                    .populate({
+                        path: "subjectId",
+                        select: "name",
+                    })
+                    .session(session);
+
+                const teachesSameSubject = replacementAssignments.some(
+                    (assignment: any) =>
+                        assignment.subjectId?.name === subject.name
+                );
+
+                if (!teachesSameSubject) {
+                    throw Object.assign(
+                        new Error(
+                            `${replacement.employeeID} is not assigned to ${subject.name} in any class.`
+                        ),
+                        { status: 400 }
+                    );
+                }
+
+                // Prevent conflicting temporary arrangements.
+                const existingReplacement = await Arrangement.findOne({
+                    arrangedTeacherId: replacement._id,
+                    class: item.class,
+                    subjectId: subject._id,
+                }).session(session);
+
+                if (existingReplacement) {
+                    throw Object.assign(
+                        new Error(
+                            `${replacement.employeeID} already has a temporary arrangement for ${subject.name} in Class ${item.class}.`
+                        ),
+                        { status: 409 }
+                    );
+                }
+
+                const wasClassTeacher =
+                    classDocument.teacherId?.toString() === teacher._id.toString();
+
+                // Store the class-teacher flag only once per class.
+                const flagKey = item.class;
+                const recordClassTeacherFlag =
+                    wasClassTeacher && !classTeacherFlags.has(flagKey);
+
+                if (wasClassTeacher && !classTeacherFlags.has(flagKey)) {
+                    classTeacherFlags.set(flagKey, true);
+                }
+
+                const arrangement = new Arrangement({
+                    originalTeacherId: teacher._id,
+                    arrangedTeacherId: replacement._id,
+                    class: item.class,
+                    subjectId: subject._id,
+                    wasClassTeacher: recordClassTeacherFlag,
+                });
+
+                await arrangement.save({ session });
+                created.push(arrangement.toObject());
+
+                // Transfer class-teacher responsibility once per class.
+                if (
+                    wasClassTeacher &&
+                    recordClassTeacherFlag
+                ) {
+                    classDocument.teacherId = replacement._id;
+                    await classDocument.save({ session });
+                }
             }
 
             user.isActive = false;
             await user.save({ session });
 
-            createdArrangement = arrangement.toObject();
+            createdArrangements = created;
         });
 
         return res.status(200).json({
-            message:
-                "Teacher account deactivated and temporary arrangement created successfully",
-            arrangement: createdArrangement
+            message: "Teacher account deactivated and temporary arrangements created successfully.",
+            arrangements: createdArrangements,
         });
     } catch (error: any) {
         if (error.status) {
             return res.status(error.status).json({
-                message: error.message
+                message: error.message,
             });
         }
 
@@ -2563,19 +3506,19 @@ export const activateTeacher = async (
     try {
         if (!mongoose.isValidObjectId(req.params.id)) {
             return res.status(400).json({
-                message: "Invalid teacher ID"
+                message: "Invalid teacher ID.",
             });
         }
 
         await session.withTransaction(async () => {
             const teacher = await Teacher.findOne({
                 _id: req.params.id,
-                isDeleted: false
+                isDeleted: { $ne: true },
             }).session(session);
 
             if (!teacher) {
                 throw Object.assign(
-                    new Error("Teacher not found"),
+                    new Error("Teacher not found."),
                     { status: 404 }
                 );
             }
@@ -2586,66 +3529,67 @@ export const activateTeacher = async (
 
             if (!user) {
                 throw Object.assign(
-                    new Error("User not found"),
+                    new Error("Teacher user account not found."),
                     { status: 404 }
                 );
             }
 
             if (user.isActive !== false) {
                 throw Object.assign(
-                    new Error("Teacher account is already active"),
+                    new Error("Teacher account is already active."),
                     { status: 400 }
                 );
             }
 
-            const arrangement = await Arrangement.findOne({
-                originalTeacherId: teacher._id
+            const arrangements = await Arrangement.find({
+                originalTeacherId: teacher._id,
             }).session(session);
 
-            if (arrangement?.wasClassTeacher) {
+            // Restore class-teacher responsibility for classes this teacher
+            // originally led. Do not overwrite a class teacher changed since.
+            for (const arrangement of arrangements) {
+                if (!arrangement.wasClassTeacher) {
+                    continue;
+                }
+
                 const classDocument = await Class.findOne({
                     class: arrangement.class,
-                    teacherId: arrangement.arrangedTeacherId
+                    teacherId: arrangement.arrangedTeacherId,
                 }).session(session);
 
                 if (!classDocument) {
                     throw Object.assign(
                         new Error(
-                            "The temporary class assignment has changed. The original teacher was not reactivated."
+                            `The temporary class-teacher assignment for Class ${arrangement.class} has changed. The original teacher was not reactivated.`
                         ),
                         { status: 409 }
                     );
                 }
 
-                // Restore the original class teacher.
                 classDocument.teacherId = teacher._id;
                 await classDocument.save({ session });
             }
 
-            // Delete the temporary arrangement, if one exists.
-            if (arrangement) {
-                await Arrangement.deleteOne({
-                    _id: arrangement._id
-                }).session(session);
-            }
+            await Arrangement.deleteMany({
+                originalTeacherId: teacher._id,
+            }).session(session);
 
-            // Reactivate the original teacher.
             user.isActive = true;
             await user.save({ session });
         });
 
         return res.status(200).json({
             message:
-                "Teacher account activated, class assignment restored when applicable, and temporary arrangement removed"
+                "Teacher account activated, class-teacher responsibility restored when applicable, and temporary arrangements removed.",
         });
     } catch (error: any) {
         if (error.status) {
             return res.status(error.status).json({
-                message: error.message
+                message: error.message,
             });
         }
 
-        next(error);
+        return next(error);
     } finally {
         await session.endSession();
     }
@@ -2780,7 +3724,11 @@ export const deleteStudents = async (req: Request, res: Response, next: NextFunc
 
 //Marks CRUD
 
-export const updateMark = async (req: Request, res: Response, next: NextFunction) => {
+export const updateMark = async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+) => {
     try {
         const { id } = req.params;
 
@@ -2794,7 +3742,7 @@ export const updateMark = async (req: Request, res: Response, next: NextFunction
             totalMarks
         } = req.body;
 
-
+        // Verify that the student belongs to the selected class.
         const student = await Student.findOne({
             _id: studentId,
             class: studentClass
@@ -2806,19 +3754,7 @@ export const updateMark = async (req: Request, res: Response, next: NextFunction
             });
         }
 
-
-        const teacher = await Teacher.findOne({
-            _id: teacherId,
-            classAssigned: studentClass
-        });
-
-        if (!teacher) {
-            return res.status(404).json({
-                message: "Teacher not found for this class"
-            });
-        }
-
-
+        // Find the subject in the selected class.
         const subject = await Subject.findOne({
             name: subjectName,
             class: studentClass
@@ -2830,7 +3766,30 @@ export const updateMark = async (req: Request, res: Response, next: NextFunction
             });
         }
 
+        // Find the selected class document.
+        const classDoc = await Class.findOne({
+            class: studentClass
+        }).select("_id");
 
+        if (!classDoc) {
+            return res.status(404).json({
+                message: "Class not found"
+            });
+        }
+
+        // Verify that the teacher is assigned to the selected class.
+        const assignment = await TeacherAssignment.findOne({
+            teacherId,
+            classId: classDoc._id
+        });
+
+        if (!assignment) {
+            return res.status(404).json({
+                message: "Teacher is not assigned to this class"
+            });
+        }
+
+        // Prevent duplicate marks, excluding the current record.
         const existingMark = await Mark.findOne({
             studentId: student._id,
             subjectId: subject._id,
@@ -2840,16 +3799,17 @@ export const updateMark = async (req: Request, res: Response, next: NextFunction
 
         if (existingMark) {
             return res.status(400).json({
-                message: "Marks for this student, subject and exam already exist"
+                message:
+                    "Marks for this student, subject and exam already exist"
             });
         }
 
-
+        // Update the mark.
         const mark = await Mark.findByIdAndUpdate(
             id,
             {
                 studentId: student._id,
-                teacherId: teacher._id,
+                teacherId: assignment.teacherId,
                 subjectId: subject._id,
                 exam,
                 marksObtained,
@@ -2861,27 +3821,27 @@ export const updateMark = async (req: Request, res: Response, next: NextFunction
             }
         );
 
-
         if (!mark) {
             return res.status(404).json({
                 message: "Mark not found"
             });
         }
 
-
-        res.status(200).json({
+        return res.status(200).json({
             message: "Mark updated successfully",
             mark
         });
-
-    }
-    catch (error) {
+    } catch (error) {
         console.log(error);
         next(error);
     }
 };
 
-export const createMark = async (req: Request, res: Response, next: NextFunction) => {
+export const createMark = async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+) => {
     try {
         const {
             class: studentClass,
@@ -2893,7 +3853,7 @@ export const createMark = async (req: Request, res: Response, next: NextFunction
             totalMarks
         } = req.body;
 
-
+        // Validate that the student belongs to the selected class.
         const student = await Student.findOne({
             _id: studentId,
             class: studentClass
@@ -2905,19 +3865,7 @@ export const createMark = async (req: Request, res: Response, next: NextFunction
             });
         }
 
-
-        const teacher = await Teacher.findOne({
-            _id: teacherId,
-            classAssigned: studentClass
-        });
-
-        if (!teacher) {
-            return res.status(404).json({
-                message: "Teacher not found for this class"
-            });
-        }
-
-
+        // Find the selected subject in the selected class.
         const subject = await Subject.findOne({
             name: subjectName,
             class: studentClass
@@ -2929,7 +3877,29 @@ export const createMark = async (req: Request, res: Response, next: NextFunction
             });
         }
 
+        const classDoc = await Class.findOne({
+            class: studentClass
+        }).select("_id");
 
+        if (!classDoc) {
+            return res.status(404).json({
+                message: "Class not found"
+            });
+        }
+
+        // Verify that the teacher is assigned to the selected class.
+        const teacherAssignment = await TeacherAssignment.findOne({
+            teacherId,
+            classId: classDoc._id
+        });
+
+        if (!teacherAssignment) {
+            return res.status(404).json({
+                message: "Teacher is not assigned to this class"
+            });
+        }
+
+        // Prevent duplicate marks for the same student, subject and exam.
         const existingMark = await Mark.findOne({
             studentId: student._id,
             subjectId: subject._id,
@@ -2942,22 +3912,20 @@ export const createMark = async (req: Request, res: Response, next: NextFunction
             });
         }
 
-
+        // Create the mark.
         await Mark.create({
             studentId: student._id,
-            teacherId: teacher._id,
+            teacherId: teacherAssignment.teacherId,
             subjectId: subject._id,
             exam,
             marksObtained,
             totalMarks
         });
 
-
-        res.status(201).json({
-            message: "mark created successfully"
+        return res.status(201).json({
+            message: "Mark created successfully"
         });
-    }
-    catch (error) {
+    } catch (error) {
         console.log(error);
         next(error);
     }
@@ -3840,7 +4808,6 @@ const normalizeTeacherAttendanceDate = (date: string): Date | null => {
     return selectedDate;
 };
 
-
 export const getTeachersForAttendance = async (
     req: Request,
     res: Response,
@@ -3851,15 +4818,8 @@ export const getTeachersForAttendance = async (
         const search = req.query.search?.toString().trim() || "";
         const classFilter = req.query.classFilter?.toString() || "All";
 
-        const currentPage = Math.max(
-            Number(req.query.page) || 1,
-            1
-        );
-
-        const pageLimit = Math.max(
-            Number(req.query.limit) || 10,
-            1
-        );
+        const currentPage = Math.max(Number(req.query.page) || 1, 1);
+        const pageLimit = Math.max(Number(req.query.limit) || 10, 1);
 
         const selectedDate = normalizeTeacherAttendanceDate(date);
 
@@ -3869,12 +4829,74 @@ export const getTeachersForAttendance = async (
             });
         }
 
+        const [availableClasses, holiday] = await Promise.all([
+            Class.distinct("class"),
+            Holiday.findOne({
+                date: selectedDate
+            }).lean()
+        ]);
+
+        const classes = availableClasses.sort(
+            (a, b) =>
+                Number.parseInt(a, 10) - Number.parseInt(b, 10)
+        );
+
+        if (holiday) {
+            return res.status(200).json({
+                teachers: [],
+                attendanceMarked: false,
+                isHoliday: true,
+                holidayName: holiday.name,
+                totalTeachers: 0,
+                totalPages: 1,
+                currentPage: 1,
+                limit: pageLimit,
+                classes
+            });
+        }
+
+        // Validate the class filter before querying Class.
+        if (
+            classFilter !== "All" &&
+            !availableClasses.includes(classFilter as typeof availableClasses[number])
+        ) {
+            return res.status(400).json({
+                message: "Invalid class selected"
+            });
+        }
+
+        const classDoc =
+            classFilter !== "All"
+                ? await Class.findOne({
+                    class: classFilter as typeof availableClasses[number]
+                })
+                    .select("_id")
+                    .lean()
+                : null;
+
+        if (classFilter !== "All" && !classDoc) {
+            return res.status(400).json({
+                message: "Invalid class selected"
+            });
+        }
+
+        // Find teachers assigned to the selected class.
+        const assignmentMatch: Record<string, unknown> = {};
+
+        if (classDoc) {
+            assignmentMatch.classId = classDoc._id;
+        }
+
+        const assignedTeacherIds = await TeacherAssignment.distinct(
+            "teacherId",
+            assignmentMatch
+        );
+
         const teacherFilter: Record<string, any> = {
+            _id: { $in: assignedTeacherIds },
             isDeleted: { $ne: true }
         };
-        if (classFilter !== "All") {
-            teacherFilter.classAssigned = classFilter;
-        }
+
         if (search) {
             const searchRegex = {
                 $regex: search,
@@ -3889,7 +4911,6 @@ export const getTeachersForAttendance = async (
 
             teacherFilter.$or = [
                 { employeeID: searchRegex },
-                { department: searchRegex },
                 {
                     userId: {
                         $in: matchingUsers.map(user => user._id)
@@ -3898,20 +4919,16 @@ export const getTeachersForAttendance = async (
             ];
         }
 
-        const totalTeachers = await Teacher.countDocuments(
-            teacherFilter
-        );
+        const totalTeachers = await Teacher.countDocuments(teacherFilter);
+        const totalPages = Math.ceil(totalTeachers / pageLimit);
 
-        const totalPages = Math.ceil(
-            totalTeachers / pageLimit
-        );
-
-        const validPage = totalPages > 0
-            ? Math.min(currentPage, totalPages)
-            : 1;
+        const validPage =
+            totalPages > 0
+                ? Math.min(currentPage, totalPages)
+                : 1;
 
         const teachers = await Teacher.find(teacherFilter)
-            .select("_id userId employeeID department")
+            .select("_id userId employeeID")
             .populate({
                 path: "userId",
                 select: "name uid"
@@ -3922,6 +4939,41 @@ export const getTeachersForAttendance = async (
             .lean();
 
         const teacherIds = teachers.map(teacher => teacher._id);
+
+        // Fetch class assignments for teachers on the current page.
+        const teacherAssignments = await TeacherAssignment.find({
+            teacherId: { $in: teacherIds }
+        })
+            .select("teacherId classId")
+            .populate({
+                path: "classId",
+                select: "class"
+            })
+            .lean();
+
+        const classesByTeacher = new Map<string, Set<string>>();
+
+        for (const assignment of teacherAssignments) {
+            const teacherId = assignment.teacherId.toString();
+            const classDocument = assignment.classId as any;
+
+            if (!classDocument?.class) {
+                continue;
+            }
+
+            if (!classesByTeacher.has(teacherId)) {
+                classesByTeacher.set(teacherId, new Set<string>());
+            }
+
+            classesByTeacher.get(teacherId)!.add(classDocument.class);
+        }
+
+        const sortClasses = (values: string[]) =>
+            values.sort(
+                (a, b) =>
+                    Number.parseInt(a, 10) -
+                    Number.parseInt(b, 10)
+            );
 
         const [existingAttendance, approvedLeaves] = await Promise.all([
             TeacherAttendance.find({
@@ -3962,34 +5014,39 @@ export const getTeachersForAttendance = async (
                 _id: teacherId,
                 employeeID: teacher.employeeID,
                 name: user?.name ?? "",
-                department: teacher.department,
+                classes: sortClasses([
+                    ...(classesByTeacher.get(teacherId) ?? new Set<string>())
+                ]),
                 onLeave: teachersOnLeave.has(teacherId),
                 attendanceStatus: attendanceMap.get(teacherId) ?? null
             };
         });
 
+        // Check attendance across all eligible teachers, not just this page.
         const attendanceMarked =
-            teacherIds.length > 0 &&
-            await TeacherAttendance.exists({
-                teacherId: {
-                    $in: teacherIds
-                },
-                date: selectedDate
-            });
+            assignedTeacherIds.length > 0 &&
+            Boolean(
+                await TeacherAttendance.exists({
+                    teacherId: { $in: assignedTeacherIds },
+                    date: selectedDate
+                })
+            );
+
         return res.status(200).json({
             teachers: result,
-            attendanceMarked: Boolean(attendanceMarked),
+            attendanceMarked,
+            isHoliday: false,
+            holidayName: null,
             totalTeachers,
             totalPages,
             currentPage: validPage,
-            limit: pageLimit
+            limit: pageLimit,
+            classes
         });
     } catch (error) {
         next(error);
     }
 };
-
-
 
 export const createTeacherAttendance = async (
     req: Request,
@@ -4006,8 +5063,7 @@ export const createTeacherAttendance = async (
             });
         }
 
-        const selectedDate =
-            normalizeTeacherAttendanceDate(date);
+        const selectedDate = normalizeTeacherAttendanceDate(date);
 
         if (!selectedDate) {
             return res.status(400).json({
@@ -4017,8 +5073,7 @@ export const createTeacherAttendance = async (
 
         if (selectedDate.getUTCDay() === 0) {
             return res.status(400).json({
-                message:
-                    "Teacher attendance cannot be marked on Sunday"
+                message: "Teacher attendance cannot be marked on Sunday"
             });
         }
 
@@ -4028,8 +5083,7 @@ export const createTeacherAttendance = async (
 
         if (holiday) {
             return res.status(400).json({
-                message:
-                    `Attendance cannot be marked because ${holiday.name} is a holiday`
+                message: `Attendance cannot be marked because ${holiday.name} is a holiday`
             });
         }
 
@@ -4041,16 +5095,6 @@ export const createTeacherAttendance = async (
             return res.status(400).json({
                 message: "Class filter is required"
             });
-        }
-
-        // "All" means all active teachers in the school.
-        // Any other value means teachers assigned to that class.
-        const teacherFilter: Record<string, unknown> = {
-            isDeleted: { $ne: true }
-        };
-
-        if (classFilter !== "All") {
-            teacherFilter.classAssigned = classFilter;
         }
 
         // 3. Authenticate the principal.
@@ -4074,30 +5118,77 @@ export const createTeacherAttendance = async (
 
         if (!principal) {
             return res.status(403).json({
-                message:
-                    "Only the principal can mark teacher attendance"
+                message: "Only the principal can mark teacher attendance"
             });
         }
 
-        // 4. Fetch the complete roster for the selected class.
-        const teachers = await Teacher.find(teacherFilter)
-            .select("_id")
-            .lean();
+        // 4. Validate the selected class against existing classes.
+        const availableClasses = await Class.distinct("class");
 
-        if (teachers.length === 0) {
+        if (
+            classFilter !== "All" &&
+            !availableClasses.includes(
+                classFilter as typeof availableClasses[number]
+            )
+        ) {
+            return res.status(400).json({
+                message: "Invalid class selected"
+            });
+        }
+
+        // 5. Find the active teacher roster.
+        let teacherIds: string[];
+
+        if (classFilter === "All") {
+            const activeTeachers = await Teacher.find({
+                isDeleted: { $ne: true }
+            })
+                .select("_id")
+                .lean();
+
+            teacherIds = activeTeachers.map(
+                teacher => teacher._id.toString()
+            );
+        } else {
+            const classDocument = await Class.findOne({
+                class: classFilter as typeof availableClasses[number]
+            })
+                .select("_id")
+                .lean();
+
+            if (!classDocument) {
+                return res.status(400).json({
+                    message: "Invalid class selected"
+                });
+            }
+
+            const assignedTeacherIds =
+                await TeacherAssignment.distinct("teacherId", {
+                    classId: classDocument._id
+                });
+
+            const activeTeachers = await Teacher.find({
+                _id: { $in: assignedTeacherIds },
+                isDeleted: { $ne: true }
+            })
+                .select("_id")
+                .lean();
+
+            teacherIds = activeTeachers.map(
+                teacher => teacher._id.toString()
+            );
+        }
+
+        if (teacherIds.length === 0) {
             return res.status(400).json({
                 message:
-                    "No active teachers found for the selected class"
+                    "No active teachers found for the selected class or roster"
             });
         }
-
-        const teacherIds = teachers.map(
-            teacher => teacher._id.toString()
-        );
 
         const teacherIdSet = new Set(teacherIds);
 
-        // 5. Validate the submitted attendance array.
+        // 6. Validate the submitted attendance array.
         if (!Array.isArray(attendance)) {
             return res.status(400).json({
                 message: "Attendance records are required"
@@ -4111,62 +5202,47 @@ export const createTeacherAttendance = async (
             }) =>
                 !record.teacherId ||
                 !mongoose.isValidObjectId(record.teacherId) ||
-                !["Present", "Absent"].includes(
-                    record.status ?? ""
-                )
+                !["Present", "Absent"].includes(record.status ?? "")
         );
 
         if (invalidRecord) {
             return res.status(400).json({
-                message:
-                    "Invalid teacher ID or attendance status"
+                message: "Invalid teacher ID or attendance status"
             });
         }
 
-        const submittedIds = attendance.map(
-            (record: { teacherId: string }) =>
-                record.teacherId
+        const submittedIds: string[] = attendance.map(
+            (record: { teacherId: string }) => record.teacherId
         );
 
-        // Reject duplicate teacher IDs in the request.
-        if (
-            new Set(submittedIds).size !==
-            submittedIds.length
-        ) {
+        if (new Set(submittedIds).size !== submittedIds.length) {
             return res.status(400).json({
-                message:
-                    "Duplicate teacher IDs were submitted"
+                message: "Duplicate teacher IDs were submitted"
             });
         }
 
-        // Reject teachers outside the selected class.
+        // Reject teachers outside the selected roster.
         const invalidTeacherIds = submittedIds.filter(
-            (id: string) => !teacherIdSet.has(id)
+            id => !teacherIdSet.has(id)
         );
 
         if (invalidTeacherIds.length > 0) {
             return res.status(400).json({
                 message:
-                    "You can only mark attendance for teachers in the selected class"
+                    "You can only mark attendance for active teachers in the selected roster"
             });
         }
 
-        // 6. Find approved leave for teachers in this roster.
-        const objectTeacherIds = teachers.map(
-            teacher => teacher._id
+        // 7. Find approved leave for teachers in this roster.
+        const objectTeacherIds = teacherIds.map(
+            id => new mongoose.Types.ObjectId(id)
         );
 
         const approvedLeaves = await Leave.find({
-            teacherId: {
-                $in: objectTeacherIds
-            },
+            teacherId: { $in: objectTeacherIds },
             status: "Approved",
-            startDate: {
-                $lte: selectedDate
-            },
-            endDate: {
-                $gte: selectedDate
-            }
+            startDate: { $lte: selectedDate },
+            endDate: { $gte: selectedDate }
         })
             .select("teacherId")
             .lean();
@@ -4174,28 +5250,19 @@ export const createTeacherAttendance = async (
         const teachersOnLeave = new Set(
             approvedLeaves
                 .filter(leave => leave.teacherId)
-                .map(leave =>
-                    leave.teacherId!.toString()
-                )
+                .map(leave => leave.teacherId!.toString())
         );
 
-        // Do not accept attendance records for teachers on leave.
-        const teacherOnLeaveSubmitted = submittedIds.some(
-            (id: string) => teachersOnLeave.has(id)
-        );
-
-        if (teacherOnLeaveSubmitted) {
+        // Reject attendance submitted for teachers on approved leave.
+        if (submittedIds.some(id => teachersOnLeave.has(id))) {
             return res.status(400).json({
                 message:
                     "Attendance cannot be marked for a teacher on approved leave"
             });
         }
 
-        // 7. Every teacher in the selected roster must be
-        // marked, except teachers on approved leave.
-        const submittedTeacherIds = new Set<string>(
-            submittedIds
-        );
+        // 8. Every eligible teacher must have an attendance record.
+        const submittedTeacherIds = new Set(submittedIds);
 
         const missingTeachers = teacherIds.filter(
             id =>
@@ -4205,16 +5272,17 @@ export const createTeacherAttendance = async (
 
         if (missingTeachers.length > 0) {
             return res.status(400).json({
-                message:
-                    `Please mark attendance for all active teachers in ${classFilter === "All"
+                message: `Please mark attendance for all active teachers in ${
+                    classFilter === "All"
                         ? "the school"
                         : `class ${classFilter}`
-                    } who are not on approved leave. ${missingTeachers.length
-                    } teacher(s) still need attendance.`
+                } who are not on approved leave. ${
+                    missingTeachers.length
+                } teacher(s) still need attendance.`
             });
         }
 
-        // 8. Remove approved-leave teachers from the roster.
+        // 9. Exclude teachers on approved leave.
         const eligibleTeacherIds = teacherIds.filter(
             id => !teachersOnLeave.has(id)
         );
@@ -4232,18 +5300,17 @@ export const createTeacherAttendance = async (
             });
         }
 
-        // 9. Prevent duplicate attendance for any teacher
-        // in this roster on the selected date.
-        // Other classes can still be submitted independently.
-        const existingAttendance =
-            await TeacherAttendance.findOne({
-                teacherId: {
-                    $in: eligibleTeacherIds
-                },
-                date: selectedDate
-            })
-                .select("_id")
-                .lean();
+        // 10. Prevent duplicate attendance for the selected roster.
+        const existingAttendance = await TeacherAttendance.findOne({
+            teacherId: {
+                $in: eligibleTeacherIds.map(
+                    id => new mongoose.Types.ObjectId(id)
+                )
+            },
+            date: selectedDate
+        })
+            .select("_id")
+            .lean();
 
         if (existingAttendance) {
             return res.status(409).json({
@@ -4252,27 +5319,30 @@ export const createTeacherAttendance = async (
             });
         }
 
-        // 10. Create records only for the submitted,
-        // eligible teachers.
-        const attendanceRecords = attendance.map(
-            (record: {
-                teacherId: string;
-                status: "Present" | "Absent";
-            }) => ({
-                teacherId: record.teacherId,
-                date: selectedDate,
-                status: record.status,
-                markedBy: principal._id
-            })
-        );
+        // 11. Create attendance records for eligible teachers.
+        const attendanceRecords = attendance
+            .filter(
+                (record: {
+                    teacherId: string;
+                    status: "Present" | "Absent";
+                }) => !teachersOnLeave.has(record.teacherId)
+            )
+            .map(
+                (record: {
+                    teacherId: string;
+                    status: "Present" | "Absent";
+                }) => ({
+                    teacherId: new mongoose.Types.ObjectId(record.teacherId),
+                    date: selectedDate,
+                    status: record.status,
+                    markedBy: principal._id
+                })
+            );
 
-        await TeacherAttendance.insertMany(
-            attendanceRecords
-        );
+        await TeacherAttendance.insertMany(attendanceRecords);
 
         return res.status(201).json({
-            message:
-                "Teacher attendance marked successfully",
+            message: "Teacher attendance marked successfully",
             totalRecords: attendanceRecords.length
         });
     } catch (error: any) {
@@ -4298,15 +5368,8 @@ export const getTeacherAttendance = async (
         const search = req.query.search?.toString().trim() || "";
         const classFilter = req.query.classFilter?.toString() || "All";
 
-        const currentPage = Math.max(
-            Number(req.query.page) || 1,
-            1
-        );
-
-        const pageLimit = Math.max(
-            Number(req.query.limit) || 10,
-            1
-        );
+        const currentPage = Math.max(Number(req.query.page) || 1, 1);
+        const pageLimit = Math.max(Number(req.query.limit) || 10, 1);
 
         const selectedDate = normalizeTeacherAttendanceDate(date);
 
@@ -4316,17 +5379,59 @@ export const getTeacherAttendance = async (
             });
         }
 
-        // Include teachers whose isDeleted field is false or missing.
+        // Fetch available classes for the dropdown.
+        const availableClasses = await Class.distinct("class");
+
+        const classes = availableClasses.sort(
+            (a, b) =>
+                Number.parseInt(a, 10) - Number.parseInt(b, 10)
+        );
+
+        // Validate the selected class before querying MongoDB.
+        if (
+            classFilter !== "All" &&
+            !classes.includes(classFilter as (typeof classes)[number])
+        ) {
+            return res.status(400).json({
+                message: "Invalid class selected"
+            });
+        }
+
+        // Resolve the selected class through the Class collection.
+        const classDoc =
+            classFilter !== "All"
+                ? await Class.findOne({
+                    class: classFilter as (typeof classes)[number]
+                })
+                    .select("_id")
+                    .lean()
+                : null;
+
+        if (classFilter !== "All" && !classDoc) {
+            return res.status(400).json({
+                message: "Invalid class selected"
+            });
+        }
+
+        // Find teachers assigned to the selected class.
+        const assignmentFilter: Record<string, unknown> = {};
+
+        if (classDoc) {
+            assignmentFilter.classId = classDoc._id;
+        }
+
+        const assignedTeacherIds = await TeacherAssignment.distinct(
+            "teacherId",
+            assignmentFilter
+        );
+
+        // Build the teacher filter.
         const teacherFilter: Record<string, any> = {
+            _id: { $in: assignedTeacherIds },
             isDeleted: { $ne: true }
         };
 
-        // Apply the selected class filter.
-        if (classFilter !== "All") {
-            teacherFilter.classAssigned = classFilter;
-        }
-
-        // Apply search by name, employee ID, or department.
+        // Search by teacher name or employee ID.
         if (search) {
             const searchRegex = {
                 $regex: search,
@@ -4341,7 +5446,6 @@ export const getTeacherAttendance = async (
 
             teacherFilter.$or = [
                 { employeeID: searchRegex },
-                { department: searchRegex },
                 {
                     userId: {
                         $in: matchingUsers.map(user => user._id)
@@ -4350,22 +5454,16 @@ export const getTeacherAttendance = async (
             ];
         }
 
-        // Count teachers after applying class and search filters.
-        const totalRecords = await Teacher.countDocuments(
-            teacherFilter
-        );
+        const totalRecords = await Teacher.countDocuments(teacherFilter);
+        const totalPages = Math.ceil(totalRecords / pageLimit);
 
-        const totalPages = Math.ceil(
-            totalRecords / pageLimit
-        );
+        const validPage =
+            totalPages > 0
+                ? Math.min(currentPage, totalPages)
+                : 1;
 
-        const validPage = totalPages > 0
-            ? Math.min(currentPage, totalPages)
-            : 1;
-
-        // Fetch the requested page of teachers.
         const teachers = await Teacher.find(teacherFilter)
-            .select("_id userId employeeID department classAssigned")
+            .select("_id userId employeeID")
             .populate({
                 path: "userId",
                 select: "name uid"
@@ -4375,16 +5473,20 @@ export const getTeacherAttendance = async (
             .limit(pageLimit)
             .lean();
 
-        const teacherIds = teachers.map(
-            teacher => teacher._id
-        );
+        const teacherIds = teachers.map(teacher => teacher._id);
 
-        // Fetch attendance and approved leave for these teachers.
-        const [attendanceRecords, approvedLeaves] = await Promise.all([
+        // Fetch attendance, approved leave, and assigned classes.
+        const [
+            attendanceRecords,
+            approvedLeaves,
+            assignments
+        ] = await Promise.all([
             TeacherAttendance.find({
                 teacherId: { $in: teacherIds },
                 date: selectedDate
-            }).lean(),
+            })
+                .select("_id teacherId status")
+                .lean(),
 
             Leave.find({
                 teacherId: { $in: teacherIds },
@@ -4393,9 +5495,20 @@ export const getTeacherAttendance = async (
                 endDate: { $gte: selectedDate }
             })
                 .select("_id teacherId")
+                .lean(),
+
+            TeacherAssignment.find({
+                teacherId: { $in: teacherIds }
+            })
+                .select("teacherId classId")
+                .populate({
+                    path: "classId",
+                    select: "class"
+                })
                 .lean()
         ]);
 
+        // Map attendance records by teacher ID.
         const attendanceMap = new Map(
             attendanceRecords.map(record => [
                 record.teacherId.toString(),
@@ -4403,6 +5516,7 @@ export const getTeacherAttendance = async (
             ])
         );
 
+        // Map approved leaves by teacher ID.
         const leaveMap = new Map(
             approvedLeaves
                 .filter(leave => leave.teacherId)
@@ -4412,7 +5526,33 @@ export const getTeacherAttendance = async (
                 ])
         );
 
-        // Include teachers even when they have no attendance record.
+        // Group assigned classes by teacher.
+        const classesByTeacher = new Map<string, Set<string>>();
+
+        for (const assignment of assignments) {
+            const teacherId = assignment.teacherId.toString();
+            const assignedClass = assignment.classId as any;
+
+            if (!assignedClass?.class) {
+                continue;
+            }
+
+            if (!classesByTeacher.has(teacherId)) {
+                classesByTeacher.set(teacherId, new Set<string>());
+            }
+
+            classesByTeacher.get(teacherId)!.add(assignedClass.class);
+        }
+
+        // Sort classes numerically.
+        const sortClasses = (values: string[]) =>
+            values.sort(
+                (a, b) =>
+                    Number.parseInt(a, 10) -
+                    Number.parseInt(b, 10)
+            );
+
+        // Include teachers even if attendance has not been marked.
         const result = teachers.map(teacher => {
             const teacherId = teacher._id.toString();
             const user = teacher.userId as any;
@@ -4425,14 +5565,18 @@ export const getTeacherAttendance = async (
                 : record?.status ?? "Not Marked";
 
             return {
-                _id: record?._id?.toString()
-                    ?? `${leave?._id ?? "unmarked"}-${teacherId}-${date}`,
+                _id:
+                    record?._id?.toString() ??
+                    `${leave?._id ?? "unmarked"}-${teacherId}-${date}`,
 
                 teacherId: {
                     _id: teacherId,
                     name: user?.name ?? "",
                     employeeID: teacher.employeeID,
-                    department: teacher.department
+                    classes: sortClasses([
+                        ...(classesByTeacher.get(teacherId) ??
+                            new Set<string>())
+                    ])
                 },
 
                 date: selectedDate,
@@ -4440,7 +5584,7 @@ export const getTeacherAttendance = async (
             };
         });
 
-        // Counts are based on the filtered and searched teacher roster.
+        // Counts represent the current filtered page.
         const presentCount = result.filter(
             record => record.status === "Present"
         ).length;
@@ -4466,14 +5610,13 @@ export const getTeacherAttendance = async (
             presentCount,
             absentCount,
             leaveCount,
-            notMarkedCount
+            notMarkedCount,
+            classes
         });
     } catch (error) {
         next(error);
     }
 };
-
-
 
 export const getTeacherAttendanceDetails = async (
     req: Request,
@@ -4817,15 +5960,17 @@ export const updateTeacherProfile = async (
 ): Promise<void> => {
     try {
         const { id } = req.params;
-        const {
-            name,
-            uid,
-            employeeID,
-            department,
-            classAssigned
-        } = req.body;
+        const { name, uid, employeeID } = req.body;
 
-        // Find teacher
+        // Validate teacher ID.
+        if (!mongoose.isValidObjectId(id)) {
+            res.status(400).json({
+                message: "Invalid teacher ID"
+            });
+            return;
+        }
+
+        // Find teacher.
         const teacher = await Teacher.findById(id);
 
         if (!teacher || teacher.isDeleted) {
@@ -4835,7 +5980,7 @@ export const updateTeacherProfile = async (
             return;
         }
 
-        // Find associated user
+        // Find associated user.
         const user = await User.findById(teacher.userId);
 
         if (!user) {
@@ -4845,42 +5990,54 @@ export const updateTeacherProfile = async (
             return;
         }
 
-        // Update User fields
+        // Update user name.
         if (name !== undefined) {
+            if (typeof name !== "string" || !name.trim()) {
+                res.status(400).json({
+                    message: "Name cannot be empty"
+                });
+                return;
+            }
+
             user.name = name.trim();
         }
 
+        // Update user UID.
         if (uid !== undefined) {
+            if (typeof uid !== "string" || !uid.trim()) {
+                res.status(400).json({
+                    message: "UID cannot be empty"
+                });
+                return;
+            }
+
             user.uid = uid.trim().toLowerCase();
         }
 
-        // Update Teacher fields
+        // Update teacher employee ID.
         if (employeeID !== undefined) {
+            if (
+                typeof employeeID !== "string" ||
+                !employeeID.trim()
+            ) {
+                res.status(400).json({
+                    message: "Employee ID cannot be empty"
+                });
+                return;
+            }
+
             teacher.employeeID = employeeID.trim();
         }
 
-        if (department !== undefined) {
-            teacher.department = department;
-        }
-
-        if (classAssigned !== undefined) {
-            teacher.classAssigned = classAssigned;
-        }
-
-        // Save teacher first to catch duplicate employeeID
-        // and duplicate department/classAssigned combinations.
-        await teacher.save();
-
-        // Save associated user details
+        // Save changes.
         await user.save();
+        await teacher.save();
 
         res.status(200).json({
             message: "Teacher profile updated successfully",
             teacher: {
                 _id: teacher._id,
                 employeeID: teacher.employeeID,
-                department: teacher.department,
-                classAssigned: teacher.classAssigned,
                 userId: {
                     _id: user._id,
                     name: user.name,
@@ -4893,16 +6050,17 @@ export const updateTeacherProfile = async (
     } catch (error: any) {
         console.error("Update teacher profile error:", error);
 
-        // Duplicate-key errors, such as an existing UID,
-        // employeeID, or department/classAssigned combination.
+        // Handle duplicate UID or employee ID.
         if (error.code === 11000) {
             res.status(409).json({
-                message:
-                    "A teacher with this UID, employee ID, or department and class assignment already exists."
+                message: error.keyPattern?.uid
+                    ? "This UID is already in use."
+                    : "This employee ID is already in use."
             });
             return;
         }
 
+        // Handle schema validation errors.
         if (error.name === "ValidationError") {
             res.status(400).json({
                 message: error.message
@@ -4946,21 +6104,43 @@ export const getMarkFormOptions = async (
 
         const selectedClass = className as ClassName;
 
-        const [students, teachers] = await Promise.all([
+        const [students, selectedClassDoc] = await Promise.all([
             Student.find({ class: selectedClass })
                 .select("_id userId class rollNumber")
                 .populate("userId", "name uid")
                 .sort({ rollNumber: 1 })
                 .lean(),
 
-            Teacher.find({ classAssigned: selectedClass })
-                .select("_id userId employeeID department classAssigned")
-                .populate("userId", "name uid")
-                .sort({ employeeID: 1 })
+            Class.findOne({ class: selectedClass })
+                .select("_id")
                 .lean()
         ]);
 
-        res.status(200).json({ students, teachers });
+        if (!selectedClassDoc) {
+            res.status(200).json({
+                students,
+                teachers: []
+            });
+            return;
+        }
+
+        const assignments = await TeacherAssignment.find({
+            classId: selectedClassDoc._id
+        })
+            .distinct("teacherId");
+
+        const teachers = await Teacher.find({
+            _id: { $in: assignments }
+        })
+            .select("_id userId employeeID department")
+            .populate("userId", "name uid")
+            .sort({ employeeID: 1 })
+            .lean();
+
+        res.status(200).json({
+            students,
+            teachers
+        });
     } catch (error) {
         console.error("Error fetching mark form options:", error);
 
@@ -4970,62 +6150,70 @@ export const getMarkFormOptions = async (
     }
 };
 
-
-
 export const getTeachersForArrangement = async (
     req: Request,
-    res: Response
-): Promise<void> => {
+    res: Response,
+    next: NextFunction
+) => {
     try {
-        const className = req.query.class;
-
-        const validClasses = [
-            "1st", "2nd", "3rd", "4th", "5th", "6th",
-            "7th", "8th", "9th", "10th", "11th", "12th"
-        ] as const;
+        const { subjectName } = req.query;
 
         if (
-            typeof className !== "string" ||
-            !validClasses.some(classOption => classOption === className)
+            typeof subjectName !== "string" ||
+            !subjectName.trim()
         ) {
-            res.status(400).json({
-                message: "A valid class from 1st to 12th is required."
+            return res.status(400).json({
+                message: "A valid subject name is required.",
             });
-            return;
         }
 
-        // Narrow className to the same literal union used by the schema.
-        const selectedClass = className as typeof validClasses[number];
-
-        const teachers = await Teacher.find({
-            classAssigned: selectedClass,
-            isDeleted: false
+        // Find every Subject document with this name,
+        // regardless of the class.
+        const subjects = await Subject.find({
+            name: subjectName.trim(),
         })
-            .select("_id userId employeeID department classAssigned")
+            .select("_id")
+            .lean();
+
+        const subjectIds = subjects.map((subject) => subject._id);
+
+        if (subjectIds.length === 0) {
+            return res.status(200).json({
+                teachers: [],
+            });
+        }
+
+        // Find teachers assigned to this subject in ANY class.
+        const teacherIds = await TeacherAssignment.distinct(
+            "teacherId",
+            {
+                subjectId: { $in: subjectIds },
+            }
+        );
+
+        // Exclude deleted teachers and retrieve their user accounts.
+        const teachers = await Teacher.find({
+            _id: { $in: teacherIds },
+            isDeleted: { $ne: true },
+        })
             .populate({
                 path: "userId",
                 select: "name uid isActive",
-                match: { isActive: true }
             })
-            .sort({ employeeID: 1 })
             .lean();
 
+        // Only include teachers whose accounts are active.
         const eligibleTeachers = teachers.filter(
-            teacher => teacher.userId !== null
+            (teacher: any) =>
+                teacher.userId &&
+                teacher.userId.isActive === true
         );
 
-        res.status(200).json({
-            teachers: eligibleTeachers
+        return res.status(200).json({
+            teachers: eligibleTeachers,
         });
     } catch (error) {
-        console.error(
-            "Error fetching teachers for arrangement:",
-            error
-        );
-
-        res.status(500).json({
-            message: "Failed to fetch teachers."
-        });
+        return next(error);
     }
 };
 
@@ -5034,33 +6222,52 @@ export const createArrangement = async (
     res: Response
 ): Promise<void> => {
     try {
-        const { originalTeacherId, arrangedTeacherId } = req.body;
+        const {
+            originalTeacherId,
+            arrangedTeacherId,
+            class: className,
+            subjectId,
+            wasClassTeacher = false,
+        } = req.body;
 
         if (
             !mongoose.isValidObjectId(originalTeacherId) ||
-            !mongoose.isValidObjectId(arrangedTeacherId)
+            !mongoose.isValidObjectId(arrangedTeacherId) ||
+            !mongoose.isValidObjectId(subjectId)
         ) {
             res.status(400).json({
-                message: "Valid teacher IDs are required."
+                message: "Valid original teacher, replacement teacher and subject IDs are required.",
             });
             return;
         }
 
         if (originalTeacherId === arrangedTeacherId) {
             res.status(400).json({
-                message: "A teacher cannot replace themselves."
+                message: "A teacher cannot replace themselves.",
+            });
+            return;
+        }
+
+        const validClasses = [
+            "1st", "2nd", "3rd", "4th", "5th", "6th",
+            "7th", "8th", "9th", "10th", "11th", "12th",
+        ];
+
+        if (!validClasses.includes(className)) {
+            res.status(400).json({
+                message: "A valid class is required.",
             });
             return;
         }
 
         const originalTeacher = await Teacher.findOne({
             _id: originalTeacherId,
-            isDeleted: false
+            isDeleted: { $ne: true },
         });
 
         if (!originalTeacher) {
             res.status(404).json({
-                message: "Original teacher not found."
+                message: "Original teacher not found.",
             });
             return;
         }
@@ -5069,63 +6276,100 @@ export const createArrangement = async (
             originalTeacher.userId
         );
 
-        if (!originalUser || originalUser.isActive) {
+        if (!originalUser || originalUser.isActive !== false) {
             res.status(400).json({
-                message: "The original teacher must be deactivated first."
+                message: "The original teacher must be deactivated first.",
             });
             return;
         }
 
-        const arrangedTeacher = await Teacher.findOne({
+        const replacement = await Teacher.findOne({
             _id: arrangedTeacherId,
-            isDeleted: false
+            isDeleted: { $ne: true },
         });
 
-        if (!arrangedTeacher) {
+        if (!replacement) {
             res.status(404).json({
-                message: "Replacement teacher not found."
+                message: "Replacement teacher not found.",
             });
             return;
         }
 
-        const arrangedUser = await User.findById(
-            arrangedTeacher.userId
+        const replacementUser = await User.findById(
+            replacement.userId
         );
 
-        if (!arrangedUser || !arrangedUser.isActive) {
+        if (!replacementUser || replacementUser.isActive !== true) {
             res.status(400).json({
-                message: "The replacement teacher must have an active account."
+                message: "The replacement teacher must have an active account.",
             });
             return;
         }
 
-        const existingArrangement = await Arrangement.findOne({
-            originalTeacherId
+        const classDocument = await Class.findOne({
+            class: className,
         });
 
-        if (existingArrangement) {
-            res.status(409).json({
-                message: "A temporary arrangement already exists for this teacher."
+        if (!classDocument) {
+            res.status(404).json({
+                message: "Class not found.",
+            });
+            return;
+        }
+
+        const [originalAssignment, replacementAssignment, subject] =
+            await Promise.all([
+                TeacherAssignment.findOne({
+                    teacherId: originalTeacher._id,
+                    classId: classDocument._id,
+                    subjectId,
+                }),
+                TeacherAssignment.findOne({
+                    teacherId: replacement._id,
+                    classId: classDocument._id,
+                    subjectId,
+                }),
+                Subject.findById(subjectId),
+            ]);
+
+        if (!subject || !originalAssignment) {
+            res.status(400).json({
+                message: "The original teacher is not assigned to this subject and class.",
+            });
+            return;
+        }
+
+        if (!replacementAssignment) {
+            res.status(400).json({
+                message: "The replacement teacher is not assigned to this subject and class.",
             });
             return;
         }
 
         const arrangement = await Arrangement.create({
             originalTeacherId: originalTeacher._id,
-            arrangedTeacherId: arrangedTeacher._id,
-            class: originalTeacher.classAssigned,
-            department: originalTeacher.department
+            arrangedTeacherId: replacement._id,
+            class: className,
+            subjectId: subject._id,
+            wasClassTeacher: Boolean(wasClassTeacher),
         });
 
         res.status(201).json({
             message: "Temporary arrangement created successfully.",
-            arrangement
+            arrangement,
         });
-    } catch (error) {
+    } catch (error: any) {
+        if (error?.code === 11000) {
+            res.status(409).json({
+                message: "An arrangement already exists for this teacher, class and subject.",
+            });
+            return;
+        }
+
         console.error("Error creating arrangement:", error);
 
         res.status(500).json({
-            message: "Failed to create temporary arrangement."
+            message: "Failed to create temporary arrangement.",
         });
     }
 };

@@ -3,6 +3,7 @@ import AdmissionRequest from "../models/AdmissionRequest";
 import User from "../models/User";
 import Student from "../models/Student";
 import mongoose from "mongoose";
+import Class from "../models/Class";
 import bcrypt from "bcrypt";
 
 export const createAdmission = async (req: Request, res: Response, next: NextFunction) => {
@@ -56,7 +57,6 @@ export const createAdmission = async (req: Request, res: Response, next: NextFun
     }
 };
 
-
 export const getAdmissions = async (
     req: Request,
     res: Response,
@@ -70,45 +70,57 @@ export const getAdmissions = async (
             sortBy = "None",
             order = "asc",
             page = "1",
-            limit = "5"
+            limit = "5",
         } = req.query;
 
-        const currentPage = Math.max(Number(page), 1);
-        const pageLimit = Math.max(Number(limit), 1);
+        const currentPage = Math.max(Number(page) || 1, 1);
+        const pageLimit = Math.max(Number(limit) || 5, 1);
         const skip = (currentPage - 1) * pageLimit;
 
-        const match: any = {
-            status
+        const selectedStatus = String(status);
+        const selectedClass = String(classFilter);
+        const searchValue = String(search).trim();
+        const selectedSort = String(sortBy);
+        const selectedOrder = String(order);
+
+        // Get available classes for the ClassFilter dropdown.
+        const availableClasses: string[] = await Class.distinct("class");
+
+        const classes = availableClasses.sort((a, b) => {
+            const numberA = parseInt(a.match(/\d+/)?.[0] ?? "0", 10);
+            const numberB = parseInt(b.match(/\d+/)?.[0] ?? "0", 10);
+            return numberA - numberB;
+        });
+
+        // Build admission filters.
+        const match: Record<string, any> = {
+            status: selectedStatus,
         };
 
-        if (classFilter !== "All") {
-            match.classApplyingFor = classFilter;
+        if (selectedClass !== "All") {
+            match.classApplyingFor = selectedClass;
         }
 
-        const searchValue = search.toString().trim();
-
-        if (searchValue !== "") {
+        if (searchValue) {
             match.studentName = {
                 $regex: searchValue,
-                $options: "i"
+                $options: "i",
             };
         }
 
         const pipeline: any[] = [
-            {
-                $match: match
-            }
+            { $match: match },
         ];
 
-        if (sortBy === "Student Name") {
+        // Apply sorting.
+        if (selectedSort === "Student Name") {
             pipeline.push({
                 $sort: {
-                    studentName: order === "desc" ? -1 : 1,
-                    createdAt: -1
-                }
+                    studentName: selectedOrder === "desc" ? -1 : 1,
+                    createdAt: -1,
+                },
             });
-        }
-        else if (sortBy === "Class") {
+        } else if (selectedSort === "Class") {
             pipeline.push({
                 $addFields: {
                     classNumber: {
@@ -118,60 +130,58 @@ export const getAdmissions = async (
                                 input: {
                                     $regexFind: {
                                         input: "$classApplyingFor",
-                                        regex: "\\d+"
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
+                                        regex: "\\d+",
+                                    },
+                                },
+                            },
+                        },
+                    },
+                },
             });
 
             pipeline.push({
                 $sort: {
-                    classNumber: order === "desc" ? -1 : 1,
-                    createdAt: -1
-                }
+                    classNumber: selectedOrder === "desc" ? -1 : 1,
+                    createdAt: -1,
+                },
             });
-        }
-        else {
+        } else {
             pipeline.push({
                 $sort: {
-                    createdAt: -1
-                }
+                    createdAt: -1,
+                },
             });
         }
 
+        // Paginate and count matching admissions in one aggregation.
         pipeline.push({
             $facet: {
                 admissions: [
                     { $skip: skip },
-                    { $limit: pageLimit }
+                    { $limit: pageLimit },
                 ],
                 total: [
-                    { $count: "count" }
-                ]
-            }
+                    { $count: "count" },
+                ],
+            },
         });
 
         const result = await AdmissionRequest.aggregate(pipeline);
 
-        const admissions = result[0]?.admissions || [];
-        const totalAdmissions = result[0]?.total[0]?.count || 0;
-        const totalPages = Math.ceil(
-            totalAdmissions / pageLimit
-        );
+        const admissions = result[0]?.admissions ?? [];
+        const totalAdmissions = result[0]?.total[0]?.count ?? 0;
+        const totalPages = Math.ceil(totalAdmissions / pageLimit);
 
         res.status(200).json({
             admissions,
             totalAdmissions,
             totalPages,
             currentPage,
-            limit: pageLimit
+            limit: pageLimit,
+            classes,
         });
-    }
-    catch (error) {
-        console.log(error);
+    } catch (error) {
+        console.error("Error fetching admission requests:", error);
         next(error);
     }
 };

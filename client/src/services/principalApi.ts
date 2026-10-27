@@ -42,7 +42,8 @@ export const viewTeachers = (
     orderBy: string,
     currentPage: number,
     limit: number,
-    showDeleted: boolean
+    showDeleted: boolean,
+    classTeacherOnly: boolean
 ) => {
     return api.get("/principal/teachers", {
         params: {
@@ -52,7 +53,8 @@ export const viewTeachers = (
             order: orderBy,
             page: currentPage,
             limit,
-            showDeleted
+            showDeleted,
+            classTeacherOnly
         }
     });
 };
@@ -102,6 +104,10 @@ export const viewSubjects = (
         }
     });
 }
+
+export const getAllSubjects = () => {
+    return api.get("/principal/all-subjects");
+};
 
 export const viewMarks = (
     classFilter: string,
@@ -160,13 +166,19 @@ export const getMarkFormOptions = (className: string) => {
 };
 
 
+type TeacherArrangementPayload = {
+    class: string;
+    subjectId: string;
+    arrangedTeacherId: string;
+};
+
 export const deactivateTeacher = (
     id: string,
-    arrangedTeacherId: string
+    arrangements: TeacherArrangementPayload[]
 ) => {
     return api.patch(
         `/principal/deactivateTeacher/${id}`,
-        { arrangedTeacherId }
+        { arrangements }
     );
 };
 
@@ -177,17 +189,17 @@ export const activateTeacher = (id: string) => {
 
 export const getTeacherLeaveApplications = (
     status: string,
-    department: string,
+    classFilter: string,
     currentPage: number,
     limit: number
 ) => {
     return api.get("/principal/teacher-leave", {
         params: {
             status,
-            department,
+            class: classFilter,
             page: currentPage,
-            limit
-        }
+            limit,
+        },
     });
 };
 
@@ -256,6 +268,16 @@ export const updateSubject = async (id: string, data: any) => {
 };
 export const getSubjectById = (id: string) => {
     return api.get(`/principal/subject/${id}`);
+};
+
+// Fetch distinct subject names for the dropdown.
+export const getSubjectNames = () => {
+    return api.get("/principal/subject-names");
+};
+
+// Fetch classes for the class dropdown.
+export const getClasses = () => {
+    return api.get("/principal/classes");
 };
 
 //MARKS CRUD:
@@ -374,8 +396,8 @@ export const getLeaveApplications = (
             status,
             class: classFilter,
             page: currentPage,
-            limit
-        }
+            limit,
+        },
     });
 };
 
@@ -423,7 +445,7 @@ export const getTeachersForAttendance = async (params: {
         { params }
     );
 
-    return response.data;
+    return response;
 };
 
 export const createTeacherAttendance = async (data: {
@@ -494,9 +516,9 @@ export const updateTeacherProfile = (
 
 //Arrangements
 // Fetch eligible teachers for a temporary arrangement
-export const getTeachersForArrangement = (className: string) =>
+export const getTeachersForArrangement = (subjectName: string) =>
     api.get("/principal/arrangement/teachers", {
-        params: { class: className }
+        params: { subjectName },
     });
 
 // Create a temporary arrangement

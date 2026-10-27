@@ -11,7 +11,8 @@ export const viewStudents = (
     orderBy: string,
     currentPage: number,
     limit: number,
-    showDeleted: boolean = false
+    showDeleted: boolean = false,
+    classFilter: string
 ) => {
     return api.get("teacher/students", {
         params: {
@@ -20,7 +21,8 @@ export const viewStudents = (
             order: orderBy,
             page: currentPage,
             limit,
-            showDeleted
+            showDeleted,
+            classFilter
         }
     });
 };
@@ -52,7 +54,8 @@ export const viewMarks = (
     orderBy: string,
     currentPage: number,
     limit: number,
-    subject: string
+    subjectId: string,
+    classFilter: string
 ) => {
     return api.get("teacher/marks", {
         params: {
@@ -62,7 +65,8 @@ export const viewMarks = (
             order: orderBy,
             page: currentPage,
             limit,
-            subject
+            subject: subjectId,
+            class: classFilter
         }
     });
 };
@@ -83,7 +87,7 @@ export const getMyLeaves = (
     currentPage: number,
     limit: number
 ) => {
-    return api.get("/teacher/leave", {
+    return api.get("/teacher/getLeave", {
         params: {
             page: currentPage,
             limit
@@ -152,7 +156,8 @@ export const getExamResults = (
     sortBy: string,
     orderBy: string,
     currentPage: number,
-    limit: number
+    limit: number,
+    classFilter: string
 ) => {
     return api.get("/teacher/examResults", {
         params: {
@@ -161,7 +166,8 @@ export const getExamResults = (
             sortBy,
             order: orderBy,
             page: currentPage,
-            limit
+            limit,
+            class: classFilter
         }
     });
 };
@@ -171,34 +177,38 @@ export const getStudentsForAttendance = (
     date: string,
     search: string,
     currentPage: number,
-    limit: number
+    limit: number,
+    className: string
 ) => {
-    return api.get("teacher/getStudentsForAttendance", {
+    return api.get("/teacher/getStudentsForAttendance", {
         params: {
             date,
             search,
             page: currentPage,
-            limit
+            limit,
+            class: className
         }
     });
 };
 
 export const createAttendance = (data: any) => {
-    return api.post("teacher/createAttendance", data);
+    return api.post("/teacher/createAttendance", data);
 };
 
 export const getAttendance = (
     date: string,
     search: string,
     currentPage: number,
-    limit: number
+    limit: number,
+    className: string
 ) => {
     return api.get("teacher/attendance", {
         params: {
             date,
             search,
             page: currentPage,
-            limit
+            limit,
+            class: className
         }
     });
 };
@@ -240,13 +250,15 @@ export const getHolidays = (year: number) => {
 export const getLeaveApplications = (
     status: string,
     currentPage: number,
-    limit: number
+    limit: number,
+    className: string
 ) => {
     return api.get("/teacher/leaves", {
         params: {
             status,
             page: currentPage,
-            limit
+            limit,
+            class: className
         }
     });
 };

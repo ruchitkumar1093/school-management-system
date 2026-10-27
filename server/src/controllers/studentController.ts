@@ -8,6 +8,7 @@ import Teacher from "../models/Teacher";
 import Attendance from "../models/Attendance";
 import Leave from "../models/Leave";
 import AdmissionRequest from "../models/AdmissionRequest";
+import TeacherAssignment from "../models/TeacherAssignment";
 
 //Leaves
 export const applyLeave = async (
@@ -221,6 +222,7 @@ export const getStudentHome = async (
     }
 };
 
+
 export const getSubjects = async (
     req: Request,
     res: Response,
@@ -228,8 +230,9 @@ export const getSubjects = async (
 ) => {
     try {
         const student = await Student.findOne({
-            userId: req.user?.userId
-        });
+            userId: req.user?.userId,
+            isDeleted: { $ne: true }
+        }).select("class");
 
         if (!student) {
             return res.status(404).json({
@@ -253,57 +256,80 @@ export const getSubjects = async (
             1
         );
 
-        const match: any = {
+        const match: Record<string, any> = {
             class: student.class
         };
 
-        if (search !== "") {
+        if (search) {
             match.name = {
                 $regex: search,
                 $options: "i"
             };
         }
 
-        const sortOrder =
-            order === "desc" ? -1 : 1;
+        const sortOrder = order === "desc" ? -1 : 1;
 
         const totalSubjects =
             await Subject.countDocuments(match);
 
         const subjects = await Subject.find(match)
-            .sort({
-                name: sortOrder
-            })
-            .skip(
-                (currentPage - 1) * pageLimit
-            )
-            .limit(pageLimit);
+            .sort({ name: sortOrder })
+            .skip((currentPage - 1) * pageLimit)
+            .limit(pageLimit)
+            .lean();
 
         const data = await Promise.all(
             subjects.map(async subject => {
+                const assignment =
+                    await TeacherAssignment.findOne({
+                        subjectId: subject._id
+                    })
+                        .populate({
+                            path: "teacherId",
+                            select: "userId isDeleted",
+                            match: { isDeleted: { $ne: true } },
+                            populate: {
+                                path: "userId",
+                                select: "name"
+                            }
+                        })
+                        .populate({
+                            path: "classId",
+                            select: "class"
+                        })
+                        .lean();
 
-                const teacher =
-                    await Teacher.findOne({
-                        department: subject.name,
-                        classAssigned: subject.class
-                    }).populate({
-                        path: "userId",
-                        select: "name"
-                    });
+                const assignedClass = assignment?.classId as
+                    | { class: string }
+                    | null
+                    | undefined;
+
+                const teacher = assignment?.teacherId as
+                    | {
+                        userId: { name?: string } | null;
+                    }
+                    | null
+                    | undefined;
+
+                // Ensure the assignment matches this exact subject AND class.
+                const matchesClass =
+                    assignedClass?.class === subject.class;
+
+                const teacherName =
+                    matchesClass && teacher?.userId
+                        ? teacher.userId.name ?? "Not Assigned"
+                        : "Not Assigned";
 
                 return {
-                    ...subject.toObject(),
-                    teacherName: teacher
-                        ? (teacher.userId as any).name
-                        : "Not Assigned"
+                    ...subject,
+                    teacherName
                 };
             })
         );
 
-        const totalPages =
-            Math.ceil(
-                totalSubjects / pageLimit
-            );
+        const totalPages = Math.ceil(
+            totalSubjects / pageLimit
+        );
 
         return res.status(200).json({
             subjects: data,
@@ -312,11 +338,11 @@ export const getSubjects = async (
             currentPage,
             limit: pageLimit
         });
-    }
-    catch (error) {
+    } catch (error) {
         next(error);
     }
 };
+
 
 export const getMarks = async (
     req: Request,

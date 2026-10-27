@@ -1,4 +1,3 @@
-
 import {
     FiEdit,
     FiTrash,
@@ -15,8 +14,8 @@ type Teacher = {
         isActive: boolean;
     };
     employeeID: string;
-    department: string;
-    classAssigned: string;
+    classes: string[];
+    subjects: string[];
     isDeleted: boolean;
     deletedAt: string | null;
     isClassTeacher: boolean;
@@ -52,8 +51,8 @@ function PrincipalTeachersTable({
     startIndex
 }: Props) {
     return (
-        <div className="overflow-x-auto rounded-lg shadow-md">
-            <table className="w-full border-collapse bg-purple-200 text-left text-gray-900">
+        <div className="w-full overflow-x-auto rounded-lg shadow-md">
+            <table className="w-full min-w-[900px] border-collapse bg-purple-200 text-left text-gray-900">
                 <thead>
                     <tr className="border-b border-purple-300 bg-purple-300/80">
                         <th className="w-12 border-r border-purple-300 p-3 text-center">
@@ -70,23 +69,23 @@ function PrincipalTeachersTable({
                         </th>
 
                         <th className="border-r border-purple-300 p-3 font-semibold text-purple-950">
-                            Teacher Name:
+                            Teacher Name
                         </th>
 
                         <th className="border-r border-purple-300 p-3 font-semibold text-purple-950">
-                            Employee ID:
+                            Employee ID
                         </th>
 
                         <th className="border-r border-purple-300 p-3 font-semibold text-purple-950">
-                            Department:
+                            Assigned Classes
                         </th>
 
                         <th className="border-r border-purple-300 p-3 font-semibold text-purple-950">
-                            Class Assigned:
+                            Assigned Subjects
                         </th>
 
                         <th className="p-3 font-semibold text-purple-950">
-                            Actions:
+                            Actions
                         </th>
                     </tr>
                 </thead>
@@ -95,7 +94,7 @@ function PrincipalTeachersTable({
                     {teacher.length === 0 ? (
                         <tr>
                             <td
-                                colSpan={7}
+                                colSpan={6}
                                 className="p-4 text-center text-gray-500"
                             >
                                 No records found
@@ -105,13 +104,12 @@ function PrincipalTeachersTable({
                         teacher.map((tch, index) => (
                             <tr
                                 key={tch._id}
-                                className={`border-b border-purple-300 last:border-b-0 transition-colors ${
-                                    tch.isDeleted
-                                        ? "bg-gray-200 text-gray-500"
-                                        : !tch.userId.isActive
-                                            ? "bg-red-50/70 text-gray-500"
-                                            : "hover:bg-purple-300/40"
-                                }`}
+                                className={`border-b border-purple-300 last:border-b-0 transition-colors ${tch.isDeleted
+                                    ? "bg-gray-200 text-gray-500"
+                                    : !tch.userId?.isActive
+                                        ? "bg-red-50/70 text-gray-500"
+                                        : "hover:bg-purple-300/40"
+                                    }`}
                             >
                                 <td className="w-12 border-r border-purple-300 p-3 text-center">
                                     <input
@@ -133,8 +131,8 @@ function PrincipalTeachersTable({
                                 </td>
 
                                 <td className="border-r border-purple-300 p-3 font-medium">
-                                    <div className="flex flex-wrap items-center gap-2">
-                                        <span>{tch.userId.name}</span>
+                                    <div className="flex min-w-[170px] flex-wrap items-center gap-2">
+                                        <span>{tch.userId?.name ?? "Unknown"}</span>
 
                                         {tch.isDeleted && (
                                             <span className="rounded-full bg-gray-400 px-2.5 py-1 text-xs font-medium text-white">
@@ -142,7 +140,7 @@ function PrincipalTeachersTable({
                                             </span>
                                         )}
 
-                                        {!tch.isDeleted && !tch.userId.isActive && (
+                                        {!tch.isDeleted && !tch.userId?.isActive && (
                                             <span className="rounded-full bg-red-100 px-2.5 py-1 text-xs font-medium text-red-700">
                                                 Deactivated
                                             </span>
@@ -157,15 +155,45 @@ function PrincipalTeachersTable({
                                 </td>
 
                                 <td className="border-r border-purple-300 p-3">
-                                    {tch.employeeID.toUpperCase()}
+                                    {tch.employeeID?.toUpperCase() ?? "—"}
                                 </td>
 
                                 <td className="border-r border-purple-300 p-3">
-                                    {tch.department}
+                                    <div className="flex min-w-[130px] flex-wrap gap-1.5">
+                                        {tch.classes?.length ? (
+                                            tch.classes.map(className => (
+                                                <span
+                                                    key={className}
+                                                    className="rounded-md border border-purple-400 bg-purple-100 px-2.5 py-1 text-sm font-medium text-purple-900"
+                                                >
+                                                    {className}
+                                                </span>
+                                            ))
+                                        ) : (
+                                            <span className="text-sm text-gray-500">
+                                                No classes assigned
+                                            </span>
+                                        )}
+                                    </div>
                                 </td>
 
                                 <td className="border-r border-purple-300 p-3">
-                                    {tch.classAssigned}
+                                    <div className="flex min-w-[150px] flex-wrap gap-1.5">
+                                        {tch.subjects?.length ? (
+                                            tch.subjects.map(subject => (
+                                                <span
+                                                    key={subject}
+                                                    className="rounded-md border border-purple-400 bg-purple-100 px-2.5 py-1 text-sm font-medium text-purple-900"
+                                                >
+                                                    {subject}
+                                                </span>
+                                            ))
+                                        ) : (
+                                            <span className="text-sm text-gray-500">
+                                                No subjects assigned
+                                            </span>
+                                        )}
+                                    </div>
                                 </td>
 
                                 <td className="p-3">
@@ -173,6 +201,7 @@ function PrincipalTeachersTable({
                                         {tch.isDeleted ? (
                                             <>
                                                 <button
+                                                    type="button"
                                                     title="Restore"
                                                     onClick={() =>
                                                         handleRestoreTeacher(tch._id)
@@ -183,6 +212,7 @@ function PrincipalTeachersTable({
                                                 </button>
 
                                                 <button
+                                                    type="button"
                                                     title="Permanently Delete"
                                                     onClick={() =>
                                                         handlePermanentlyDeleteTeacher(tch._id)
@@ -195,6 +225,7 @@ function PrincipalTeachersTable({
                                         ) : (
                                             <>
                                                 <button
+                                                    type="button"
                                                     title="Edit"
                                                     onClick={() =>
                                                         handleEditTeacher(tch._id)
@@ -205,6 +236,7 @@ function PrincipalTeachersTable({
                                                 </button>
 
                                                 <button
+                                                    type="button"
                                                     title="Delete"
                                                     onClick={() =>
                                                         handleDeleteTeacher(tch._id)
@@ -215,6 +247,7 @@ function PrincipalTeachersTable({
                                                 </button>
 
                                                 <button
+                                                    type="button"
                                                     title="View"
                                                     onClick={() =>
                                                         handleTeacherProfile(tch._id)
@@ -225,6 +258,7 @@ function PrincipalTeachersTable({
                                                 </button>
 
                                                 <button
+                                                    type="button"
                                                     title="View Marks"
                                                     onClick={() =>
                                                         handleTeacherMarks(tch._id)

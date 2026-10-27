@@ -3,7 +3,7 @@ import React from "react";
 type Teacher = {
     id: string;
     name: string;
-    classAssigned: string;
+    classes: string[];
 };
 
 type Props = {
@@ -42,7 +42,7 @@ function TeacherFilter({
                         key={teacher.id}
                         value={teacher.id}
                     >
-                        {teacher.name} — {teacher.classAssigned}
+                        {teacher.name} — {(teacher.classes ?? []).join(", ")}
                     </option>
                 ))}
             </select>

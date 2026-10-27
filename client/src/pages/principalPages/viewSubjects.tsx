@@ -15,7 +15,7 @@ import {
 
 import PrincipalSubjectsTable from "../../components/principalComponents/subjectsTable";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 
 import Breadcrumb from "../../components/breadcrumb";
@@ -33,14 +33,14 @@ function PrincipalViewSubjects() {
     const navigate = useNavigate();
     const location = useLocation();
 
-    // Read the class selected on the Class Overview page.
     const selectedClassFromNavigation: string | undefined =
         location.state?.selectedClass;
 
     const [subjectsData, setSubjectsData] = useState<Subject[]>([]);
+    const [availableClasses, setAvailableClasses] = useState<string[]>([]);
 
     const [currentPage, setCurrentPage] = useState(1);
-    const [limit, setLimit] = useState(5);
+    const [limit, setLimit] = useState(10);
     const [totalPages, setTotalPages] = useState(1);
 
     const [search, setSearch] = useState("");
@@ -49,7 +49,6 @@ function PrincipalViewSubjects() {
     const [sortBy, setSortBy] = useState("None");
     const [orderBy, setOrderBy] = useState("asc");
 
-    // Use the received class, or "All" when opened directly.
     const [classFilter, setClassFilter] = useState<string>(
         selectedClassFromNavigation ?? "All"
     );
@@ -61,9 +60,9 @@ function PrincipalViewSubjects() {
     const [modalAction, setModalAction] =
         useState<(() => void) | null>(null);
 
-    const fetchSubjects = async () => {
+    const fetchSubjects = useCallback(async () => {
         try {
-            const subjects = await viewSubjects(
+            const response = await viewSubjects(
                 classFilter,
                 debouncedSearch,
                 sortBy,
@@ -72,19 +71,29 @@ function PrincipalViewSubjects() {
                 limit
             );
 
-            console.log("Subjects response:", subjects.data);
+            const subjects: Subject[] = response.data.subjects ?? [];
 
-            setSubjectsData(subjects.data.subjects);
-            setTotalPages(subjects.data.totalPages);
+            setSubjectsData(subjects);
+            setTotalPages(response.data.totalPages ?? 1);
+
+            // Collect classes from the returned subjects.
+            // The backend controller will later return all classes separately,
+            // so this list can be made independent of search and pagination.
+            setAvailableClasses(response.data.classes ?? []);
         } catch (error) {
-            console.log(error);
+            console.error("Failed to fetch subjects:", error);
             setSubjectsData([]);
             setTotalPages(1);
         }
-    };
+    }, [
+        classFilter,
+        debouncedSearch,
+        sortBy,
+        orderBy,
+        currentPage,
+        limit
+    ]);
 
-    // Update the filter if navigation supplies a different class
-    // while this component is already mounted.
     useEffect(() => {
         if (
             typeof selectedClassFromNavigation === "string" &&
@@ -93,16 +102,14 @@ function PrincipalViewSubjects() {
             setClassFilter(selectedClassFromNavigation);
             setCurrentPage(1);
         }
-    }, [selectedClassFromNavigation]);
+    }, [selectedClassFromNavigation, classFilter]);
 
     useEffect(() => {
         const timer = setTimeout(() => {
             setDebouncedSearch(search);
         }, 500);
 
-        return () => {
-            clearTimeout(timer);
-        };
+        return () => clearTimeout(timer);
     }, [search]);
 
     useEffect(() => {
@@ -117,14 +124,7 @@ function PrincipalViewSubjects() {
 
     useEffect(() => {
         void fetchSubjects();
-    }, [
-        classFilter,
-        debouncedSearch,
-        sortBy,
-        orderBy,
-        currentPage,
-        limit
-    ]);
+    }, [fetchSubjects]);
 
     const sortOptions = [
         "None",
@@ -159,17 +159,17 @@ function PrincipalViewSubjects() {
             setModalAction(null);
 
             if (subjectsData.length === 1 && currentPage > 1) {
-                setCurrentPage(currentPage - 1);
+                setCurrentPage(previous => previous - 1);
             } else {
                 await fetchSubjects();
             }
         } catch (error: any) {
-            console.log(error);
+            console.error("Failed to delete subject:", error);
 
             setModalTitle("Error");
             setModalMessage(
                 error.response?.data?.message ||
-                    "Failed to delete subject."
+                "Failed to delete subject."
             );
             setModalConfirm(false);
             setModalAction(null);
@@ -186,11 +186,11 @@ function PrincipalViewSubjects() {
             <div className="flex flex-1 bg-purple-100">
                 <SideBar />
 
-                <div>
+                <div className="min-w-0 flex-1">
                     <Breadcrumb />
 
-                    <div className="mb-10 flex flex-col pl-20 pt-12">
-                        <div className="mb-4 flex items-center justify-between">
+                    <div className="mb-10 flex flex-col px-8 pt-12 lg:px-20">
+                        <div className="mb-4 flex flex-wrap items-center justify-between gap-4">
                             <div>
                                 <h1 className="text-3xl font-medium text-gray-900">
                                     School Subjects
@@ -210,8 +210,8 @@ function PrincipalViewSubjects() {
                             </button>
                         </div>
 
-                        <div className="mb-3 flex items-center justify-between">
-                            <div className="mb-3 flex gap-8">
+                        <div className="mb-3 flex flex-wrap items-end justify-between gap-4">
+                            <div className="mb-3 flex flex-wrap gap-6">
                                 <SortBy
                                     sortOptions={sortOptions}
                                     sortBy={sortBy}
@@ -227,18 +227,17 @@ function PrincipalViewSubjects() {
                                 <ClassFilter
                                     classFilter={classFilter}
                                     setClassFilter={setClassFilter}
+                                    classes={availableClasses}
                                 />
                             </div>
 
-                            <div>
-                                <SearchBar
-                                    search={search}
-                                    setSearch={setSearch}
-                                />
-                            </div>
+                            <SearchBar
+                                search={search}
+                                setSearch={setSearch}
+                            />
                         </div>
 
-                        <div className="flex flex-wrap gap-10">
+                        <div className="w-full">
                             <PrincipalSubjectsTable
                                 subject={subjectsData}
                                 handleEditSubject={handleEditSubject}
@@ -247,7 +246,7 @@ function PrincipalViewSubjects() {
                             />
                         </div>
 
-                        <div className="mt-5 flex items-center justify-between">
+                        <div className="mt-5 flex items-center justify-between gap-4">
                             <div className="mt-1">
                                 <Pagination
                                     currentPage={currentPage}
