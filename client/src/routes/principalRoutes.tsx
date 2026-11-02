@@ -25,6 +25,7 @@ import LeaveApplications from "../pages/principalPages/leaves";
 import PrincipalAttendanceCalendarPage from "../pages/principalPages/attendanceCalendar";
 import PrincipalTeacherAttendanceCalendarPage from "../pages/principalPages/attendanceCalendarPage";
 import NotFound from "../pages/notFound";
+import PrincipalFees from "../pages/principalPages/fees";
 
 function PrincipalRoutes() {
     return (
@@ -56,6 +57,9 @@ function PrincipalRoutes() {
             <Route path="viewStudents/studentProfile" element={<StudentProfile />} />
             <Route path="viewSubjects/subjectForm" element={<SubjectForm />} />
             <Route path="viewMarks/marksForm" element={<MarksForm />} />
+
+            <Route path="/fees" element={<PrincipalFees />} />
+            
             <Route path="*" element={<NotFound />} />
         </Routes>
     );

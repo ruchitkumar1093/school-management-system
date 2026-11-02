@@ -32,7 +32,8 @@ function Breadcrumb() {
         viewClass: "Class Overview",
         viewHolidays: "Holidays",
         viewTeacherAttendance: "View",
-        myLeaves: "My Leaves"
+        myLeaves: "My Leaves",
+        fees: "Fee"
     };
 
     const paths = location.pathname

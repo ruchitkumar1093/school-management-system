@@ -11,7 +11,8 @@ import {
     CalendarDays,
     CalendarClock,
     ChevronRight,
-    GraduationCap
+    GraduationCap,
+    Wallet
 } from "lucide-react";
 
 type Role = "principal" | "teacher" | "student";
@@ -95,6 +96,11 @@ function SideBar() {
         {
             title: "School Operations",
             links: [
+                {
+                    label: "Fee Management",
+                    path: "/principal/fees",
+                    icon: Wallet
+                },
                 {
                     label: "Student Attendance",
                     path: "/principal/attendance",
@@ -213,6 +219,16 @@ function SideBar() {
                     label: "Marks & Results",
                     path: "/student/viewMarks",
                     icon: GraduationCap
+                }
+            ]
+        },
+        {
+            title: "Fees & Payments",
+            links: [
+                {
+                    label: "My Fees",
+                    path: "/student/fees",
+                    icon: Wallet
                 }
             ]
         },

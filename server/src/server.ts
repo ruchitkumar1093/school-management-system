@@ -4,10 +4,10 @@ import express from "express";
 import connectDB from "./config/db";
 import errorHandler from "./middlewares/errorHandler";
 import cors from "cors";
-
+import feeRoutes from "./routes/feeRoutes";
 import verifyToken from "./middlewares/authMiddleware";
 import authorizeRole from "./middlewares/authorizeRole";
-
+import studentFeeRoutes from "./routes/studentFeeRoutes";
 import authRouter from "./routes/authRoutes";
 import principalRoutes from "./routes/principalRoutes";
 import teacherRoutes from "./routes/teacherRoutes";
@@ -28,8 +28,12 @@ app.use(cors({
 app.use("/api", authRouter);
 
 app.use("/api/principal", verifyToken, authorizeRole("principal"), principalRoutes);
+app.use("/api/principal/fees", verifyToken, authorizeRole("principal"), feeRoutes);
+
 app.use("/api/teacher", verifyToken, authorizeRole("teacher"), teacherRoutes);
+
 app.use("/api/student", verifyToken, authorizeRole("student"), studentRoutes);
+app.use("/api/student/fees", verifyToken, authorizeRole("student"), studentFeeRoutes);
 
 app.use("/api/admissionRequest", admissionRoutes);
 

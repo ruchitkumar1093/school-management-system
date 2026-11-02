@@ -8,6 +8,7 @@ import StudentAttendance from "../pages/studentPages/attendance";
 import Holidays from "../pages/studentPages/holidays";
 import LeaveApplications from "../pages/studentPages/leaves";
 import AttendanceCalendarPage from "../pages/studentPages/attendanceCalendarPage";
+import StudentFees from "../pages/studentPages/fees";
 import NotFound from "../pages/notFound";
 
 
@@ -23,6 +24,7 @@ function StudentRoutes() {
             <Route path="/viewHolidays" element={<Holidays />} />
             <Route path="/viewLeaves" element={<LeaveApplications />} />
             <Route path="/changePassword" element= {<StudentChangePassword />} />
+            <Route path="/fees" element={<StudentFees />} />
             <Route path="*" element={<NotFound />} />
         </Routes>
     );
