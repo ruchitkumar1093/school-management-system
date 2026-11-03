@@ -1,4 +1,3 @@
-
 import { useNavigate } from "react-router-dom";
 import { FiCalendar, FiLock } from "react-icons/fi";
 
@@ -38,23 +37,27 @@ function TeacherAttendanceTable({
   const navigate = useNavigate();
 
   return (
-    <div className="overflow-x-auto rounded-lg shadow-md">
-      <table className="w-full border-collapse bg-purple-200 text-left text-gray-900">
+    <div className="w-full overflow-x-auto">
+      <table className="w-full border-separate border-spacing-y-2 text-left text-gray-900">
         <thead>
-          <tr className="border-b border-purple-300 bg-purple-300/80">
-            <th className="border-r border-purple-300 p-3 text-center font-semibold text-purple-950">
+          <tr className="bg-purple-300 text-purple-950">
+            <th className="rounded-l-lg px-3 py-2 text-center font-semibold">
               S.No.
             </th>
-            <th className="border-r border-purple-300 p-3 text-center font-semibold text-purple-950">
+
+            <th className="px-3 py-2 text-center font-semibold">
               Student Name:
             </th>
-            <th className="border-r border-purple-300 p-3 text-center font-semibold text-purple-950">
+
+            <th className="px-3 py-2 text-center font-semibold">
               UID:
             </th>
-            <th className="border-r border-purple-300 p-3 text-center font-semibold text-purple-950">
+
+            <th className="px-3 py-2 text-center font-semibold">
               Attendance:
             </th>
-            <th className="p-3 text-center font-semibold text-purple-950">
+
+            <th className="rounded-r-lg px-3 py-2 text-center font-semibold">
               Calendar
             </th>
           </tr>
@@ -65,7 +68,7 @@ function TeacherAttendanceTable({
             <tr>
               <td
                 colSpan={5}
-                className="p-4 text-center text-gray-500"
+                className="rounded-lg bg-purple-100 p-4 text-center text-gray-500"
               >
                 No records found
               </td>
@@ -78,24 +81,21 @@ function TeacherAttendanceTable({
                 markAllStatus;
 
               return (
-                <tr
-                  key={student._id}
-                  className="border-b border-purple-300 last:border-b-0 transition-colors hover:bg-purple-300/40"
-                >
-                  <td className="border-r border-purple-300 p-3 font-medium">
+                <tr key={student._id} className="group">
+                  <td className="rounded-l-lg bg-purple-200 p-3 text-center font-medium transition-colors group-hover:bg-purple-200/70">
                     {startIndex + index + 1}
                   </td>
 
-                  <td className="border-r border-purple-300 p-3 font-medium">
+                  <td className="bg-purple-200 p-3 font-medium transition-colors group-hover:bg-purple-200/70">
                     {student.userId.name}
                   </td>
 
-                  <td className="border-r border-purple-300 p-3">
+                  <td className="bg-purple-200 p-3 transition-colors group-hover:bg-purple-200/70">
                     {student.userId.uid.toUpperCase()}
                   </td>
 
                   {isClassTeacher ? (
-                    <td className="border-r border-purple-300 border-b border-purple-300 p-2">
+                    <td className="bg-purple-200 p-2 transition-colors group-hover:bg-purple-200/70">
                       {student.onLeave ? (
                         <div className="flex justify-center">
                           <span className="rounded-md px-5 py-2 font-medium text-yellow-600">
@@ -165,7 +165,7 @@ function TeacherAttendanceTable({
                       )}
                     </td>
                   ) : attendanceMarked ? (
-                    <td className="border-r border-purple-300 border-b border-purple-300 p-2">
+                    <td className="bg-purple-200 p-2 transition-colors group-hover:bg-purple-200/70">
                       {student.onLeave ? (
                         <div className="flex justify-center">
                           <span className="rounded-md px-5 py-2 font-medium text-yellow-600">
@@ -185,28 +185,19 @@ function TeacherAttendanceTable({
                           </span>
                         </div>
                       ) : (
-                        <div className="text-center text-gray-500">
-                          —
-                        </div>
+                        <div className="text-center text-gray-500">—</div>
                       )}
                     </td>
                   ) : (
-                    index === 0 && (
-                      <td
-                        rowSpan={students.length}
-                        className="border-r border-purple-300 p-3 align-middle"
-                      >
-                        <div className="flex items-center justify-center gap-2 text-center text-sm text-purple-800">
-                          <FiLock className="h-4 w-4 shrink-0" />
-                          <span>
-                            Only class teachers can mark
-                          </span>
-                        </div>
-                      </td>
-                    )
+                    <td className="bg-purple-200 p-3 align-middle transition-colors group-hover:bg-purple-200/70">
+                      <div className="flex items-center justify-center gap-2 text-center text-sm text-purple-800">
+                        <FiLock className="h-4 w-4 shrink-0" />
+                        <span>Only class teachers can mark</span>
+                      </div>
+                    </td>
                   )}
 
-                  <td className="p-2 text-center">
+                  <td className="rounded-r-lg bg-purple-200 p-2 text-center transition-colors group-hover:bg-purple-200/70">
                     <button
                       type="button"
                       onClick={() =>
@@ -216,7 +207,7 @@ function TeacherAttendanceTable({
                       }
                       title="View attendance calendar"
                       aria-label={`View attendance calendar for ${student.userId.name}`}
-                      className="inline-flex cursor-pointer items-center justify-center rounded-md p-2 text-purple-800 transition-colors hover:bg-purple-300 hover:text-purple-950"
+                      className="inline-flex cursor-pointer items-center justify-center rounded-md p-1.5 text-purple-800 transition-colors hover:bg-purple-300 hover:text-purple-950"
                     >
                       <FiCalendar size={20} />
                     </button>

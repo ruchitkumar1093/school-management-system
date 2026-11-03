@@ -26,29 +26,35 @@ function StudentMarksTable({
     startIndex
 }: Props) {
     return (
-        <div className="overflow-x-auto rounded-lg shadow-md">
-            <table className="w-full border-collapse bg-purple-200 text-left text-gray-900">
+        <div className="w-full overflow-x-auto">
+            <table className="w-full border-separate border-spacing-y-2 text-left text-gray-900">
                 <thead>
-                    <tr className="border-b border-purple-300 bg-purple-300/80">
-                        <th className="border-r border-purple-300 p-3 font-semibold text-purple-950">
+                    <tr className="bg-purple-300 text-purple-950">
+                        <th className="rounded-l-lg px-3 py-2 font-semibold">
                             S.No.
                         </th>
-                        <th className="border-r border-purple-300 p-3 font-semibold text-purple-950">
+
+                        <th className="px-3 py-2 font-semibold">
                             Subject Name:
                         </th>
-                        <th className="border-r border-purple-300 p-3 font-semibold text-purple-950">
+
+                        <th className="px-3 py-2 font-semibold">
                             Exam Type:
                         </th>
-                        <th className="border-r border-purple-300 p-3 font-semibold text-purple-950">
+
+                        <th className="px-3 py-2 font-semibold">
                             Checked by:
                         </th>
-                        <th className="border-r border-purple-300 p-3 font-semibold text-purple-950">
+
+                        <th className="px-3 py-2 font-semibold">
                             Marks Obtained:
                         </th>
-                        <th className="border-r border-purple-300 p-3 font-semibold text-purple-950">
+
+                        <th className="px-3 py-2 font-semibold">
                             Total Marks:
                         </th>
-                        <th className="p-3 font-semibold text-purple-950">
+
+                        <th className="rounded-r-lg px-3 py-2 text-center font-semibold">
                             Result:
                         </th>
                     </tr>
@@ -59,62 +65,58 @@ function StudentMarksTable({
                         <tr>
                             <td
                                 colSpan={7}
-                                className="p-4 text-center text-gray-500"
+                                className="rounded-lg bg-purple-100 p-4 text-center text-gray-500"
                             >
                                 No records found
                             </td>
                         </tr>
                     ) : (
-                        marksData.map((mark, index) => (
-                            <tr
-                                key={mark._id}
-                                className="border-b border-purple-300 last:border-b-0 transition-colors hover:bg-purple-300/40"
-                            >
-                                <td className="border-r border-purple-300 p-3 font-medium">
-                                    {startIndex + index + 1}
-                                </td>
+                        marksData.map((mark, index) => {
+                            const isPass =
+                                (mark.marksObtained / mark.totalMarks) *
+                                    100 >=
+                                33;
 
-                                <td className="border-r border-purple-300 p-3 font-medium">
-                                    {mark.subjectId?.name ??
-                                        "Subject deleted"}
-                                </td>
+                            return (
+                                <tr key={mark._id} className="group">
+                                    <td className="rounded-l-lg bg-purple-200 p-3 font-medium transition-colors group-hover:bg-purple-200/70">
+                                        {startIndex + index + 1}
+                                    </td>
 
-                                <td className="border-r border-purple-300 p-3 capitalize">
-                                    {mark.exam}
-                                </td>
+                                    <td className="bg-purple-200 p-3 font-medium transition-colors group-hover:bg-purple-200/70">
+                                        {mark.subjectId?.name ??
+                                            "Subject deleted"}
+                                    </td>
 
-                                <td className="border-r border-purple-300 p-3">
-                                    {mark.teacherId?.userId?.name ??
-                                        "Teacher deleted"}
-                                </td>
+                                    <td className="bg-purple-200 p-3 capitalize transition-colors group-hover:bg-purple-200/70">
+                                        {mark.exam}
+                                    </td>
 
-                                <td className="border-r border-purple-300 p-3">
-                                    {mark.marksObtained}
-                                </td>
+                                    <td className="bg-purple-200 p-3 transition-colors group-hover:bg-purple-200/70">
+                                        {mark.teacherId?.userId?.name ??
+                                            "Teacher deleted"}
+                                    </td>
 
-                                <td className="border-r border-purple-300 p-3">
-                                    {mark.totalMarks}
-                                </td>
+                                    <td className="bg-purple-200 p-3 transition-colors group-hover:bg-purple-200/70">
+                                        {mark.marksObtained}
+                                    </td>
 
-                                <td
-                                    className={`p-3 text-center font-medium ${
-                                        (mark.marksObtained /
-                                            mark.totalMarks) *
-                                            100 >=
-                                        33
-                                            ? "bg-green-200 text-green-800"
-                                            : "bg-red-200 text-red-800"
-                                    }`}
-                                >
-                                    {(mark.marksObtained /
-                                        mark.totalMarks) *
-                                        100 >=
-                                    33
-                                        ? "Pass"
-                                        : "Fail"}
-                                </td>
-                            </tr>
-                        ))
+                                    <td className="bg-purple-200 p-3 transition-colors group-hover:bg-purple-200/70">
+                                        {mark.totalMarks}
+                                    </td>
+
+                                    <td
+                                        className={`rounded-r-lg p-3 text-center font-medium ${
+                                            isPass
+                                                ? "bg-green-200 text-green-800"
+                                                : "bg-red-200 text-red-800"
+                                        }`}
+                                    >
+                                        {isPass ? "Pass" : "Fail"}
+                                    </td>
+                                </tr>
+                            );
+                        })
                     )}
                 </tbody>
             </table>

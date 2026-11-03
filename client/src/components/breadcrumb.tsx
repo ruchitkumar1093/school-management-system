@@ -70,14 +70,14 @@ function Breadcrumb() {
                             className="flex items-center"
                         >
                             {isLast ? (
-                                <span className="px-4 py-2 text-gray-600 font-medium">
+                                <span className="px-4 py-1 text-gray-600 font-medium">
                                     {labels[path] || path}
                                 </span>
                             ) : (
                                 <Link
                                     to={pathTo}
                                     className="
-                                        px-4 py-2
+                                        px-4 py-1
                                         text-purple-700
                                         font-medium
                                         hover:text-purple-800

@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 
@@ -28,7 +27,6 @@ import {
     RefreshCw,
     ArrowUpRight,
     CalendarDays,
-    LayoutDashboard
 } from "lucide-react";
 
 type ClassOverview = {
@@ -147,7 +145,7 @@ function PrincipalViewClass() {
                 1,
                 1000,
                 false,
-                true
+                false
             );
 
             setTeachers(response.data.teachers ?? []);
@@ -193,9 +191,6 @@ function PrincipalViewClass() {
         }
     };
 
-    // Absolute URLs prevent nested paths such as
-    // /principal/viewClass/viewStudents.
-    // Navigation state carries the currently selected class.
     const openClassSection = (path: string) => {
         navigate(path, {
             state: {
@@ -264,18 +259,13 @@ function PrincipalViewClass() {
                         {/* Page heading */}
                         <section className="flex flex-col justify-between gap-4 border-b border-purple-200 pb-5 sm:flex-row sm:items-center">
                             <div>
-                                <div className="mb-1 flex items-center gap-2 text-sm font-medium text-purple-800">
-                                    <LayoutDashboard size={17} />
-                                    School management
-                                </div>
 
                                 <h1 className="text-2xl font-semibold tracking-tight text-gray-900 sm:text-3xl">
                                     Class Overview
                                 </h1>
 
                                 <p className="mt-1 text-sm text-gray-600">
-                                    Manage each class, its students, teachers,
-                                    subjects, attendance, and academic records.
+                                    Choose a class to see its information and management options.
                                 </p>
                             </div>
 
@@ -295,20 +285,6 @@ function PrincipalViewClass() {
 
                         {/* Class selector */}
                         <section>
-                            <div className="mb-3 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
-                                <div>
-                                    <h2 className="text-lg font-semibold text-gray-900">
-                                        Select a class
-                                    </h2>
-                                    <p className="mt-1 text-sm text-gray-600">
-                                        Choose a class to see its information and management options.
-                                    </p>
-                                </div>
-
-                                <span className="text-sm font-medium text-purple-800">
-                                    Selected: Class {selectedClass}
-                                </span>
-                            </div>
 
                             <div className="rounded-xl border border-purple-200 bg-purple-200/50 p-3 sm:p-4">
                                 <ClassTabs
@@ -318,63 +294,8 @@ function PrincipalViewClass() {
                             </div>
                         </section>
 
-                        {/* Selected class banner */}
-                        <section className="overflow-hidden rounded-2xl border border-purple-300 bg-purple-200">
-                            <div className="flex flex-col justify-between gap-5 p-5 sm:flex-row sm:items-center sm:p-7">
-                                <div className="flex items-center gap-4">
-                                    <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-purple-800 text-white shadow-sm">
-                                        <School size={29} />
-                                    </div>
-
-                                    <div>
-                                        <p className="text-sm font-medium text-purple-800">
-                                            Class workspace
-                                        </p>
-                                        <h2 className="mt-0.5 text-2xl font-semibold text-gray-900">
-                                            Class {selectedClass}
-                                        </h2>
-                                        <p className="mt-1 text-sm text-gray-600">
-                                            Overview and class management
-                                        </p>
-                                    </div>
-                                </div>
-
-                                <div className="flex flex-wrap gap-2">
-                                    <button
-                                        type="button"
-                                        onClick={() =>
-                                            openClassSection("/principal/viewStudents")
-                                        }
-                                        className="inline-flex items-center justify-center gap-2 rounded-lg bg-purple-800 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-purple-900"
-                                    >
-                                        <Users size={16} />
-                                        View students
-                                    </button>
-
-                                    <button
-                                        type="button"
-                                        onClick={() =>
-                                            openClassSection("/principal/viewSubjects")
-                                        }
-                                        className="inline-flex items-center justify-center gap-2 rounded-lg border border-purple-400 bg-purple-100 px-4 py-2.5 text-sm font-medium text-purple-900 transition-colors hover:bg-purple-300"
-                                    >
-                                        <BookOpen size={16} />
-                                        View subjects
-                                    </button>
-                                </div>
-                            </div>
-                        </section>
-
                         {/* Class statistics */}
                         <section>
-                            <div className="mb-4">
-                                <h2 className="text-xl font-semibold text-gray-900">
-                                    Class statistics
-                                </h2>
-                                <p className="mt-1 text-sm text-gray-600">
-                                    A snapshot of Class {selectedClass}.
-                                </p>
-                            </div>
 
                             {loading ? (
                                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
@@ -391,28 +312,24 @@ function PrincipalViewClass() {
                                         {
                                             title: "Students",
                                             value: classOverview.students,
-                                            description: "Students in this class",
                                             Icon: Users,
                                             iconColor: "text-blue-800"
                                         },
                                         {
                                             title: "Teachers",
                                             value: classOverview.teachers,
-                                            description: "Teachers assigned to this class",
                                             Icon: Presentation,
                                             iconColor: "text-indigo-800"
                                         },
                                         {
                                             title: "Subjects",
                                             value: classOverview.subjects,
-                                            description: "Subjects offered to this class",
                                             Icon: BookOpen,
                                             iconColor: "text-violet-800"
                                         },
                                         {
                                             title: "Attendance",
                                             value: `${classOverview.overallAttendance}%`,
-                                            description: "Overall class attendance",
                                             Icon: CalendarDays,
                                             iconColor: "text-emerald-800"
                                         }
@@ -432,9 +349,6 @@ function PrincipalViewClass() {
                                             </div>
                                             <p className="mt-3 text-3xl font-semibold text-gray-900">
                                                 {stat.value}
-                                            </p>
-                                            <p className="mt-1 text-xs text-gray-500">
-                                                {stat.description}
                                             </p>
                                         </div>
                                     ))}
@@ -662,27 +576,6 @@ function PrincipalViewClass() {
                                     );
                                 })}
                             </div>
-                        </section>
-
-                        {/* Back to dashboard */}
-                        <section className="flex flex-col justify-between gap-3 border-t border-purple-200 pt-5 sm:flex-row sm:items-center">
-                            <div>
-                                <p className="text-sm font-medium text-gray-900">
-                                    Managing Class {selectedClass}
-                                </p>
-                                <p className="mt-1 text-xs text-gray-600">
-                                    Choose another class above or return to the principal dashboard.
-                                </p>
-                            </div>
-
-                            <button
-                                type="button"
-                                onClick={() => navigate("/principal")}
-                                className="inline-flex items-center justify-center gap-2 self-start rounded-lg px-3 py-2 text-sm font-medium text-purple-800 transition-colors hover:bg-purple-200 sm:self-auto"
-                            >
-                                Back to dashboard
-                                <ArrowUpRight size={16} />
-                            </button>
                         </section>
                     </div>
                 </main>

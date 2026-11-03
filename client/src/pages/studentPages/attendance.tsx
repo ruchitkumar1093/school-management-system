@@ -122,7 +122,7 @@ function StudentAttendance() {
         (currentPage - 1) * limit;
 
     return (
-        <div className="flex flex-col min-h-screen font-fredoka">
+        <div className="flex min-h-screen flex-col font-fredoka">
             <NavBar />
 
             <div className="flex flex-1 bg-purple-100">
@@ -131,8 +131,8 @@ function StudentAttendance() {
                 <div>
                     <Breadcrumb />
 
-                    <div className="flex flex-col pt-12 pl-20 mb-10">
-                        <div className="flex justify-between items-center mb-6">
+                    <div className="mb-10 flex flex-col pt-12 pl-20">
+                        <div className="mb-6 flex items-center justify-between">
                             <div>
                                 <h1 className="text-3xl font-medium text-gray-900">
                                     Attendance
@@ -142,10 +142,15 @@ function StudentAttendance() {
                                     View your Attendance
                                 </p>
                             </div>
+
                             <button
-                                onClick={() => navigate("calender", { state: { student } })}
+                                onClick={() =>
+                                    navigate("calender", {
+                                        state: { student }
+                                    })
+                                }
                                 type="button"
-                                className="rounded-lg bg-purple-300 px-6 py-3 font-medium text-purple-950 shadow-[0_2px_3px] transition-colors hover:bg-violet-300 cursor-pointer"
+                                className="cursor-pointer rounded-lg bg-purple-300 px-6 py-3 font-medium text-purple-950 shadow-[0_2px_3px] transition-colors hover:bg-violet-300"
                             >
                                 Attendance Calender
                             </button>
@@ -153,77 +158,68 @@ function StudentAttendance() {
 
                         {student && (
                             <>
-                                <div className="flex gap-8 mb-5">
+                                <div className="mb-5 flex flex-wrap gap-8">
                                     <div>
                                         Student:
-
-                                        <span className="font-medium ml-1">
+                                        <span className="ml-1 font-medium">
                                             {student.name}
                                         </span>
                                     </div>
 
                                     <div>
                                         UID:
-
-                                        <span className="font-medium ml-1">
+                                        <span className="ml-1 font-medium">
                                             {student.uid.toUpperCase()}
                                         </span>
                                     </div>
 
                                     <div>
                                         Class:
-
-                                        <span className="font-medium ml-1">
+                                        <span className="ml-1 font-medium">
                                             {student.class}
                                         </span>
                                     </div>
 
                                     <div>
                                         Roll Number:
-
-                                        <span className="font-medium ml-1">
+                                        <span className="ml-1 font-medium">
                                             {student.rollNumber}
                                         </span>
                                     </div>
                                 </div>
 
-                                <div className="flex gap-8 mb-5">
+                                <div className="mb-5 flex flex-wrap gap-8">
                                     <div>
                                         Total Days:
-
-                                        <span className="font-medium ml-1">
+                                        <span className="ml-1 font-medium">
                                             {totalDays}
                                         </span>
                                     </div>
 
                                     <div>
                                         Present:
-
-                                        <span className="font-medium ml-1">
+                                        <span className="ml-1 font-medium">
                                             {presentCount}
                                         </span>
                                     </div>
 
                                     <div>
                                         Absent:
-
-                                        <span className="font-medium ml-1">
+                                        <span className="ml-1 font-medium">
                                             {absentCount}
                                         </span>
                                     </div>
 
                                     <div>
                                         Leave:
-
-                                        <span className="font-medium ml-1">
+                                        <span className="ml-1 font-medium">
                                             {leaveCount}
                                         </span>
                                     </div>
 
                                     <div>
                                         Attendance:
-
-                                        <span className="font-medium ml-1">
+                                        <span className="ml-1 font-medium">
                                             {percentage.toFixed(2)}%
                                         </span>
                                     </div>
@@ -231,19 +227,19 @@ function StudentAttendance() {
                             </>
                         )}
 
-                        <div className="overflow-x-auto rounded-lg shadow-md">
-                            <table className="w-full border-collapse bg-purple-200 text-left text-gray-900">
+                        <div className="w-full overflow-x-auto">
+                            <table className="w-full border-separate border-spacing-y-2 text-left text-gray-900">
                                 <thead>
-                                    <tr className="border-b border-purple-300 bg-purple-300/80">
-                                        <th className="border-r border-purple-300 p-3 font-semibold text-purple-950">
+                                    <tr className="bg-purple-300 text-purple-950">
+                                        <th className="rounded-l-lg px-3 py-2 font-semibold">
                                             S.No.
                                         </th>
 
-                                        <th className="border-r border-purple-300 p-3 font-semibold text-purple-950">
+                                        <th className="px-3 py-2 font-semibold">
                                             Date
                                         </th>
 
-                                        <th className="p-3 font-semibold text-purple-950">
+                                        <th className="rounded-r-lg px-3 py-2 text-center font-semibold">
                                             Attendance
                                         </th>
                                     </tr>
@@ -254,7 +250,7 @@ function StudentAttendance() {
                                         <tr>
                                             <td
                                                 colSpan={3}
-                                                className="p-4 text-center text-gray-500"
+                                                className="rounded-lg bg-purple-100 p-4 text-center text-gray-500"
                                             >
                                                 No attendance records found
                                             </td>
@@ -263,18 +259,16 @@ function StudentAttendance() {
                                         attendance.map(
                                             (record, index) => (
                                                 <tr
-                                                    key={
-                                                        record._id
-                                                    }
-                                                    className="border-b border-purple-300 last:border-b-0 transition-colors hover:bg-purple-300/40"
+                                                    key={record._id}
+                                                    className="group"
                                                 >
-                                                    <td className="border-r border-purple-300 p-3 font-medium">
+                                                    <td className="rounded-l-lg bg-purple-200 p-3 font-medium transition-colors group-hover:bg-purple-200/70">
                                                         {startIndex +
                                                             index +
                                                             1}
                                                     </td>
 
-                                                    <td className="border-r border-purple-300 p-3">
+                                                    <td className="bg-purple-200 p-3 transition-colors group-hover:bg-purple-200/70">
                                                         {new Date(
                                                             record.date
                                                         ).toLocaleDateString(
@@ -283,18 +277,17 @@ function StudentAttendance() {
                                                     </td>
 
                                                     <td
-                                                        className={`p-3 text-center font-medium ${record.status ===
+                                                        className={`rounded-r-lg bg-purple-200 p-3 text-center font-medium transition-colors group-hover:bg-purple-200/70 ${
+                                                            record.status ===
                                                             "Present"
-                                                            ? "text-emerald-600"
-                                                            : record.status ===
-                                                                "Absent"
-                                                                ? "text-red-600"
-                                                                : "text-amber-600"
-                                                            }`}
+                                                                ? "text-emerald-600"
+                                                                : record.status ===
+                                                                  "Absent"
+                                                                  ? "text-red-600"
+                                                                  : "text-amber-600"
+                                                        }`}
                                                     >
-                                                        {
-                                                            record.status
-                                                        }
+                                                        {record.status}
                                                     </td>
                                                 </tr>
                                             )
@@ -304,17 +297,11 @@ function StudentAttendance() {
                             </table>
                         </div>
 
-                        <div className="flex justify-between mt-5 mb-5 items-center">
+                        <div className="mb-5 mt-5 flex items-center justify-between">
                             <Pagination
-                                currentPage={
-                                    currentPage
-                                }
-                                totalPages={
-                                    totalPages
-                                }
-                                setCurrentPage={
-                                    setCurrentPage
-                                }
+                                currentPage={currentPage}
+                                totalPages={totalPages}
+                                setCurrentPage={setCurrentPage}
                             />
 
                             <Limit

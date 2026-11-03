@@ -631,7 +631,7 @@ function TeacherAttendance() {
                                     </select>
                                 </div>
 
-                                <div className="flex items-center gap-3">
+                                <div className="flex items-center gap-3 mr-2">
                                     <label
                                         htmlFor="date"
                                         className="text-lg"

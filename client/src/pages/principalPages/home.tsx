@@ -155,20 +155,11 @@ function PrincipalHome() {
                     <div className="mx-auto flex max-w-[1700px] flex-col gap-7 px-5 py-6 sm:px-7 lg:px-9">
 
                         {/* Dashboard header */}
-                        <section className="flex flex-col justify-between gap-4 border-b border-purple-200 pb-5 sm:flex-row sm:items-center">
+                        <section className="flex flex-col justify-between gap-4 border-b border-purple-200 pb-4 sm:flex-row sm:items-center">
                             <div>
-                                <div className="mb-1 flex items-center gap-2 text-sm font-medium text-purple-800">
-                                    <School size={17} />
-                                    Principal dashboard
-                                </div>
-
                                 <h1 className="text-2xl font-semibold tracking-tight text-gray-900 sm:text-3xl">
                                     Welcome, {user.name || "Principal"}
                                 </h1>
-
-                                <p className="mt-1 text-sm text-gray-600">
-                                    Your school at a glance. What needs your attention today?
-                                </p>
                             </div>
 
                             <div className="flex flex-col gap-2 sm:items-end">
@@ -182,36 +173,27 @@ function PrincipalHome() {
 
                                 <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-600">
                                     <span>
-                                        <strong className="text-gray-900">
-                                            {homeInfo?.totalStudents ?? "—"}
-                                        </strong>{" "}
+                                            {homeInfo?.totalStudents ?? "—"}{" "}
                                         students
                                     </span>
 
                                     <span className="text-purple-400">•</span>
 
-                                    <span>
-                                        <strong className="text-gray-900">
-                                            {homeInfo?.totalTeachers ?? "—"}
-                                        </strong>{" "}
+                                    <span>{homeInfo?.totalTeachers ?? "—"}{" "}
                                         teachers
                                     </span>
 
                                     <span className="text-purple-400">•</span>
 
                                     <span>
-                                        <strong className="text-gray-900">
-                                            {homeInfo?.totalSubjects ?? "—"}
-                                        </strong>{" "}
+                                            {homeInfo?.totalSubjects ?? "—"}{" "}
                                         subjects
                                     </span>
 
                                     <span className="text-purple-400">•</span>
 
                                     <span>
-                                        <strong className="text-gray-900">
-                                            {homeInfo?.totalClasses ?? "—"}
-                                        </strong>{" "}
+                                            {homeInfo?.totalClasses ?? "—"}{" "}
                                         classes
                                     </span>
                                 </div>
@@ -222,11 +204,7 @@ function PrincipalHome() {
                         <section>
                             <div className="mb-4 flex flex-col justify-between gap-2 sm:flex-row sm:items-end">
                                 <div>
-                                    <h2 className="text-xl font-semibold text-gray-900">
-                                        Classes
-                                    </h2>
-
-                                    <p className="mt-1 text-sm text-gray-600">
+                                    <p className=" text-sm text-gray-600">
                                         Select a class to open its overview, roster, attendance, and academic information.
                                     </p>
                                 </div>
@@ -281,12 +259,8 @@ function PrincipalHome() {
                         <section>
                             <div className="mb-4">
                                 <h2 className="text-xl font-semibold text-gray-900">
-                                    Quick actions
+                                    Quick actions:
                                 </h2>
-
-                                <p className="mt-1 text-sm text-gray-600">
-                                    Common tasks you may need to complete today.
-                                </p>
                             </div>
 
                             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 2xl:grid-cols-4">
@@ -336,12 +310,8 @@ function PrincipalHome() {
                         {/* School management shortcuts */}
                         <section>
                             <div className="mb-3">
-                                <h2 className="text-lg font-semibold text-gray-900">
-                                    School management
-                                </h2>
-
                                 <p className="mt-1 text-sm text-gray-600">
-                                    Other areas you may need to access.
+                                    Other areas you may need to access:
                                 </p>
                             </div>
 
@@ -373,36 +343,7 @@ function PrincipalHome() {
                             </div>
                         </section>
 
-                        {/* Account link */}
-                        <section className="flex flex-wrap items-center justify-between gap-3 border-t border-purple-200 pt-4">
-                            <div className="flex items-center gap-3">
-                                <div className="flex h-9 w-9 items-center justify-center rounded-full bg-purple-300 text-purple-900">
-                                    <School size={18} />
-                                </div>
-
-                                <div>
-                                    <p className="text-sm font-medium text-gray-900">
-                                        {user.name || "Principal"}
-                                    </p>
-
-                                    <p className="text-xs text-gray-500">
-                                        {user.uid
-                                            ? user.uid.toUpperCase()
-                                            : "Principal"}{" "}
-                                        · Principal
-                                    </p>
-                                </div>
-                            </div>
-
-                            <button
-                                type="button"
-                                onClick={() => navigate("profile")}
-                                className="inline-flex items-center gap-1 rounded-lg px-3 py-2 text-sm font-medium text-purple-800 transition-colors hover:bg-purple-200"
-                            >
-                                View profile
-                                <ChevronRight size={16} />
-                            </button>
-                        </section>
+                        
 
                     </div>
                 </main>

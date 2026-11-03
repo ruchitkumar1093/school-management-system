@@ -4741,9 +4741,11 @@ export const getClassOverview = async (req: Request, res: Response) => {
 
         const studentCount = students.length;
 
-        const teacherCount = await Teacher.countDocuments({
-            classAssigned: studentClass
-        });
+        const teacherCount = (
+            await TeacherAssignment.distinct("teacherId", {
+                classId: classData._id
+            })
+        ).length;
 
         const subjectCount = await Subject.countDocuments({
             class: studentClass
@@ -5272,13 +5274,11 @@ export const createTeacherAttendance = async (
 
         if (missingTeachers.length > 0) {
             return res.status(400).json({
-                message: `Please mark attendance for all active teachers in ${
-                    classFilter === "All"
+                message: `Please mark attendance for all active teachers in ${classFilter === "All"
                         ? "the school"
                         : `class ${classFilter}`
-                } who are not on approved leave. ${
-                    missingTeachers.length
-                } teacher(s) still need attendance.`
+                    } who are not on approved leave. ${missingTeachers.length
+                    } teacher(s) still need attendance.`
             });
         }
 

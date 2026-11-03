@@ -22,26 +22,26 @@ function PrincipalSubjectsTable({
     startIndex
 }: Props) {
     return (
-        <div className="overflow-x-auto rounded-lg shadow-md">
-            <table className="w-full border-collapse bg-purple-200 text-left text-gray-900">
+        <div className="overflow-x-auto">
+            <table className="w-full border-separate border-spacing-y-2 text-left text-gray-900">
                 <thead>
-                    <tr className="border-b border-purple-300 bg-purple-300/80">
-                        <th className="border-r border-purple-300 p-3 font-semibold text-purple-950">
+                    <tr>
+                        <th className="px-3 py-2 font-semibold text-purple-950 bg-purple-300 rounded-l-lg">
                             S.No.
                         </th>
-                        <th className="border-r border-purple-300 p-3 font-semibold text-purple-950">
+                        <th className="px-3 py-2 font-semibold text-purple-950 bg-purple-300">
                             Subject Name:
                         </th>
-                        <th className="border-r border-purple-300 p-3 font-semibold text-purple-950">
+                        <th className="px-3 py-2 font-semibold text-purple-950 bg-purple-300">
                             Subject Code:
                         </th>
-                        <th className="border-r border-purple-300 p-3 font-semibold text-purple-950">
+                        <th className="px-3 py-2 font-semibold text-purple-950 bg-purple-300">
                             Class:
                         </th>
-                        <th className="border-r border-purple-300 p-3 font-semibold text-purple-950">
+                        <th className="px-3 py-2 font-semibold text-purple-950 bg-purple-300">
                             Teacher Assigned:
                         </th>
-                        <th className="p-3 font-semibold text-purple-950">
+                        <th className="px-3 py-2 text-center font-semibold text-purple-950 bg-purple-300 rounded-r-lg">
                             Actions:
                         </th>
                     </tr>
@@ -52,7 +52,7 @@ function PrincipalSubjectsTable({
                         <tr>
                             <td
                                 colSpan={6}
-                                className="p-4 text-center text-gray-500"
+                                className="rounded-lg bg-purple-100 p-4 text-center text-gray-500"
                             >
                                 No records found
                             </td>
@@ -61,46 +61,50 @@ function PrincipalSubjectsTable({
                         subject.map((sub, index) => (
                             <tr
                                 key={sub._id}
-                                className="border-b border-purple-300 last:border-b-0 transition-colors hover:bg-purple-300/40"
+                                className="group transition-colors"
                             >
-                                <td className="border-r border-purple-300 p-3 font-medium">
+                                <td className="whitespace-nowrap rounded-l-lg border-y border-l border-none bg-purple-200 p-3 font-medium group-hover:bg-purple-200/70">
                                     {startIndex + index + 1}
                                 </td>
 
-                                <td className="border-r border-purple-300 p-3 font-medium">
+                                <td className="border-y border-none bg-purple-200 p-3 font-medium group-hover:bg-purple-200/70">
                                     {sub.name}
                                 </td>
 
-                                <td className="border-r border-purple-300 p-3">
+                                <td className="border-y border-none bg-purple-200 p-3 group-hover:bg-purple-200/70">
                                     {sub.subjectCode.toUpperCase()}
                                 </td>
 
-                                <td className="border-r border-purple-300 p-3">
+                                <td className="border-y border-none bg-purple-200 p-3 group-hover:bg-purple-200/70">
                                     {sub.class}
                                 </td>
 
-                                <td className="border-r border-purple-300 p-3">
+                                <td className="border-y border-none bg-purple-200 p-3 group-hover:bg-purple-200/70">
                                     {sub.teacherName}
                                 </td>
 
-                                <td className="p-3">
-                                    <div className="flex items-center gap-1">
+                                <td className="rounded-r-lg border-y border-r border-none bg-purple-200 p-3 group-hover:bg-purple-200/70">
+                                    <div className="flex items-center justify-center gap-1">
                                         <button
+                                            type="button"
                                             title="Edit"
+                                            aria-label={`Edit ${sub.name}`}
                                             onClick={() =>
                                                 handleEditSubject(sub._id)
                                             }
-                                            className="cursor-pointer p-1.5 text-purple-900 transition-colors hover:text-purple-600"
+                                            className="cursor-pointer rounded-md p-1.5 text-purple-900 transition-colors hover:bg-purple-200 hover:text-purple-700"
                                         >
                                             <FiEdit className="h-4 w-4" />
                                         </button>
 
                                         <button
+                                            type="button"
                                             title="Delete"
+                                            aria-label={`Delete ${sub.name}`}
                                             onClick={() =>
                                                 handleDeleteSubject(sub._id)
                                             }
-                                            className="cursor-pointer p-1.5 text-purple-900 transition-colors hover:text-red-700"
+                                            className="cursor-pointer rounded-md p-1.5 text-purple-900 transition-colors hover:bg-red-100 hover:text-red-700"
                                         >
                                             <FiTrash className="h-4 w-4" />
                                         </button>

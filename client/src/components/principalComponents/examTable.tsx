@@ -42,41 +42,41 @@ function PrincipalExamTable({
     const columnCount = 6 + subjects.length;
 
     return (
-        <div className="block w-full min-w-0 max-w-full overflow-x-auto rounded-lg shadow-md">
-            <table className="w-max min-w-full whitespace-nowrap border-collapse bg-purple-200 text-left text-gray-900">
+        <div className="block w-full min-w-0 max-w-full overflow-x-auto">
+            <table className="w-full border-separate border-spacing-y-2 text-left text-gray-900">
                 <thead>
-                    <tr className="border-b border-purple-300 bg-purple-300/80">
-                        <th className="whitespace-nowrap border-r border-purple-300 p-3 font-semibold text-purple-950">
+                    <tr className="bg-purple-300">
+                        <th className="rounded-l-lg px-3 py-2 font-semibold text-purple-950">
                             S.No.
                         </th>
 
-                        <th className="whitespace-nowrap border-r border-purple-300 p-3 font-semibold text-purple-950">
+                        <th className="px-3 py-2 font-semibold text-purple-950">
                             Student Name
                         </th>
 
-                        <th className="whitespace-nowrap border-r border-purple-300 p-3 font-semibold text-purple-950">
+                        <th className="px-3 py-2 font-semibold text-purple-950">
                             UID
                         </th>
 
                         {subjects.map((subject) => (
                             <th
                                 key={subject.subjectCode || subject.name}
-                                className="whitespace-nowrap border-r border-purple-300 p-3 text-center font-semibold text-purple-950"
+                                className="px-3 py-2 text-center font-semibold text-purple-950"
                                 title={subject.name}
                             >
                                 {subject.name}
                             </th>
                         ))}
 
-                        <th className="whitespace-nowrap border-r border-purple-300 p-3 font-semibold text-purple-950">
+                        <th className="px-3 py-2 font-semibold text-purple-950">
                             Total
                         </th>
 
-                        <th className="whitespace-nowrap border-r border-purple-300 p-3 font-semibold text-purple-950">
+                        <th className="px-3 py-2 font-semibold text-purple-950">
                             Percentage
                         </th>
 
-                        <th className="whitespace-nowrap p-3 font-semibold text-purple-950">
+                        <th className="rounded-r-lg px-3 py-2 font-semibold text-purple-950">
                             Result
                         </th>
                     </tr>
@@ -87,7 +87,7 @@ function PrincipalExamTable({
                         <tr>
                             <td
                                 colSpan={columnCount}
-                                className="p-4 text-center text-gray-500"
+                                className="rounded-lg bg-purple-100 p-4 text-center text-gray-500"
                             >
                                 No records found
                             </td>
@@ -99,17 +99,17 @@ function PrincipalExamTable({
                                     student.uid ||
                                     `${student.class}-${index}`
                                 }
-                                className="border-b border-purple-300 transition-colors last:border-b-0 hover:bg-purple-300/40"
+                                className="group"
                             >
-                                <td className="whitespace-nowrap border-r border-purple-300 p-3 font-medium">
+                                <td className="rounded-l-lg bg-purple-200 p-3 font-medium transition-colors group-hover:bg-purple-200/70">
                                     {startIndex + index + 1}
                                 </td>
 
-                                <td className="whitespace-nowrap border-r border-purple-300 p-3 font-medium">
+                                <td className="bg-purple-200 p-3 font-medium transition-colors group-hover:bg-purple-200/70">
                                     {student.studentName}
                                 </td>
 
-                                <td className="whitespace-nowrap border-r border-purple-300 p-3">
+                                <td className="bg-purple-200 p-3 transition-colors group-hover:bg-purple-200/70">
                                     {student.uid.toUpperCase()}
                                 </td>
 
@@ -119,7 +119,7 @@ function PrincipalExamTable({
                                             subject.subjectCode ||
                                             subject.name
                                         }
-                                        className="whitespace-nowrap border-r border-purple-300 p-3 text-center"
+                                        className="bg-purple-200 p-3 text-center transition-colors group-hover:bg-purple-200/70"
                                     >
                                         {displayMarks(
                                             student.subjects?.[subject.name]
@@ -127,25 +127,25 @@ function PrincipalExamTable({
                                     </td>
                                 ))}
 
-                                <td className="whitespace-nowrap border-r border-purple-300 p-3 text-center font-medium">
+                                <td className="bg-purple-200 p-3 text-center font-medium transition-colors group-hover:bg-purple-200/70">
                                     {displayMarks(student.total)}
                                 </td>
 
-                                <td className="whitespace-nowrap border-r border-purple-300 p-3 text-center">
+                                <td className="bg-purple-200 p-3 text-center transition-colors group-hover:bg-purple-200/70">
                                     {student.percentage !== null
                                         ? `${student.percentage}%`
                                         : "-"}
                                 </td>
 
                                 <td
-                                    className={`whitespace-nowrap p-3 text-center font-medium ${
+                                    className={`rounded-r-lg p-3 text-center font-medium transition-colors ${
                                         student.result === "Pass"
-                                            ? "bg-green-200 text-green-800"
+                                            ? "bg-green-200 text-green-800 group-hover:bg-green-200/70"
                                             : student.result === "Fail"
-                                              ? "bg-red-200 text-red-800"
+                                              ? "bg-red-200 text-red-800 group-hover:bg-red-200/70"
                                               : student.result === "Incomplete"
-                                                ? "bg-orange-200 text-orange-800"
-                                                : "bg-gray-200 text-gray-700"
+                                                ? "bg-orange-200 text-orange-800 group-hover:bg-orange-200/70"
+                                                : "bg-gray-200 text-gray-700 group-hover:bg-gray-200/70"
                                     }`}
                                 >
                                     {student.result}

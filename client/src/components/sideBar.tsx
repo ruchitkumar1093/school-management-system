@@ -263,7 +263,7 @@ function SideBar() {
     const sections = user ? sectionsByRole[user.role] ?? [] : [];
 
     return (
-        <aside className="w-64 shrink-0 self-stretch border-r border-purple-300/70 bg-purple-200 font-fredoka">
+        <aside className="sticky top-0 h-[calc(100vh-0px)] w-64 shrink-0 self-start overflow-y-auto border-r border-purple-300/70 bg-purple-200 font-fredoka [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
 
             <nav className="px-4 py-5">
                 <div className="flex flex-col gap-5">

@@ -42,38 +42,38 @@ function TeacherMarksTable({
     };
 
     return (
-        <div className="overflow-x-auto rounded-lg shadow-md">
-            <table className="w-full border-collapse bg-purple-200 text-left text-gray-900">
+        <div className="overflow-x-auto">
+            <table className="w-full border-separate border-spacing-y-2 text-left text-gray-900">
                 <thead>
-                    <tr className="border-b border-purple-300 bg-purple-300/80">
-                        <th className="border-r border-purple-300 p-3 font-semibold text-purple-950">
+                    <tr className="bg-purple-300 text-purple-950">
+                        <th className="rounded-l-lg px-3 py-2 font-semibold">
                             S.No.
                         </th>
-                        <th className="border-r border-purple-300 p-3 font-semibold text-purple-950">
+                        <th className="px-3 py-2 font-semibold">
                             Student Name:
                         </th>
-                        <th className="border-r border-purple-300 p-3 font-semibold text-purple-950">
+                        <th className="px-3 py-2 font-semibold">
                             Subject Name:
                         </th>
-                        <th className="border-r border-purple-300 p-3 font-semibold text-purple-950">
+                        <th className="px-3 py-2 font-semibold">
                             UID:
                         </th>
-                        <th className="border-r border-purple-300 p-3 font-semibold text-purple-950">
+                        <th className="px-3 py-2 font-semibold">
                             Class:
                         </th>
-                        <th className="border-r border-purple-300 p-3 font-semibold text-purple-950">
+                        <th className="px-3 py-2 font-semibold">
                             Exam Type:
                         </th>
-                        <th className="border-r border-purple-300 p-3 font-semibold text-purple-950">
+                        <th className="px-3 py-2 font-semibold">
                             Marks Obtained:
                         </th>
-                        <th className="border-r border-purple-300 p-3 font-semibold text-purple-950">
+                        <th className="px-3 py-2 font-semibold">
                             Max Marks:
                         </th>
-                        <th className="border-r border-purple-300 p-3 font-semibold text-purple-950">
+                        <th className="px-3 py-2 font-semibold">
                             Result:
                         </th>
-                        <th className="p-3 text-center font-semibold text-purple-950">
+                        <th className="rounded-r-lg px-3 py-2 text-center font-semibold">
                             Manage:
                         </th>
                     </tr>
@@ -84,123 +84,117 @@ function TeacherMarksTable({
                         <tr>
                             <td
                                 colSpan={10}
-                                className="p-4 text-center text-gray-500"
+                                className="rounded-lg bg-purple-100 p-4 text-center text-gray-500"
                             >
                                 No records found
                             </td>
                         </tr>
                     ) : (
-                        marksData.map((mark, index) => (
-                            <tr
-                                key={mark._id}
-                                className="border-b border-purple-300 last:border-b-0 transition-colors hover:bg-purple-300/40"
-                            >
-                                <td className="border-r border-purple-300 p-3 font-medium">
-                                    {startIndex + index + 1}
-                                </td>
+                        marksData.map((mark, index) => {
+                            const isPass =
+                                (mark.marksObtained / mark.totalMarks) * 100 >= 33;
 
-                                <td className="border-r border-purple-300 p-3 font-medium">
-                                    {mark.studentId?.userId?.name ??
-                                        "Student Deleted"}
-                                </td>
+                            return (
+                                <tr key={mark._id} className="group">
+                                    <td className="rounded-l-lg bg-purple-200 p-3 font-medium transition-colors group-hover:bg-purple-200/70">
+                                        {startIndex + index + 1}
+                                    </td>
 
-                                <td className="border-r border-purple-300 p-3">
-                                    {mark.subjectId?.name ??
-                                        "Subject Deleted"}
-                                </td>
+                                    <td className="bg-purple-200 p-3 font-medium transition-colors group-hover:bg-purple-200/70">
+                                        {mark.studentId?.userId?.name ??
+                                            "Student Deleted"}
+                                    </td>
 
-                                <td className="border-r border-purple-300 p-3">
-                                    {mark.studentId?.userId?.uid?.toUpperCase() ??
-                                        "..."}
-                                </td>
+                                    <td className="bg-purple-200 p-3 transition-colors group-hover:bg-purple-200/70">
+                                        {mark.subjectId?.name ??
+                                            "Subject Deleted"}
+                                    </td>
 
-                                <td className="border-r border-purple-300 p-3">
-                                    {mark.studentId?.class ?? "..."}
-                                </td>
+                                    <td className="bg-purple-200 p-3 transition-colors group-hover:bg-purple-200/70">
+                                        {mark.studentId?.userId?.uid?.toUpperCase() ??
+                                            "..."}
+                                    </td>
 
-                                <td className="border-r border-purple-300 p-3 capitalize">
-                                    {mark.exam}
-                                </td>
+                                    <td className="bg-purple-200 p-3 transition-colors group-hover:bg-purple-200/70">
+                                        {mark.studentId?.class ?? "..."}
+                                    </td>
 
-                                <td className="border-r border-purple-300 p-3">
-                                    {mark.marksObtained}
-                                </td>
+                                    <td className="bg-purple-200 p-3 capitalize transition-colors group-hover:bg-purple-200/70">
+                                        {mark.exam}
+                                    </td>
 
-                                <td className="border-r border-purple-300 p-3">
-                                    {mark.totalMarks}
-                                </td>
+                                    <td className="bg-purple-200 p-3 transition-colors group-hover:bg-purple-200/70">
+                                        {mark.marksObtained}
+                                    </td>
 
-                                <td
-                                    className={`border-r border-purple-300 p-3 text-center font-medium ${
-                                        (mark.marksObtained /
-                                            mark.totalMarks) *
-                                            100 >=
-                                        33
-                                            ? "bg-green-200 text-green-800"
-                                            : "bg-red-200 text-red-800"
-                                    }`}
-                                >
-                                    {(mark.marksObtained /
-                                        mark.totalMarks) *
-                                        100 >=
-                                    33
-                                        ? "Pass"
-                                        : "Fail"}
-                                </td>
+                                    <td className="bg-purple-200 p-3 transition-colors group-hover:bg-purple-200/70">
+                                        {mark.totalMarks}
+                                    </td>
 
-                                <td className="p-3">
-                                    <div className="flex items-center justify-center gap-1">
-                                        {mark.studentId?._id ? (
+                                    <td
+                                        className={`p-3 text-center font-medium ${
+                                            isPass
+                                                ? "bg-green-200 text-green-800"
+                                                : "bg-red-200 text-red-800"
+                                        }`}
+                                    >
+                                        {isPass ? "Pass" : "Fail"}
+                                    </td>
+
+                                    <td className="rounded-r-lg bg-purple-200 p-3 transition-colors group-hover:bg-purple-200/70">
+                                        <div className="flex items-center justify-center gap-1">
+                                            {mark.studentId?._id ? (
+                                                <button
+                                                    type="button"
+                                                    title="View student attendance calendar"
+                                                    aria-label={`View attendance calendar for ${
+                                                        mark.studentId.userId?.name ??
+                                                        "student"
+                                                    }`}
+                                                    onClick={() =>
+                                                        handleViewAttendance(
+                                                            mark.studentId!._id
+                                                        )
+                                                    }
+                                                    className="cursor-pointer rounded-md p-1.5 text-purple-800 transition-colors hover:bg-purple-300 hover:text-purple-950"
+                                                >
+                                                    <FiCalendar className="h-4 w-4" />
+                                                </button>
+                                            ) : (
+                                                <span
+                                                    className="p-1.5 text-gray-400"
+                                                    title="Student record unavailable"
+                                                >
+                                                    —
+                                                </span>
+                                            )}
+
                                             <button
                                                 type="button"
-                                                title="View student attendance calendar"
-                                                aria-label={`View attendance calendar for ${
-                                                    mark.studentId.userId?.name ??
-                                                    "student"
-                                                }`}
+                                                title="Edit"
                                                 onClick={() =>
-                                                    handleViewAttendance(
-                                                        mark.studentId!._id
-                                                    )
+                                                    handleEditMarks(mark._id)
                                                 }
-                                                className="cursor-pointer p-1.5 text-purple-900 transition-colors hover:text-purple-600"
+                                                className="cursor-pointer rounded-md p-1.5 text-purple-800 transition-colors hover:bg-purple-300 hover:text-purple-950"
                                             >
-                                                <FiCalendar className="h-4 w-4" />
+                                                <FiEdit className="h-4 w-4" />
                                             </button>
-                                        ) : (
-                                            <span
-                                                className="p-1.5 text-gray-400"
-                                                title="Student record unavailable"
+
+                                            <button
+                                                type="button"
+                                                title="Delete"
+                                                onClick={() =>
+                                                    handleDeleteMarks(mark._id)
+                                                }
+                                                className="cursor-pointer rounded-md p-1.5 text-purple-800 transition-colors hover:bg-red-100 hover:text-red-700"
                                             >
-                                                —
-                                            </span>
-                                        )}
-
-                                        <button
-                                            type="button"
-                                            title="Edit"
-                                            onClick={() =>
-                                                handleEditMarks(mark._id)
-                                            }
-                                            className="cursor-pointer p-1.5 text-purple-900 transition-colors hover:text-purple-600"
-                                        >
-                                            <FiEdit className="h-4 w-4" />
-                                        </button>
-
-                                        <button
-                                            type="button"
-                                            title="Delete"
-                                            onClick={() =>
-                                                handleDeleteMarks(mark._id)
-                                            }
-                                            className="cursor-pointer p-1.5 text-purple-900 transition-colors hover:text-red-700"
-                                        >
-                                            <FiTrash className="h-4 w-4" />
-                                        </button>
-                                    </div>
-                                </td>
-                            </tr>
-                        ))
+                                                <FiTrash className="h-4 w-4" />
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            );
+                        })
                     )}
                 </tbody>
             </table>
