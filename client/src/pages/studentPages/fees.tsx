@@ -636,18 +636,6 @@ function StudentFees() {
         await handlePayCombined(allocations);
     };
 
-    const combinedPaymentTotal = useMemo(
-        () =>
-            fees.reduce((total, fee) => {
-                if (Number(fee.balance) <= 0) return total;
-
-                const amount = Number(combinedAmounts[fee._id]) || 0;
-
-                return total + amount;
-            }, 0),
-        [fees, combinedAmounts]
-    );
-
     const handleOpenHistory = async () => {
         setShowHistory(true);
         setLoadingHistory(true);

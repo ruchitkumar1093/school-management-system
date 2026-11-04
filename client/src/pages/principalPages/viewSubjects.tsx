@@ -1,4 +1,3 @@
-
 import NavBar from "../../components/navBar";
 import SideBar from "../../components/sideBar";
 import SortBy from "../../components/sortBy";
@@ -15,7 +14,7 @@ import {
 
 import PrincipalSubjectsTable from "../../components/principalComponents/subjectsTable";
 
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 
 import Breadcrumb from "../../components/breadcrumb";
@@ -93,16 +92,6 @@ function PrincipalViewSubjects() {
         currentPage,
         limit
     ]);
-
-    useEffect(() => {
-        if (
-            typeof selectedClassFromNavigation === "string" &&
-            selectedClassFromNavigation !== classFilter
-        ) {
-            setClassFilter(selectedClassFromNavigation);
-            setCurrentPage(1);
-        }
-    }, [selectedClassFromNavigation, classFilter]);
 
     useEffect(() => {
         const timer = setTimeout(() => {

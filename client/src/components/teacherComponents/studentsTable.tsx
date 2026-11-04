@@ -48,7 +48,6 @@ function TeacherStudentsTable({
     allStudentsSelected,
     startIndex,
     isClassTeacher,
-    loadingTeacherStatus
 }: Props) {
     return (
         <div className="overflow-x-auto">

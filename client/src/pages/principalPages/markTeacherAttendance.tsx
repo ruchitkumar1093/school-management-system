@@ -332,16 +332,6 @@ const fetchAllTeachersForDate = async (
     return allTeachers;
 };
 
-const getStatus = (teacher: Teacher) => {
-    if (teacher.onLeave) return null;
-
-    return (
-        teacher.attendanceStatus ??
-        attendance[teacher._id] ??
-        markAllStatus
-    );
-};
-
 const isAlreadyRecorded = (teacher: Teacher) =>
     teacher.onLeave || teacher.attendanceStatus !== null;
 

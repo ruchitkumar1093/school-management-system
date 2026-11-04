@@ -109,16 +109,6 @@ function PrincipalViewTeachers() {
     ]);
 
     useEffect(() => {
-        if (
-            typeof selectedClassFromNavigation === "string" &&
-            selectedClassFromNavigation !== classFilter
-        ) {
-            setClassFilter(selectedClassFromNavigation);
-            setCurrentPage(1);
-        }
-    }, [selectedClassFromNavigation, classFilter]);
-
-    useEffect(() => {
         const timer = setTimeout(() => {
             setDebouncedSearch(search);
         }, 500);

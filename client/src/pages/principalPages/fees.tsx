@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
 import {
-    Wallet,
     Plus,
     Search,
     IndianRupee,
@@ -9,14 +8,12 @@ import {
     X,
     LoaderCircle,
     Pencil,
-    ReceiptText,
     School,
     AlertCircle,
     RefreshCw,
     ChevronLeft,
     ChevronRight,
     Users,
-    ArrowUpDown,
     CheckCircle2,
     Clock3,
     CircleX
@@ -289,27 +286,6 @@ function PrincipalFees() {
         () => fees.find((fee) => fee.feeType === "Examination Fee") ?? null,
         [fees]
     );
-
-    const configuredClasses = useMemo(
-        () => new Set(tuitionFees.map((fee) => fee.class).filter(Boolean)),
-        [tuitionFees]
-    );
-
-    const missingClasses = useMemo(
-        () => classes.filter((className) => !configuredClasses.has(className)),
-        [configuredClasses]
-    );
-
-    const totalConfiguredAmount = useMemo(
-        () => fees.reduce((total, fee) => total + fee.amount, 0),
-        [fees]
-    );
-
-    const openCreateForm = () => {
-        setEditingFee(null);
-        setFormData({ ...initialForm, className: "" });
-        setShowForm(true);
-    };
 
     const openEditForm = (fee: FeeData) => {
         setEditingFee(fee);

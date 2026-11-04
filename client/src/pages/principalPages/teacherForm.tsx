@@ -576,6 +576,7 @@ function TeacherForm() {
 
                                 <input
                                     required
+                                    autoComplete="off"
                                     value={formData.name}
                                     onChange={(e) =>
                                         setFormData((previous) => ({
@@ -622,6 +623,7 @@ function TeacherForm() {
 
                                 <input
                                     required={isAdding}
+                                    autoComplete="new-password"
                                     value={formData.password}
                                     onChange={(e) =>
                                         setFormData((previous) => ({

@@ -3,7 +3,7 @@ import SideBar from "../../components/sideBar";
 import SearchBar from "../../components/searchBar";
 import Pagination from "../../components/pagination";
 import Limit from "../../components/limit";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { FiCalendar } from "react-icons/fi";
 import Breadcrumb from "../../components/breadcrumb";
 import { getAttendance } from "../../services/principalApi";
@@ -28,7 +28,12 @@ const classes: StudentClass[] = ["1st", "2nd", "3rd", "4th", "5th", "6th", "7th"
 
 function PrincipalAttendance() {
     const navigate = useNavigate();
-    const [selectedClass, setSelectedClass] = useState<StudentClass>("1st");
+    const location = useLocation();
+
+    const [selectedClass, setSelectedClass] = useState<StudentClass>(
+        location.state?.selectedClass ?? "1st"
+    );
+    // const [selectedClass, setSelectedClass] = useState<StudentClass>("1st");
     const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split("T")[0]);
     const [summaryData, setSummaryData] = useState<Summary | null>(null);
     const [attendance, setAttendance] = useState<Attendance[]>([]);

@@ -114,17 +114,6 @@ function PrincipalViewExams() {
         limit,
     ]);
 
-    // Apply the class selected on the previous page.
-    useEffect(() => {
-        if (
-            typeof selectedClassFromNavigation === "string" &&
-            selectedClassFromNavigation !== classFilter
-        ) {
-            setClassFilter(selectedClassFromNavigation);
-            setCurrentPage(1);
-        }
-    }, [selectedClassFromNavigation, classFilter]);
-
     // Debounce search input.
     useEffect(() => {
         const timer = setTimeout(() => {

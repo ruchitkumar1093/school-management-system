@@ -1,5 +1,3 @@
-import React from "react";
-
 type StatusType = "pending" | "approved" | "rejected";
 
 type Props = {
