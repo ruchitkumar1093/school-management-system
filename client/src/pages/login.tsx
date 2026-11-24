@@ -6,8 +6,8 @@ import { jwtDecode } from "jwt-decode";
 function Login() {
     const navigate = useNavigate();
 
-    const [uid, setUid] = useState("");
-    const [password, setPassword] = useState("");
+    const [uid, setUid] = useState("PRI0001");
+    const [password, setPassword] = useState("12345");
     const [error, setError] = useState("");
     const [loading, setLoading] = useState(false);
 
@@ -139,6 +139,30 @@ function Login() {
                         >
                             {loading ? "Please wait..." : "Login"}
                         </button>
+
+                        <div className="mt-2 border-t border-purple-300 pt-4">
+                            <p className="mb-2 text-center text-xs font-medium text-gray-600">
+                                USE DEMO CREDENTIALS
+                            </p>
+
+                            <div className="flex flex-wrap justify-center gap-x-4 gap-y-2 text-xs text-gray-600">
+                                <span>
+                                    Principal: <span className="font-medium text-purple-900">PRI0001</span>
+                                </span>
+
+                                <span>
+                                    Teacher: <span className="font-medium text-purple-900">TCH0001</span>
+                                </span>
+
+                                <span>
+                                    Student: <span className="font-medium text-purple-900">STU0001</span>
+                                </span>
+                            </div>
+
+                            <p className="mt-2 text-center text-xs text-gray-500">
+                                Password: <span className="font-medium text-gray-700">12345</span>
+                            </p>
+                        </div>
                     </form>
                 </div>
 
